@@ -82,6 +82,7 @@
 - ✅ **DD126** **The build details link buildx prints opens nothing, because it addresses a dashboard this machine does not have** — The docker-desktop scheme is registered to this install, and the ref in the link opens a Builds destination listing the history with the named record shown in full.
 - ✅ **DD140** **Clicking the tray icon does nothing, so the window is only reachable by right-clicking into a menu that lists it fourth** — A left click on the tray icon opens the window, and Open window leads the context menu instead of sitting fourth, so the icon answers the gesture a user already makes.
 - ✅ **DD165** **The engine journal is a file nobody finds, so a user who watched the engine go offline has nothing to read** — An Engine destination follows the host journal live, with the restart count, the file path and Copy all - and the site's destination count now comes from the nav strip instead of being typed.
+- ✅ **DD166** **A container's image column prints a full sha256 digest, so what is running is truncated mid-hash** — A bare digest now reads as the twelve characters docker ps prints, spelled once in ImageReference.Short and used by the window, the CLI list and the agent surface.
 
 ## Block D — Container operations (what a user came to do)
 

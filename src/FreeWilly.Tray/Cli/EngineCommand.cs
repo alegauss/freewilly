@@ -407,7 +407,7 @@ internal static class EngineCommand
                     ? ""
                     : "  " + string.Join(", ", container.PublishedPorts);
                 Console.WriteLine(
-                    $"  {container.ShortId}  {container.State,-8}  {container.Image,-22}  "
+                    $"  {container.ShortId}  {container.State,-8}  {container.ImageName,-22}  "
                     + $"{container.DisplayName}{ports}");
             }
 

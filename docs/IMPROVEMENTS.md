@@ -6,28 +6,6 @@
 
 ## Block C — The window (claude-tray's elements)
 
-### §DD166 A digest in the image column is a constant, drawn forty characters wide
-
-The daemon fills a container's `Image` field with whatever reference the container was
-created with, and falls back to the raw image id when that reference no longer resolves
-— which is what happens the moment a tag is rebuilt or removed underneath a running
-container. On this machine four containers created from `schools:slim` and
-`schools:local` all report
-`sha256:e4af4f3e24fdad8647264213f60f94ba16f67ae71a4b7281e6a0cd55de2627d1`, and the
-column shows the first forty characters of it. Every one of those forty characters is
-shared by every image on the machine, so the column is drawing a constant.
-
-`docker ps` prints twelve characters of the digest and no algorithm prefix, and the
-images list here already agrees with it: `ImageSummary.ShortId` strips `sha256:` and
-takes twelve. The container row does not go through that rule — `ContainerRow.From`
-passes `container.Image` through untouched — so one window spells the same identifier
-two ways.
-
-The fix is the rule, not the column width: a reference that parses as a digest reads as
-a short id, and a reference that is a name is left exactly as the daemon said it.
-Widening the column would only show more of a prefix nobody reads, and truncating with
-an ellipsis is what it already does.
-
 ### §DD167 Two correct pages that read as a contradiction
 
 Both pages are already correct, which is exactly why the pair is confusing. The

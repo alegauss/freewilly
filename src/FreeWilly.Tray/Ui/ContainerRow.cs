@@ -667,7 +667,7 @@ public sealed record ContainerRow(
 
         return new ContainerRow(
             container.DisplayName,
-            container.Image,
+            container.ImageName,
             container.State,
             container.Status,
             ports,

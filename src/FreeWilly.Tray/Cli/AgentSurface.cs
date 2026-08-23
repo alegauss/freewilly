@@ -1011,7 +1011,7 @@ public static class AgentSurface
                 : string.Join(",", container.PublishedPorts);
             text.Append(container.DisplayName).Append("  ")
                 .Append(container.State).Append("  ")
-                .Append(container.Image).Append("  ")
+                .Append(container.ImageName).Append("  ")
                 .Append(ports).AppendLine();
         }
 

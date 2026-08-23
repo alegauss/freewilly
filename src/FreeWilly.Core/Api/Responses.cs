@@ -148,6 +148,43 @@ public sealed record VolumesPruned
     public long SpaceReclaimed { get; init; }
 }
 
+/// <summary>How an image reference reads when it is a digest rather than a name (DD166).</summary>
+public static class ImageReference
+{
+    private const string Algorithm = "sha256:";
+
+    /// <summary>
+    /// Twelve characters of a digest, or a name exactly as the daemon said it.
+    /// </summary>
+    /// <remarks>
+    /// The daemon answers with the reference a container was created with, and falls back to the
+    /// raw image id once that reference stops resolving — which is what a rebuilt or removed tag
+    /// leaves behind. Every one of the forty characters a column has room for is then shared by
+    /// every image on the machine, so the cell draws a constant. Twelve and no algorithm prefix is
+    /// what <c>docker ps</c> prints and what the images list here already shows, and one window
+    /// spelling the same identifier two ways is the thing this exists to stop.
+    ///
+    /// A name is returned untouched, digest suffix included: <c>redis@sha256:…</c> is how that
+    /// container was addressed, and shortening the half that identifies it would lose the name.
+    /// </remarks>
+    /// <param name="reference">Whatever the daemon reported.</param>
+    /// <returns>The reference, as a person reads it.</returns>
+    public static string Short(string reference)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+
+        var digest = reference.StartsWith(Algorithm, StringComparison.Ordinal)
+            ? reference[Algorithm.Length..]
+            : reference;
+
+        // Only a bare digest shortens. Anything else is a name somebody chose, and a name is the
+        // answer the column wanted in the first place.
+        return digest.Length >= 12 && digest.All(char.IsAsciiHexDigit)
+            ? digest[..12]
+            : reference;
+    }
+}
+
 /// <summary>An image, as the list endpoint reports it.</summary>
 public sealed record ImageSummary
 {
@@ -176,14 +213,7 @@ public sealed record ImageSummary
     public long Created { get; init; }
 
     /// <summary>The twelve characters every Docker tool shows, without the algorithm prefix.</summary>
-    public string ShortId
-    {
-        get
-        {
-            var digest = Id.StartsWith("sha256:", StringComparison.Ordinal) ? Id[7..] : Id;
-            return digest.Length > 12 ? digest[..12] : digest;
-        }
-    }
+    public string ShortId => ImageReference.Short(Id);
 }
 
 /// <summary>What a prune reclaimed.</summary>
@@ -484,6 +514,9 @@ public sealed record ContainerSummary
 
     /// <summary>The twelve characters every Docker tool shows.</summary>
     public string ShortId => Id.Length > 12 ? Id[..12] : Id;
+
+    /// <summary>The image as a column shows it: a name, or twelve characters of a digest (DD166).</summary>
+    public string ImageName => ImageReference.Short(Image);
 
     /// <summary>
     /// The ports as a list renders them, with rows that would read identically collapsed.

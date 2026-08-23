@@ -89,6 +89,34 @@ public sealed class ContainerRowTests
     }
 
     [Fact]
+    public void An_image_the_daemon_could_only_name_by_digest_reads_as_twelve_characters()
+    {
+        // What a rebuilt or removed tag leaves behind: the reference stops resolving and the
+        // daemon answers with the raw id. Forty characters of it are shared by every image on the
+        // machine, so the untouched field draws a constant (DD166).
+        var container = new ContainerSummary
+        {
+            Id = "b12f355e14c8",
+            Names = ["/vigilant_diffie"],
+            Image = "sha256:e4af4f3e24fdad8647264213f60f94ba16f67ae71a4b7281e6a0cd55de2627d1",
+        };
+
+        Assert.Equal("e4af4f3e24fd", ContainerRow.From(container).Image);
+    }
+
+    [Theory]
+    [InlineData("redis:7-alpine")]
+    [InlineData("registry.local:5000/app:2.1")]
+    [InlineData("redis@sha256:e4af4f3e24fdad8647264213f60f94ba16f67ae71a4b7281e6a0cd55de2627d1")]
+    [InlineData("deadbeef")]
+    public void A_name_is_left_exactly_as_the_daemon_said_it(string reference)
+    {
+        // Only a bare digest shortens. A name is the answer the column wanted, and a digest that
+        // is the suffix of one is the half that identifies it.
+        Assert.Equal(reference, ImageReference.Short(reference));
+    }
+
+    [Fact]
     public void A_container_with_no_name_shows_its_short_id()
     {
         var row = ContainerRow.From(new ContainerSummary { Id = "ff00112233445566", Names = [] });
