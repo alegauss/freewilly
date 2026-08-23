@@ -8,6 +8,8 @@
 
 ## Block C — The window (claude-tray's elements)
 
+- 📋 **DD170** (deps: —) **A destination already ticked is shown by the caller's spelling, so a capture of volumes photographs the containers list** — The lookup matches case-insensitively and Show switches on an exact string, and only the already-ticked path passes the caller's word not the tag. → §DD170
+
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks
