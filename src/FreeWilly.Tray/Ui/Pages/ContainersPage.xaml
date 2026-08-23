@@ -137,9 +137,24 @@
                 <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
             </DockPanel>
-            <TextBlock Grid.Column="1" Text="{Binding Image}" TextTrimming="CharacterEllipsis"
+            <!-- DD167. A second Run rather than a second element: the note has to sit against the
+                 image it is about, and anything laid out across the cell puts it at the far edge
+                 where it reads as belonging to the STATE chip next door — seen by capturing it.
+                 A Run also needs no panel, so this cell stays one TextBlock and the file keeps the
+                 single ColumnDefinitions block the header-and-rows guard pairs.
+
+                 Tertiary and in no warning colour: an image rebuilt under a running container is a
+                 condition and not a failure, and Danger is spoken for by the line the daemon's own
+                 refusals land on. Empty on every other row, so it costs nothing to draw. The
+                 tooltip carries what to do, because the reflex this provokes — restart it — is the
+                 one thing that does not work. -->
+            <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Visibility="{Binding IsContainer, Converter={StaticResource Shown}}" />
+                       Visibility="{Binding IsContainer, Converter={StaticResource Shown}}"><Run
+                       Text="{Binding Image, Mode=OneWay}" /> <Run
+                       Text="{Binding ImageNote, Mode=OneWay}" FontSize="11"
+                       ToolTip="{Binding ImageEvidence}"
+                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" /></TextBlock>
             <!-- A chip, because state is the column actually scanned and it used to be drawn in
                  the same tertiary grey as the status restating it. The fill is translucent so one
                  pair of bytes works on both surfaces, and it is resolved once per render rather

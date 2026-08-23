@@ -69,11 +69,30 @@ public sealed class SampleMachineTests
     public async Task The_images_carry_something_dangling_and_something_in_use()
     {
         var machine = new SampleMachine();
-        var totals = ImageTotals.For(
-            ImageRow.From(await machine.ImagesAsync(), await machine.ContainersAsync()).ToList());
+        var rows = ImageRow.From(
+            await machine.ImagesAsync(), await machine.ContainersAsync()).ToList();
 
         // Or the prune button has nothing to confirm and its dialog cannot be looked at.
-        Assert.True(totals.CanPrune);
+        Assert.True(ImageTotals.For(rows).CanPrune);
+
+        // The other half this test is named for, which nothing asserted and which was false: no
+        // container here carried an image id, so the join found no holder for anything and USED BY
+        // was blank in every capture of the page it is the point of (DD167).
+        Assert.Contains(rows, row => row.IsInUse);
+    }
+
+    [Fact]
+    public async Task One_container_runs_on_an_image_the_machine_no_longer_has()
+    {
+        // The DD167 state, and the fixture is the only place it can be photographed: a rebuilt tag
+        // leaves the daemon with a digest to report and the images page with nothing to hold.
+        var machine = new SampleMachine();
+        var rows = (await machine.ContainersAsync()).Select(ContainerRow.From).ToList();
+
+        // Exactly one, or the note is the fixture's normal state rather than its exception.
+        var orphan = Assert.Single(rows, row => row.ImageIsGone);
+        Assert.Equal("image gone", orphan.ImageNote);
+        Assert.Equal("666666666666", orphan.Image);
     }
 
     [Fact]

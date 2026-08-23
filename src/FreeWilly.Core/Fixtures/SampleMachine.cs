@@ -68,6 +68,7 @@ public sealed class SampleMachine : IEngineClient
     /// exercise a parser this project does not ship.
     /// </param>
     /// <returns>The container.</returns>
+    /// <returns>The container.</returns>
     private static ContainerSummary Container(
         string id, string name, string image, string state, string status,
         string? service = null, IReadOnlyList<PortBinding>? ports = null,
@@ -76,10 +77,55 @@ public sealed class SampleMachine : IEngineClient
         Id = id,
         Names = ["/" + name],
         Image = image,
+        ImageId = IdOf(image),
         State = state,
         Status = status,
         Ports = ports ?? [],
         Labels = service is null ? null : ComposeLabels(service, dependsOn),
+    };
+
+    /// <summary>
+    /// Which image a tag names here, resolved the way the daemon resolves it (DD167).
+    /// </summary>
+    /// <remarks>
+    /// The images page joins on image id and nothing else, and no container here carried one — so
+    /// every image read as held by nobody, the USED BY column was blank in every capture, and the
+    /// test named for the in-use half asserted only the dangling one.
+    ///
+    /// <para>A reference this machine has no image for resolves to itself, which is exactly what the
+    /// daemon does once a tag is rebuilt or removed under a running container: it has only the
+    /// digest left to report. That is the state DD167 draws, and one row here is in it.</para>
+    /// </remarks>
+    /// <param name="image">The reference the container was created with.</param>
+    /// <returns>The image's id, or the reference itself where nothing answers to it.</returns>
+    private static string IdOf(string image) =>
+        Tagged.TryGetValue(image, out var id) ? id : image;
+
+    /// <summary>What the project's own service images are called.</summary>
+    private const string ApiImage = "sample/api:1.4.2";
+
+    /// <summary>The database's image.</summary>
+    private const string DbImage = "postgres:16-alpine";
+
+    /// <summary>The cache's image.</summary>
+    private const string CacheImage = "redis:7-alpine";
+
+    /// <summary>
+    /// The digest of an image this machine no longer has (DD167).
+    /// </summary>
+    /// <remarks>
+    /// Deliberately in no tag and in no image row: a container running on it is the state where the
+    /// containers page has only a digest to show and the images page truthfully holds nothing in
+    /// use, which without a note is the pair that reads as two lists disagreeing.
+    /// </remarks>
+    private const string GoneImage = "sha256:6666666666666666";
+
+    /// <summary>The tags this machine's images answer to, and the id behind each.</summary>
+    private static readonly Dictionary<string, string> Tagged = new(StringComparer.Ordinal)
+    {
+        [ApiImage] = "sha256:1111111111111111",
+        [DbImage] = "sha256:2222222222222222",
+        [CacheImage] = "sha256:3333333333333333",
     };
 
     /// <summary>The compose labels a service's container carries.</summary>
@@ -123,34 +169,42 @@ public sealed class SampleMachine : IEngineClient
         // fallback and looked exactly as it would if it did not exist. api and worker both waiting
         // on db is the smallest shape that orders differently from the list — stopping this project
         // reaches api and worker before db rather than db first.
-        Container("c1aaaaaaaaaa0000", Prefix + "api-1", "sample/api:1.4.2", "running",
+        Container("c1aaaaaaaaaa0000", Prefix + "api-1", ApiImage, "running",
             "Up 6 minutes", "api", [Published(8080, 8080)],
             dependsOn: "db:service_healthy:true"),
 
         // Running and healthy, so the status column carries something other than a duration. The
         // condition above is why it is healthy rather than merely up: a fixture whose db said
         // nothing about health would be one where the label it is depended on by made no sense.
-        Container("c2bbbbbbbbbb0000", Prefix + "db-1", "postgres:16-alpine", "running",
+        Container("c2bbbbbbbbbb0000", Prefix + "db-1", DbImage, "running",
             "Up 6 minutes (healthy)", "db", [Published(5432, 5432)]),
 
         // Killed. 137 is the exit code the whole diagnostic half of this product is about.
-        Container("c3cccccccccc0000", Prefix + "worker-1", "sample/api:1.4.2", "exited",
+        Container("c3cccccccccc0000", Prefix + "worker-1", ApiImage, "exited",
             "Exited (137) 12 seconds ago", "worker", dependsOn: "db:service_started:false"),
 
         // Exposed but not published: the port that is text rather than a link.
-        Container("c4dddddddddd0000", Prefix + "cache-1", "redis:7-alpine", "running",
+        Container("c4dddddddddd0000", Prefix + "cache-1", CacheImage, "running",
             "Up 2 hours", ports: [Exposed(6379)]),
 
         // A clean exit, which reads differently from a kill and shares a row shape with it.
-        Container("c5eeeeeeeeee0000", Prefix + "migrate-1", "sample/api:1.4.2", "exited",
+        Container("c5eeeeeeeeee0000", Prefix + "migrate-1", ApiImage, "exited",
             "Exited (0) 3 minutes ago"),
+
+        // Running on an image this machine no longer has (DD167). The only row whose image column
+        // is a digest and the only one carrying a note, which is the whole state: the images page
+        // holds nothing for it, and without the note the two pages read as disagreeing. Outside the
+        // project, because a rebuilt tag is not a compose problem and grouping it under one would
+        // suggest it is.
+        Container("c6ffffffffff0000", Prefix + "legacy-1", GoneImage, "running",
+            "Up 3 days", ports: [Exposed(9000)]),
     ];
 
     private readonly List<ImageSummary> _images =
     [
-        new() { Id = "sha256:1111111111111111", RepoTags = ["sample/api:1.4.2"], Size = 184320000 },
-        new() { Id = "sha256:2222222222222222", RepoTags = ["postgres:16-alpine"], Size = 247000000 },
-        new() { Id = "sha256:3333333333333333", RepoTags = ["redis:7-alpine"], Size = 41200000 },
+        new() { Id = Tagged[ApiImage], RepoTags = [ApiImage], Size = 184320000 },
+        new() { Id = Tagged[DbImage], RepoTags = [DbImage], Size = 247000000 },
+        new() { Id = Tagged[CacheImage], RepoTags = [CacheImage], Size = 41200000 },
 
         // Dangling, twice: enough for the prune button to have a number worth confirming.
         new() { Id = "sha256:4444444444444444", RepoTags = ["<none>:<none>"], Size = 183900000 },

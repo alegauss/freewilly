@@ -117,6 +117,44 @@ public sealed class ContainerRowTests
     }
 
     [Fact]
+    public void A_container_whose_image_left_the_store_says_so_beside_the_image()
+    {
+        // The daemon falls back to the raw id only when the reference stops resolving, so the two
+        // fields agreeing is the condition itself. It is the one fact that explains a digest here
+        // and an images page holding nothing in use (DD167).
+        var digest = "sha256:e4af4f3e24fdad8647264213f60f94ba16f67ae71a4b7281e6a0cd55de2627d1";
+        var row = ContainerRow.From(new ContainerSummary
+        {
+            Id = "b12f355e14c8",
+            Names = ["/vigilant_diffie"],
+            Image = digest,
+            ImageId = digest,
+        });
+
+        Assert.True(row.ImageIsGone);
+        Assert.Equal("image gone", row.ImageNote);
+        Assert.Contains("Recreating the container", row.ImageEvidence, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_container_whose_image_is_still_there_says_nothing_about_it()
+    {
+        // The quiet case is most of them, and a note drawn on every row would be noise where the
+        // column already answers.
+        var row = ContainerRow.From(new ContainerSummary
+        {
+            Id = "34527ec173c3",
+            Names = ["/probe"],
+            Image = "alpine:3.20",
+            ImageId = "sha256:d9e853e87e5548e4f9b1b1e5e5a3f1b6c0d4a2e7f8b9c0d1e2f3a4b5c6d7e8f9",
+        });
+
+        Assert.False(row.ImageIsGone);
+        Assert.Equal("", row.ImageNote);
+        Assert.Equal("", row.ImageEvidence);
+    }
+
+    [Fact]
     public void A_container_with_no_name_shows_its_short_id()
     {
         var row = ContainerRow.From(new ContainerSummary { Id = "ff00112233445566", Names = [] });

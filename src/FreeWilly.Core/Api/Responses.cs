@@ -169,7 +169,18 @@ public static class ImageReference
     /// </remarks>
     /// <param name="reference">Whatever the daemon reported.</param>
     /// <returns>The reference, as a person reads it.</returns>
-    public static string Short(string reference)
+    public static string Short(string reference) =>
+        Digest(reference) is { } digest ? digest[..12] : reference;
+
+    /// <summary>
+    /// Whether the daemon answered with an id rather than with a name (DD167).
+    /// </summary>
+    /// <param name="reference">Whatever the daemon reported.</param>
+    /// <returns>Whether it is a bare digest.</returns>
+    public static bool IsDigest(string reference) => Digest(reference) is not null;
+
+    /// <summary>The digest a reference is, or nothing where it is a name somebody chose.</summary>
+    private static string? Digest(string reference)
     {
         ArgumentNullException.ThrowIfNull(reference);
 
@@ -177,11 +188,9 @@ public static class ImageReference
             ? reference[Algorithm.Length..]
             : reference;
 
-        // Only a bare digest shortens. Anything else is a name somebody chose, and a name is the
-        // answer the column wanted in the first place.
-        return digest.Length >= 12 && digest.All(char.IsAsciiHexDigit)
-            ? digest[..12]
-            : reference;
+        // Only a bare digest shortens. Anything else is a name, and a name is the answer the
+        // column wanted in the first place.
+        return digest.Length >= 12 && digest.All(char.IsAsciiHexDigit) ? digest : null;
     }
 }
 
@@ -517,6 +526,25 @@ public sealed record ContainerSummary
 
     /// <summary>The image as a column shows it: a name, or twelve characters of a digest (DD166).</summary>
     public string ImageName => ImageReference.Short(Image);
+
+    /// <summary>
+    /// Whether the image this was created from has left the store (DD167).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Image"/> holds the reference the container was created with, and the daemon
+    /// falls back to the raw id only when that reference stops resolving — so the two fields
+    /// agreeing is the condition itself and not a heuristic for it. Measured against this engine:
+    /// a container whose tag was rebuilt under it reports both as the same <c>sha256:…</c>, and
+    /// one created from <c>alpine:3.20</c> reports the tag.
+    ///
+    /// <para>Worth saying on the row because it is the whole explanation for a digest in one list
+    /// and nothing held in the other, and because a restart will not pick the new image up — only
+    /// recreating the container will.</para>
+    /// </remarks>
+    public bool ImageIsGone =>
+        ImageReference.IsDigest(Image)
+        && string.Equals(
+            ImageReference.Short(Image), ImageReference.Short(ImageId), StringComparison.Ordinal);
 
     /// <summary>
     /// The ports as a list renders them, with rows that would read identically collapsed.

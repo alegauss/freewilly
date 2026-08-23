@@ -8,8 +8,6 @@
 
 ## Block C — The window (claude-tray's elements)
 
-- 📋 **DD167** (deps: DD166 ✅) **Nothing says a container's image left the store, so a digest row and an empty USED BY read as two lists disagreeing** — The images page joins on image id and truthfully finds no holder, so the fact that explains both pages is the one neither states. → §DD167
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks

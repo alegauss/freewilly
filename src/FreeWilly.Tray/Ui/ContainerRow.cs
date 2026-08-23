@@ -300,6 +300,33 @@ public sealed record ContainerRow(
         _ => Status,
     };
 
+    /// <summary>
+    /// Whether the image this container runs on has left the store (DD167).
+    /// </summary>
+    /// <remarks>
+    /// The one fact that explains a digest in this column and an images page holding nothing in
+    /// use: those are two correct answers to the same question, and without this they read as two
+    /// lists disagreeing.
+    /// </remarks>
+    public bool ImageIsGone { get; init; }
+
+    /// <summary>What the note beside the image says, or nothing where the image is still there.</summary>
+    public string ImageNote => ImageIsGone ? "image gone" : "";
+
+    /// <summary>
+    /// Why the note says it, and what to do about it.
+    /// </summary>
+    /// <remarks>
+    /// A note is an assertion and owes its evidence, the same debt <see cref="StateEvidence"/> pays.
+    /// The last sentence is the actionable half: a restart reuses the image the container already
+    /// holds, so the reflex that would fix almost anything else does nothing here.
+    /// </remarks>
+    public string ImageEvidence => ImageIsGone
+        ? "This container's image is no longer in the image list — it was rebuilt or removed "
+          + "while the container kept running, so the daemon has only its digest left to report. "
+          + "Recreating the container is what picks up the current image; restarting it will not."
+        : "";
+
     /// <summary>The fill the chip is drawn with, set once per render from <see cref="RowStyle"/>.</summary>
     public System.Windows.Media.Brush? ChipFill { get; init; }
 
@@ -366,7 +393,8 @@ public sealed record ContainerRow(
             {
                 nameof(Image), nameof(State), nameof(Status), nameof(Ports), nameof(Service),
                 nameof(DependsOn), nameof(ExitCode), nameof(StateEvidence), nameof(IsRunning),
-                nameof(IsLive), nameof(ChipFill), nameof(ChipText),
+                nameof(IsLive), nameof(ChipFill), nameof(ChipText), nameof(ImageIsGone),
+                nameof(ImageNote), nameof(ImageEvidence),
             };
 
         /// <summary>What only a header answers. A container returns each of these empty.</summary>
@@ -674,6 +702,7 @@ public sealed record ContainerRow(
             container.Id)
         {
             Project = project,
+            ImageIsGone = container.ImageIsGone,
             Service = Label(container, Core.Agent.ContextPack.ServiceLabel),
             DependsOn = ComposeOrder.DependenciesIn(
                 Label(container, ComposeOrder.DependsOnLabel)),
