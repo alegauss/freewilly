@@ -20,6 +20,17 @@ public sealed class VolumeRowTests
             UsageData = size is { } bytes ? new VolumeUsage { Size = bytes } : null,
         };
 
+    /// <summary>A volume the daemon has labelled the way it labels one it named itself (DD169).</summary>
+    private static VolumeSummary Labelled(string name) =>
+        new()
+        {
+            Name = name,
+            Labels = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["com.docker.volume.anonymous"] = "",
+            },
+        };
+
     private static ContainerSummary Mounting(string name, params string[] volumes) =>
         new()
         {
@@ -265,6 +276,50 @@ public sealed class VolumeRowTests
     public void An_uppercase_digest_shaped_name_is_not_what_docker_generates()
     {
         Assert.False(VolumeRow.From([Volume(Anonymous.ToUpperInvariant())], [])[0].IsAnonymous);
+    }
+
+    // ---- the daemon's own word, where there is one (DD169) --------------------------------------
+
+    [Fact]
+    public void The_daemons_label_is_what_says_a_volume_is_anonymous()
+    {
+        var rows = VolumeRow.From([Labelled(Anonymous)], []);
+
+        Assert.True(rows[0].IsAnonymous);
+        Assert.Equal("anonymous, nothing mounts it", rows[0].Holders);
+    }
+
+    [Fact]
+    public void A_digest_shaped_name_is_a_name_where_the_daemon_labels_the_ones_it_generated()
+    {
+        // The case the shape test cannot see and this exists for: a script that names volumes after
+        // content produces exactly this, and the whole tab then describes somebody's data as loose.
+        // One labelled volume in the list is what proves the daemon stamps them, so the other's
+        // silence means what it says.
+        var named = new string('a', 64);
+        var rows = VolumeRow.From([Labelled(Anonymous), Volume(named)], []);
+
+        Assert.True(rows.Single(row => row.Name == Anonymous).IsAnonymous);
+        Assert.False(rows.Single(row => row.Name == named).IsAnonymous);
+    }
+
+    [Fact]
+    public void With_no_label_anywhere_the_shape_is_still_the_answer()
+    {
+        // A daemon old enough never to stamp one leaves every volume looking named, so absence
+        // proves nothing and the fallback stands. This is the honest limit of DD169.
+        var rows = VolumeRow.From([Volume(Anonymous), Volume("shop_pgdata")], []);
+
+        Assert.True(rows.Single(row => row.Name == Anonymous).IsAnonymous);
+        Assert.False(rows.Single(row => row.Name == "shop_pgdata").IsAnonymous);
+    }
+
+    [Fact]
+    public void A_labelled_volume_whose_name_is_nothing_like_a_digest_is_still_anonymous()
+    {
+        // The other direction, and the reason the label is asked first rather than as a tiebreak:
+        // the shape test would call this a name and the daemon has already said otherwise.
+        Assert.True(VolumeRow.From([Labelled("not-a-digest")], [])[0].IsAnonymous);
     }
 
     [Fact]

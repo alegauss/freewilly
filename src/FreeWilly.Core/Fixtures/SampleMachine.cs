@@ -217,11 +217,17 @@ public sealed class SampleMachine : IEngineClient
         new() { Name = "sample_uploads", Driver = "local" },
 
         // Anonymous: the sixty-four hex characters `docker run -v /data` leaves behind, and the one
-        // the prune button is actually for.
+        // the prune button is actually for. Labelled the way the daemon labels it (DD169) — the
+        // list reads that label in preference to the name's shape, and a fixture carrying only the
+        // shape would exercise the fallback on every capture and the rule on none.
         new()
         {
             Name = "9f2c1d4b6a8e0f3c5d7b9a1e2f4c6d8b0a2e4f6c8d0b2a4e6f8c0d2b4a6e8f0c",
             Driver = "local",
+            Labels = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["com.docker.volume.anonymous"] = "",
+            },
         },
     ];
 

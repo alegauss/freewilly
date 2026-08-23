@@ -200,17 +200,60 @@ public sealed record VolumeRow(
             }
         }
 
+        // Enumerated once: the answer below is about the list as a whole, and `volumes` is an
+        // IEnumerable a caller is free to make lazily.
+        var all = volumes.ToList();
+        var stamped = StampsAnonymous(all);
+
         return
         [
-            .. volumes
+            .. all
                 .Select(volume => new VolumeRow(
                     volume.Name,
                     volume.UsageData is { Size: >= 0 } usage ? usage.Size : null,
                     holders.TryGetValue(volume.Name, out var names) ? names : [],
-                    LooksAnonymous(volume.Name)))
+                    NobodyNamed(volume, stamped)))
                 .OrderBy(row => row.Name, StringComparer.Ordinal),
         ];
     }
+
+    /// <summary>The label a daemon puts on a volume it named itself.</summary>
+    private const string AnonymousLabel = "com.docker.volume.anonymous";
+
+    /// <summary>
+    /// Whether this daemon says so itself, rather than leaving it to be inferred (DD169).
+    /// </summary>
+    /// <remarks>
+    /// The label's presence is a fact and its absence is not: a daemon old enough never to stamp one
+    /// leaves every volume looking named. So the question is asked of the list rather than of the
+    /// row — one volume carrying it proves this daemon stamps them, and every other volume's silence
+    /// then means what it says.
+    ///
+    /// <para>A machine whose volumes are all named answers no here and keeps the shape test, which
+    /// is the honest limit of this: there is nothing in the list to learn from.</para>
+    /// </remarks>
+    /// <param name="volumes">Every volume the endpoint returned.</param>
+    /// <returns>Whether the label can be trusted to be absent.</returns>
+    private static bool StampsAnonymous(IEnumerable<VolumeSummary> volumes) =>
+        volumes.Any(volume => volume.Labels?.ContainsKey(AnonymousLabel) == true);
+
+    /// <summary>
+    /// Whether nobody named this volume.
+    /// </summary>
+    /// <remarks>
+    /// The label where the daemon writes one, and the shape of the generated name where it does not.
+    /// What this decides is what the tab says about the row — the count in the totals line, the
+    /// number the prune dialog promises, and since DD168 how much of the name is drawn. It does not
+    /// decide what a prune deletes: that call carries no <c>all=true</c> and the daemon takes only
+    /// the volumes it knows to be anonymous, whatever this list believes.
+    /// </remarks>
+    /// <param name="volume">The volume.</param>
+    /// <param name="stamped">Whether this daemon labels the ones it named.</param>
+    /// <returns>Whether it is anonymous.</returns>
+    private static bool NobodyNamed(VolumeSummary volume, bool stamped) =>
+        stamped
+            ? volume.Labels?.ContainsKey(AnonymousLabel) == true
+            : LooksAnonymous(volume.Name);
 
     /// <summary>
     /// Put sizes onto rows that already exist, leaving everything else alone.
@@ -245,6 +288,17 @@ public sealed record VolumeRow(
         ];
     }
 
+    /// <summary>
+    /// The fallback, for a daemon that stamps nothing (DD169).
+    /// </summary>
+    /// <remarks>
+    /// This was the whole rule until the label was read, and it is kept only for the daemon that has
+    /// no label to read. It cannot tell a generated name from a name somebody chose that happens to
+    /// be a digest — a script naming volumes after content produces exactly that — which is why it
+    /// is no longer asked first.
+    /// </remarks>
+    /// <param name="name">The volume's name.</param>
+    /// <returns>Whether it has the shape of a name Docker generates.</returns>
     private static bool LooksAnonymous(string name) =>
         name.Length == AnonymousNameLength
         && name.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));

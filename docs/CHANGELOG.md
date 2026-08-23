@@ -101,6 +101,7 @@
 - ✅ **DD138** **A compose file that binds host folders leaves the volumes tab saying nothing has been created, which reads as lost data** — With the list empty the tab now says how many bind mounts are in use, who holds them and that they are host folders the engine does not own, rather than that nothing was created.
 - ✅ **DD139** **One named volume anywhere hides the bind mounts again, because only the empty state ever mentions them** — The totals line carries a third clause naming the same bind mounts the empty state counts, so a tab that has rows still says what it is not showing.
 - ✅ **DD168** **An anonymous volume's name fills the column with 64 characters, where the app's own delete dialog shows 12** — The name column draws twelve characters and an ellipsis for a generated name, the whole digest moved to the tooltip, and the delete dialog reads the row's rule instead of its own copy.
+- ✅ **DD169** **Whether a volume is anonymous is guessed from its name being 64 hex characters, not read off the daemon's label** — The daemon's label decides where the list carries one, proven by any volume in it having one, and the sixty-four hex characters stay as the fallback for a daemon that stamps none.
 
 ## Block F — Installer and distribution (free, Apache 2.0)
 
