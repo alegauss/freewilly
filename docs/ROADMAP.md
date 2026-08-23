@@ -14,6 +14,9 @@
 
 ## Block F — Installer and distribution (free, Apache 2.0)
 
+- 📋 **DD171** (deps: —) **The release check ships off, so an install learns a version exists only if somebody found the menu item first** — claude-tray checks on every launch with no switch and is this product's reference, and a check nobody turns on is a check nobody has. → §DD171
+- 📋 **DD172** (deps: DD171) **The balloon announcing a release does nothing when clicked, so the offer is reachable only through the tray menu** — claude-tray installs from that click, and the balloon is the only thing on screen at the moment the news arrives. → §DD172
+
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
 ## Block H — The public surface (the site a reader and an agent both read)
