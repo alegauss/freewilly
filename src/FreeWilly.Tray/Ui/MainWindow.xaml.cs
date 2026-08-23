@@ -122,10 +122,18 @@ internal partial class MainWindow : Window
             return false;
         }
 
+        // The button's own tag and never the caller's word (DD170). The lookup above matches
+        // case-insensitively, which is right for a name typed on a command line, and `Show` decides
+        // with a switch on an exact string — so passing `header` through drew the default page under
+        // a strip that said otherwise. The Checked handler has always passed the tag; this is the
+        // path that did not, and it only runs when the window reopened on the destination being
+        // asked for, which is why a capture could photograph the wrong list and report success.
+        var destination = (string)found.Tag;
+
         // Already there: Checked does not fire again, so show it directly.
         if (found.IsChecked == true)
         {
-            Show(header);
+            Show(destination);
         }
         else
         {

@@ -158,4 +158,24 @@ public sealed class MainWindowLayoutTests
                 page => Path.GetFileName(page) == destination + "Page.xaml");
         }
     }
+
+    [Fact]
+    public void Every_destination_in_the_strip_is_a_case_the_switch_answers()
+    {
+        // DD170. `Show` decides with a switch on an exact string and its `default` draws the
+        // containers list, so a destination the switch does not name is one that silently shows the
+        // wrong page under a strip that says otherwise — which is what a capture then photographs
+        // and reports success about. Containers is excluded because it *is* the default.
+        var xaml = File.ReadAllText(RepositoryFile("src/FreeWilly.Tray/Ui/MainWindow.xaml"));
+        var code = File.ReadAllText(RepositoryFile("src/FreeWilly.Tray/Ui/MainWindow.xaml.cs"));
+
+        var destinations = Regex.Matches(xaml, @"Tag=""([^""]+)"" Checked=""Destination_Checked""")
+            .Select(match => match.Groups[1].Value)
+            .Where(destination => !string.Equals(destination, "Containers", StringComparison.Ordinal));
+
+        foreach (var destination in destinations)
+        {
+            Assert.Contains($"case \"{destination}\":", code, StringComparison.Ordinal);
+        }
+    }
 }
