@@ -111,7 +111,7 @@ export const sponsor = {
   label: "Sponsored by",
   name: "Viglet",
   url: "https://www.viglet.org",
-  github: "https://github.com/openviglet",
+  siteLabel: "viglet.org",
   logo: "/freewilly/viglet/viglet-logo.png",
   summary: "Open source software for search and content.",
   products: [

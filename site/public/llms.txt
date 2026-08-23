@@ -186,12 +186,10 @@ and content management.
   with generative AI: semantic and faceted navigation, hybrid retrieval (vector +
   BM25), RAG and AI agents grounded in indexed content, with a pluggable engine
   (Apache Solr, Elasticsearch or Lucene). Apache 2.0, self-hostable.
-  Source: https://github.com/openviglet/turing
 - **Viglet Shio CMS** (https://shio.viglet.org) — open source headless CMS whose
   primary operator is a coding agent: authoring over MCP and content as files,
   curator approval in a React console, delivery through a Content Delivery API
   (REST and GraphQL, with TypeScript SDKs). Apache 2.0, self-hostable.
-  Source: https://github.com/openviglet/shio
 
 ## Links
 

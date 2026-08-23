@@ -52,9 +52,9 @@ function Sponsor() {
           {sponsor.name}
         </a>
         <p>
-          {sponsor.summary} Both Apache 2.0 and self-hostable, on{" "}
-          <a href={sponsor.github} target="_blank" rel="noopener">
-            github.com/openviglet
+          {sponsor.summary} Both Apache 2.0 and self-hostable — more at{" "}
+          <a href={sponsor.url} target="_blank" rel="noopener">
+            {sponsor.siteLabel}
           </a>
           .
         </p>
