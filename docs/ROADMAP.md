@@ -12,6 +12,9 @@
 
 ## Block E — Images, volumes and networks
 
+- 📋 **DD168** (deps: —) **An anonymous volume's name fills the column with 64 characters, where the app's own delete dialog shows 12** — The dialog already shortens it and the list does not, so one window spells one identifier two ways and the wider spelling helps nobody choose a row. → §DD168
+- 📋 **DD169** (deps: —) **Whether a volume is anonymous is guessed from its name being 64 hex characters, not read off the daemon's label** — The daemon stamps com.docker.volume.anonymous and the summary already carries it, and a named volume shaped like a digest would be swept into Prune anonymous. → §DD169
+
 ## Block F — Installer and distribution (free, Apache 2.0)
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
