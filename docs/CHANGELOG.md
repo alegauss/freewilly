@@ -100,6 +100,7 @@
 - ✅ **DD12** **Volumes are invisible: a user cannot see which exist, what they cost on disk, or which containers mount them** — Volumes with their sizes and what mounts them, the compose project read off the name, and a deletion that names all of it first because a volume is the one thing here that does not come back.
 - ✅ **DD138** **A compose file that binds host folders leaves the volumes tab saying nothing has been created, which reads as lost data** — With the list empty the tab now says how many bind mounts are in use, who holds them and that they are host folders the engine does not own, rather than that nothing was created.
 - ✅ **DD139** **One named volume anywhere hides the bind mounts again, because only the empty state ever mentions them** — The totals line carries a third clause naming the same bind mounts the empty state counts, so a tab that has rows still says what it is not showing.
+- ✅ **DD168** **An anonymous volume's name fills the column with 64 characters, where the app's own delete dialog shows 12** — The name column draws twelve characters and an ellipsis for a generated name, the whole digest moved to the tooltip, and the delete dialog reads the row's rule instead of its own copy.
 
 ## Block F — Installer and distribution (free, Apache 2.0)
 

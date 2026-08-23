@@ -10,29 +10,6 @@
 
 ## Block E — Images, volumes and networks
 
-### §DD168 Sixty-four characters where the dialog next door shows twelve
-
-An anonymous volume's name is not a name somebody lost — nobody ever gave it one, so the
-daemon generated a 64-character digest and that string is what `docker volume ls` prints
-too. Nothing is missing. What is wrong is how much of it the list draws.
-
-Every one of those characters is noise to the only decision this tab exists for. A
-reader picking which volume to delete uses the size, the MOUNTED BY column and, for a
-named one, the compose prefix. The digest distinguishes one anonymous volume from
-another, and twelve characters do that as well as sixty-four while leaving the column to
-the rest of the row.
-
-The window already knows this. `VolumeRemoval.Question` writes `row.Name[..12]…` for
-exactly this case, so the dialog a user reaches by clicking Delete shows a short form of
-the identifier the row above it just showed in full. One window, one identifier, two
-spellings — the same fault DD166 found in the containers list, where the fix was to
-write the rule once and let both surfaces read it.
-
-So the list shortens an anonymous volume the way the dialog already does, and a named
-volume is left exactly as it is: a name somebody chose is the answer the column wanted.
-The full digest stays reachable, because a deletion is addressed to it and a user
-copying one out of the window needs all of it — the tooltip is where it goes.
-
 ### §DD169 A guess where the daemon states the fact, on the path that deletes data
 
 `LooksAnonymous` decides by shape: sixty-four characters, all of them hex. That was a

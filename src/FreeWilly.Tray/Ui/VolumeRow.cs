@@ -57,6 +57,37 @@ public sealed record VolumeRow(
         }
     }
 
+    /// <summary>How much of a generated name is worth drawing.</summary>
+    private const int ShownCharacters = 12;
+
+    /// <summary>
+    /// What the name column draws (DD168).
+    /// </summary>
+    /// <remarks>
+    /// A name somebody chose is the answer the column wanted and is left exactly as it is. A name
+    /// the daemon generated is sixty-four characters of digest, and every one past the twelfth
+    /// distinguishes nothing a reader of this tab is deciding between — the size, what mounts it and
+    /// the compose prefix are what that decision is made on.
+    ///
+    /// <para>Twelve and an ellipsis because that is what this window's own delete dialog has always
+    /// written for this case, and one identifier spelled two ways in one window is the fault DD166
+    /// found in the containers list. The rule is here now and the dialog reads it, rather than each
+    /// surface carrying its own copy.</para>
+    /// </remarks>
+    public string NameText =>
+        IsAnonymous ? $"{Name[..Math.Min(Name.Length, ShownCharacters)]}…" : Name;
+
+    /// <summary>
+    /// The whole name where the column is not showing it, and nothing where it is.
+    /// </summary>
+    /// <remarks>
+    /// A deletion is addressed to the full string and somebody copying one out of the window needs
+    /// all of it, so shortening the cell has to leave it reachable. Null rather than empty on a
+    /// named row: a tooltip repeating the text under the pointer is noise, and WPF draws an empty
+    /// box for an empty one.
+    /// </remarks>
+    public string? FullName => IsAnonymous ? Name : null;
+
     /// <summary>What the size column reads, including while the answer is still being worked out.</summary>
     public string SizeText => Size is { } bytes ? Bytes.Human(bytes) : "measuring…";
 
@@ -393,9 +424,12 @@ public static class VolumeRemoval
     {
         ArgumentNullException.ThrowIfNull(row);
 
+        // Through the row's own rule rather than shortening it a second time here (DD168). This is
+        // where the twelve-character form was first written, and the list drawing the whole digest
+        // beside a dialog that did not is what the task is about.
         var what = row.IsAnonymous
-            ? $"Delete the anonymous volume {row.Name[..12]}…?"
-            : $"Delete the volume {row.Name}?";
+            ? $"Delete the anonymous volume {row.NameText}?"
+            : $"Delete the volume {row.NameText}?";
 
         var whose = row.Project is { } project
             ? $" It is named the way `docker compose` names a volume in the project \"{project}\"."

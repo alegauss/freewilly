@@ -218,6 +218,32 @@ public sealed class VolumeRowTests
     }
 
     [Fact]
+    public void A_generated_name_is_drawn_short_and_kept_whole_in_the_tooltip()
+    {
+        // Twelve and an ellipsis, which is what the delete dialog has always written for this case.
+        // The whole digest is what a deletion is addressed to, so shortening the cell has to leave
+        // it reachable (DD168).
+        var row = VolumeRow.From([Volume(Anonymous)], [])[0];
+
+        Assert.Equal($"{Anonymous[..12]}…", row.NameText);
+        Assert.Equal(Anonymous, row.FullName);
+
+        // And the dialog reads the row's rule rather than shortening it a second time.
+        Assert.Contains(row.NameText, VolumeRemoval.Question(row), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_name_somebody_chose_is_drawn_whole_and_needs_no_tooltip()
+    {
+        // The column wanted the name, so there is nothing to shorten and nothing to put under the
+        // pointer — a tooltip repeating the text it covers is noise.
+        var row = VolumeRow.From([Volume("shop_pgdata")], [])[0];
+
+        Assert.Equal("shop_pgdata", row.NameText);
+        Assert.Null(row.FullName);
+    }
+
+    [Fact]
     public void A_named_volume_that_merely_looks_long_is_not_anonymous()
     {
         var rows = VolumeRow.From([Volume("my_very_long_but_perfectly_named_volume")], []);

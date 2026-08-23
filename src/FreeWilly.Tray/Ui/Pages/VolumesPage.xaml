@@ -66,8 +66,12 @@
               <ColumnDefinition Width="2*" />
               <ColumnDefinition Width="120" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="{Binding Name}"
-                       TextTrimming="CharacterEllipsis"
+            <!-- DD168. A generated name is drawn short, and the tooltip is where the whole digest
+                 stays: a deletion is addressed to it and somebody copying one out of the window
+                 needs all of it. Null on a named row, so no empty box opens over a name the cell
+                 is already showing in full. -->
+            <TextBlock Grid.Column="0" Text="{Binding NameText}"
+                       TextTrimming="CharacterEllipsis" ToolTip="{Binding FullName}"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
             <TextBlock Grid.Column="1" Text="{Binding SizeText}"
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
