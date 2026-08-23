@@ -177,6 +177,22 @@ it.
   distribution's disk, `bin\docker.exe`).
 - Nothing is uploaded, nothing is measured, and there is no account.
 
+## Sponsor
+
+Sponsored by **Viglet** (https://www.viglet.org), an open source project for search
+and content management.
+
+- **Viglet Turing ES** (https://turing.viglet.org) — open source enterprise search
+  with generative AI: semantic and faceted navigation, hybrid retrieval (vector +
+  BM25), RAG and AI agents grounded in indexed content, with a pluggable engine
+  (Apache Solr, Elasticsearch or Lucene). Apache 2.0, self-hostable.
+  Source: https://github.com/openviglet/turing
+- **Viglet Shio CMS** (https://shio.viglet.org) — open source headless CMS whose
+  primary operator is a coding agent: authoring over MCP and content as files,
+  curator approval in a React console, delivery through a Content Delivery API
+  (REST and GraphQL, with TypeScript SDKs). Apache 2.0, self-hostable.
+  Source: https://github.com/openviglet/shio
+
 ## Links
 
 - [Website](https://alegauss.github.io/freewilly/): project page
@@ -185,3 +201,4 @@ it.
 - [Roadmap](https://github.com/alegauss/freewilly/blob/main/docs/ROADMAP.md): what is open, and why each line exists
 - [Changelog](https://github.com/alegauss/freewilly/blob/main/docs/CHANGELOG.md): what has shipped
 - [Contributing](https://github.com/alegauss/freewilly/blob/main/CONTRIBUTING.md): how the governed docs work
+- [Sponsor](https://www.viglet.org): Viglet, open source search and content management

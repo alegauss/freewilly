@@ -101,6 +101,36 @@ export const footer = {
     "Unofficial / community project — not affiliated with, endorsed by, or sponsored by Docker, Inc. “Docker” and “Docker Desktop” are trademarks of Docker, Inc.; this tool installs the Apache-2.0 licensed Moby engine and Docker CLI as published upstream, unmodified, and pins each artefact to a version and a digest. Apache-2.0 is this project's stated licence, in LICENSE, with a NOTICE covering the bundled upstream binaries. © 2026 Alexandre Oliveira.",
 } as const;
 
+/* --------------------------------------------------------------- sponsor */
+
+// Mirrors alegauss.github.io/sponsor.json — the canonical sponsor declaration for
+// these projects. Transcribed here rather than fetched at runtime: this site is
+// prerendered, and the whole point of naming a sponsor is that crawlers and LLMs
+// read it in the served HTML.
+export const sponsor = {
+  label: "Sponsored by",
+  name: "Viglet",
+  url: "https://www.viglet.org",
+  github: "https://github.com/openviglet",
+  logo: "/freewilly/viglet/viglet-logo.png",
+  summary: "Open source software for search and content.",
+  products: [
+    {
+      name: "Viglet Turing ES",
+      url: "https://turing.viglet.org",
+      logo: "/freewilly/viglet/turing-logo.png",
+      inline:
+        "enterprise search with semantic navigation, hybrid retrieval (vector + BM25) and generative AI (RAG)",
+    },
+    {
+      name: "Viglet Shio CMS",
+      url: "https://shio.viglet.org",
+      logo: "/freewilly/viglet/shio-logo.png",
+      inline: "the headless CMS built for coding agents",
+    },
+  ],
+} as const;
+
 /* ------------------------------------------------------------------ hero */
 
 export const hero = {
