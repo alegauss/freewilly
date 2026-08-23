@@ -113,20 +113,22 @@ export const sponsor = {
   url: "https://www.viglet.org",
   siteLabel: "viglet.org",
   logo: "/freewilly/viglet/viglet-logo.png",
-  summary: "Open source software for search and content.",
+  summary:
+    "Open source search and content tools for organisations with a lot to publish — run on your own servers, with no per-user licence.",
   products: [
     {
       name: "Viglet Turing ES",
       url: "https://turing.viglet.org",
       logo: "/freewilly/viglet/turing-logo.png",
       inline:
-        "enterprise search with semantic navigation, hybrid retrieval (vector + BM25) and generative AI (RAG)",
+        "so visitors find what they came for, with AI answers drawn only from your own content",
     },
     {
       name: "Viglet Shio CMS",
       url: "https://shio.viglet.org",
       logo: "/freewilly/viglet/shio-logo.png",
-      inline: "the headless CMS built for coding agents",
+      inline:
+        "so a new page goes live the same day, reviewed and approved by your own team",
     },
   ],
 } as const;
