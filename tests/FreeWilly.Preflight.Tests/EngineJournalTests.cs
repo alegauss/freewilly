@@ -79,9 +79,9 @@ public sealed class EngineJournalTests : IDisposable
         var digest = JournalDigest.Of(new SampleJournal().Read());
 
         Assert.Equal(2, digest.Restarts);
-        Assert.Equal(16, digest.Lines);
+        Assert.Equal(17, digest.Lines);
         Assert.Equal("2026-08-21 09:19:41", digest.Since);
-        Assert.Equal("2 restarts since 2026-08-21 09:19:41 · 16 lines", digest.Summary());
+        Assert.Equal("2 restarts since 2026-08-21 09:19:41 · 17 lines", digest.Summary());
     }
 
     /// <summary>The words the digest counts are the words the host writes (DD165).</summary>

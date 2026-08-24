@@ -2,7 +2,7 @@ namespace FreeWilly.Core.Engine;
 
 /// <summary>
 /// Turns a run of polls into the decision to stop serving, so one slow answer is not mistaken for a
-/// dead engine (DD133).
+/// dead engine (DD133), and dates the run it counted (DD174).
 /// </summary>
 /// <remarks>
 /// <c>--run</c> polls <see cref="EngineLifecycle.StatusAsync"/> every couple of seconds and comes
@@ -43,6 +43,22 @@ public sealed class EngineWatch
     public int QuietPolls { get; private set; }
 
     /// <summary>
+    /// Whether the poll just folded in is the one that started a run of silence (DD174).
+    /// </summary>
+    /// <remarks>
+    /// True on exactly one call of a run, which is what makes it the right thing to announce on —
+    /// the same shape as <see cref="EngineRevival.JustRanOutOfQuickAttempts"/> and for the same
+    /// reason. A line on every quiet poll would be the host repeating itself for as long as the
+    /// failure lasts, and the journal is worth opening because everything in it is something that
+    /// happened rather than something that went on happening.
+    ///
+    /// <para>An engine that flaps writes one line per spell, and that is not a defect: each spell
+    /// is a real crossing, and a file showing four of them in a minute is describing a machine a
+    /// reader needs to know about.</para>
+    /// </remarks>
+    public bool JustWentQuiet => QuietPolls == 1;
+
+    /// <summary>
     /// Fold one poll in, and say whether to carry on serving.
     /// </summary>
     /// <param name="now">What the poll observed.</param>
@@ -73,6 +89,27 @@ public sealed class EngineWatch
 
         QuietPolls++;
         return !now.Conclusive && QuietPolls < ToleratedQuietPolls;
+    }
+
+    /// <summary>What to say about the poll that began the silence (DD174).</summary>
+    /// <param name="first">The first thing observed after a run of answers.</param>
+    /// <returns>The line.</returns>
+    /// <remarks>
+    /// Without this, the journal's first word about any failure is <see cref="WhyItStopped"/>, and
+    /// that line is written six polls late. At two seconds between polls and three for the ping,
+    /// six of them is between twelve and thirty seconds — so a reader could date the verdict and
+    /// never the failure, and what lives inside that window is the difference between an engine
+    /// that went quiet while idle and one that went quiet under load.
+    ///
+    /// <para>The tail says which end of the gap this is, and it is not the count
+    /// <see cref="WhyItStopped"/> carries: there is nothing to count yet. Naming it as the first
+    /// keeps the two lines from reading as the same observation written twice, which is what they
+    /// would otherwise be — the same state, the same detail, ten seconds apart.</para>
+    /// </remarks>
+    public string WhenItWentQuiet(EngineStatus first)
+    {
+        ArgumentNullException.ThrowIfNull(first);
+        return $"{first.State,-8}  {first.Detail} — first quiet poll";
     }
 
     /// <summary>What to say about the run of silence that ended the watch.</summary>

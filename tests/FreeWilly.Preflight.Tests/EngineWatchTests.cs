@@ -145,6 +145,56 @@ public sealed class EngineWatchTests
     }
 
     [Fact]
+    public void Only_the_poll_that_starts_the_silence_announces_it()
+    {
+        // DD174. The crossing is one event and the run is another, and a host that said "gone quiet"
+        // on every poll of a failure would write six lines about one outage — which is the file
+        // repeating itself, and the reason nothing was written at all before this.
+        var watch = new EngineWatch();
+
+        watch.KeepServing(Quiet());
+        Assert.True(watch.JustWentQuiet);
+
+        for (var i = 1; i < EngineWatch.ToleratedQuietPolls; i++)
+        {
+            watch.KeepServing(Quiet());
+            Assert.False(watch.JustWentQuiet);
+        }
+    }
+
+    [Fact]
+    public void An_engine_that_answers_and_goes_quiet_again_is_a_second_crossing()
+    {
+        // A flap is not one long failure, and reporting it as one would lose the shape of it. Each
+        // spell is a real crossing out of a working engine, and a journal showing several in a
+        // minute is describing a machine its reader needs to know about.
+        var watch = new EngineWatch();
+
+        watch.KeepServing(Quiet());
+        watch.KeepServing(Running());
+        watch.KeepServing(Quiet());
+
+        Assert.True(watch.JustWentQuiet);
+    }
+
+    [Fact]
+    public void The_crossing_names_itself_rather_than_reading_as_the_verdict_written_twice()
+    {
+        // Both lines carry the same state and the same detail — they are the same engine, seen ten
+        // seconds apart — so without the tail the pair reads as one observation logged twice, and
+        // the earlier of them stops dating anything.
+        var watch = new EngineWatch();
+        var first = Quiet();
+        watch.KeepServing(first);
+
+        var said = watch.WhenItWentQuiet(first);
+
+        Assert.Contains(first.Detail, said, StringComparison.Ordinal);
+        Assert.Contains("first quiet poll", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("polls in a row", said, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_tolerance_outlasts_the_window_a_caller_was_promised()
     {
         // DD133 asked whether "is the engine ready" could be an answer that survives the next thirty

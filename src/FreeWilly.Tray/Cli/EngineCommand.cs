@@ -285,6 +285,16 @@ internal static class EngineCommand
 
                 if (watch.KeepServing(now) && !(justResumed && !now.Usable))
                 {
+                    // DD174. Written from inside the quiet path, and it is the one thing written
+                    // there that is not a stumble: the crossing out of a working engine. Placed
+                    // after the branch has been taken rather than before it, so a conclusive
+                    // reading — which ends the watch on its first poll — reports itself once below
+                    // instead of twice, here and there, about the same observation.
+                    if (watch.JustWentQuiet)
+                    {
+                        Note(journal, $"  {watch.WhenItWentQuiet(now)}");
+                    }
+
                     continue;
                 }
 

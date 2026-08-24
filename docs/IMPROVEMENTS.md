@@ -2,25 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD174 When the silence started is worth a line
-
-`Supervise` writes only where the watch has already decided, which is the rule that
-keeps this file worth opening: a quiet engine writes nothing. The cost is that the six
-polls behind `— 6 polls in a row` are invisible. At two seconds between polls and three
-for each ping, that verdict is reached anywhere from twelve to thirty seconds after the
-engine actually stopped answering, and on 24 August that was the whole difference
-between an engine that went quiet while idle and one that went quiet under load — a
-question the journal could not settle either way.
-
-One line on the crossing into silence fixes it, and only the crossing: the first poll
-after a run of good ones, then nothing until the verdict or the recovery. An engine that
-answers still writes nothing, an incident costs one extra line, and a reader gets both
-ends of the gap instead of the far end alone.
-
-The pairing with DD173 is the point. DD173 says what broke; this says when. Neither is
-worth much by itself, and together they turn a restart line into an account of an
-incident.
-
 ### §DD175 Say what was actually checked
 
 `StatusAsync` reports `the daemon is running and …` on the strength of `_daemon.Alive`,

@@ -8,8 +8,13 @@ namespace FreeWilly.Core.Fixtures;
 /// <remarks>
 /// <b>It is the run of 21 August 2026, which is the failure this whole page was built for.</b> The
 /// engine goes quiet, the host spends its quick attempts, the machine stays down, and a human
-/// eventually clicks Start — with the lines DD162 and DD163 added, which is what that day was
-/// missing. A fixture chosen to look healthy would photograph the one state nobody needs to see.
+/// eventually clicks Start — with the lines DD162, DD163 and DD174 added, which is what that day
+/// was missing. A fixture chosen to look healthy would photograph the one state nobody needs to
+/// see.
+///
+/// <para><b>Both ends of the silence are here since DD174</b>, twenty seconds apart, because that
+/// is now what the host writes and a page illustrating a journal it cannot produce is the coupling
+/// DD165 was about.</para>
 ///
 /// <para><b>Fixed, never relative to now.</b> A capture is compared byte for byte, so a stamp
 /// computed against the clock would make every picture differ from the last — the same rule
@@ -35,6 +40,8 @@ public sealed class SampleJournal : IEngineJournal
         "2026-08-21 12:41:55  power     the machine came back",
         "2026-08-21 12:41:58  Starting  the daemon is running and no answer within 3s",
         "2026-08-21 12:42:07  Running   " + EngineRevival.RestartMark + " (restart 1)",
+        "2026-08-21 14:34:51  Starting  the daemon is running and no answer within 3s "
+            + "— first quiet poll",
         "2026-08-21 14:35:11  Starting  the daemon is running and no answer within 3s "
             + "— 6 polls in a row",
         "2026-08-21 14:35:11  tray      the engine stopped answering",
