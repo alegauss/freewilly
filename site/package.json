@@ -23,12 +23,12 @@
     "@tailwindcss/vite": "^4.1.4",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
-    "@vitejs/plugin-react": "^6.0.5",
+    "@vitejs/plugin-react": "^6.1.0",
     "jimp": "^1.6.1",
     "node-html-parser": "^9.0.1",
     "potrace": "^2.1.8",
     "tailwindcss": "^4.1.4",
     "typescript": "^7.0.2",
-    "vite": "^8.2.1"
+    "vite": "^8.2.2"
   }
 }
