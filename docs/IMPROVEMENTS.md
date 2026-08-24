@@ -2,6 +2,103 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+### §DD179 A relay that stops accepting says nothing
+
+Measured on 24 August 2026: the host reported `no connection within 3s` for six polls
+running while `pidof dockerd` answered and the distribution was listed as up. Nothing
+else was written — the stumble counter never moved — and a full stop and start of the
+engine was what brought the pipe back.
+
+That combination points at the relay rather than the daemon, and the reason it can only
+be pointed at is that the accept loop has a way out that says nothing. `AcceptLoop`
+catches `IOException`, `InvalidOperationException`, `ObjectDisposedException` and
+`OperationCanceledException` from `WaitForConnection` and returns. Cancellation is the
+expected one. The other three are the loop dying, and when it dies the pipe stops being
+served for the rest of the host's life: every docker client on the machine fails
+together, the daemon goes on answering `pidof`, and the journal carries no record of the
+one event that explains it.
+
+DD142 closed exactly this hole on the other side of the loop — a throw from creating the
+next listener used to end it, unobserved, with the same consequence — and left this side
+open. The remedy is the same shape: separate the cancellation exit from the failure
+exit, and write the failure down before returning.
+
+### §DD180 A connection failure that names no relay
+
+DD173 split the ping's timeout into the stage that ran out of budget, and the first
+outage recorded with that vocabulary said `no connection` — the client never got a
+handle on the pipe at all. That is a statement about the relay, and the relay is the one
+participant in the incident that the journal says nothing about.
+
+The numbers already exist. `EnginePipeRelay` counts what it has `Accepted` and what it
+has stumbled over creating, and it owns a named thread whose liveness is a question a
+`Thread` object answers. Only the stumble count is ever written, and only when it moves
+— so a silence with no stumble in it, which is what this incident was, leaves a reader
+with nothing to distinguish a relay that is refilling too slowly from one that stopped
+accepting altogether.
+
+The line to carry them is the one DD174 added: the first quiet poll, written once at the
+crossing. It is already the sentence that dates the failure, and a connection failure is
+the case where the relay's own figures are the evidence. Attached only to a connection
+failure, so a daemon that is merely slow to reply does not drag relay bookkeeping into a
+sentence that is not about it.
+
+### §DD181 A cached reading read as a current one
+
+DD175 stopped the host claiming "the daemon is running" from a Windows process handle
+and made it ask the machine instead. The answer is cached in `_found` and reused for
+every poll of the same silence, which is right for the load — `wsl --exec` on a machine
+that is already struggling is the last thing to run six times — and wrong for the
+sentence.
+
+The incident of 24 August 2026 shows the cost. The verdict line at 14:01:12 reads "the
+daemon is running and no connection within 3s — 6 polls in a row", and the clause it
+opens with was measured at 14:00:46, twenty-six seconds earlier. A reader takes it as
+the state at the verdict. In the failure this whole supervisor exists for — a virtual
+machine lost under the host's feet — those twenty-six seconds are exactly where the
+daemon stops being there, so the one line that would show it is the one repeating an
+older reading.
+
+Keeping the cache and dating the clause costs nothing and answers the reader's actual
+question, which is not "was the daemon up" but "was it up when you gave up on it".
+
+### §DD182 A restart that does not name its outage
+
+`brought the engine back (restart 1)` reports the attempt. What a reader wants from it
+is the outage: how long this machine had no engine. Today that is a subtraction across
+two lines and a scroll — the crossing DD174 writes, and this one — and it is the number
+somebody skimming a night's journal is actually counting.
+
+It matters most where the journal is skimmed rather than read. A host that brought the
+engine back four times overnight is a different machine depending on whether each gap
+was ten seconds or four minutes, and the restart count alone — the number the window
+already draws from these lines — cannot tell those apart.
+
+The host knows both ends: the first quiet poll is when the engine was last seen, and
+this line is written the moment it answered again. Carrying the span in the sentence
+that closes the incident keeps the whole event legible from one line, which is the
+property the rest of this file is written for.
+
+### §DD183 A balloon for a failure already repaired
+
+DD164 gave the tray a balloon for an engine that went away on its own, and the reasoning
+holds: a host that now keeps trying instead of exiting is a host that can look like
+nothing happening, and a user who sees a grey dot and no explanation clicks Start on an
+engine already being restarted.
+
+What it did not separate is the outage from the blip. The balloon fires on the
+Running-to-Stopped crossing itself, and on 24 August 2026 that crossing lasted ten
+seconds: the host noticed at 14:01:14, the first revival attempt landed at 14:01:24, and
+the user was interrupted to be told about a failure that had already been repaired. The
+text makes it worse rather than better — "there is nothing to click" is precisely right
+and precisely not worth a notification for something over before it was read.
+
+The distinction the balloon needs is one the host already draws. A first revival attempt
+that works is a blip; one that fails is the outage DD164 wrote this sentence for.
+Waiting for that answer costs an announcement a few seconds of lateness and buys the
+surface back its meaning — a balloon that only ever appears for something still
+happening is one a user keeps reading.
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

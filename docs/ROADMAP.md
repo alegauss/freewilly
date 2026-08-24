@@ -4,6 +4,12 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD179** (deps: —) **The pipe accept loop returns without a word when a connection wait throws, so a dead relay reads as a healthy engine** — The loop now tells cancellation from failure and writes what ended it before returning, so the fault that takes the machine's docker with it leaves a line. → §DD179
+- 📋 **DD180** (deps: DD179) **A poll that could not connect names no relay figure, so a silence with no stumble in it is a dead end for the reader** — The first quiet poll now carries what the relay accepted and whether its accept thread is alive, so a connection failure says which side of the pipe failed. → §DD180
+- 📋 **DD181** (deps: —) **The clause naming what is on the machine is measured once and reused, so a verdict quotes evidence half a minute old** — The reading is dated where it is reused, so a reader tells a fact established at the crossing from one established at the verdict. → §DD181
+- 📋 **DD182** (deps: DD174 ✅) **A restart line names the attempt and not the outage, so how long the engine was away is a subtraction across two lines** — The line that reports a revival now carries how long the engine was unreachable, so an incident is legible from the sentence that closes it. → §DD182
+- 📋 **DD183** (deps: DD164 ✅) **The balloon fires the instant the engine stops answering, so a blip the host heals in ten seconds interrupts the user** — The announcement waits for the first revival attempt to fail, so a user hears about an outage that is lasting and never about one already over. → §DD183
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
