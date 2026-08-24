@@ -57,10 +57,6 @@ export const product: ProductData = {
         "hidden": false
       },
       {
-        "caption": "Check for updates",
-        "hidden": false
-      },
-      {
         "caption": "Install the update",
         "hidden": true
       },
@@ -69,7 +65,7 @@ export const product: ProductData = {
         "hidden": false
       }
     ],
-    "visible": 6
+    "visible": 5
   },
   "window": {
     "destinations": [

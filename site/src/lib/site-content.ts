@@ -607,17 +607,11 @@ export const tray = {
       " — what happens when you are not asking. Opening this tool usually means wanting an engine, so it ships on; turning it off restores the old behaviour exactly, or the setting is decoration",
     ] as Rich,
     [
-      { b: "Check for updates" },
-      " — the same question about the app rather than the engine, and ",
-      { b: "off unless you turn it on" },
-      ": it is the one thing here that reaches a host the rest of this tool never touches",
-    ] as Rich,
-    [
       { b: "Quit" },
       " — and the engine goes with it. It used to stay up, and the asymmetry was stated as the point; measured against the complaint this project exists over it cost more than it saved, because a running engine holds a WSL2 virtual machine and the only way to get those gigabytes back was remembering a second item first. Somebody who quits has said they are done",
     ] as Rich,
   ],
-  // The item that is not on that list, and the reason the heading counts six rather than seven.
+  // The item that is not on that list, and the reason the heading counts five rather than six.
   splitHidden: [
     { b: "One more appears, and only then" },
     " — the item that installs an update exists so the menu's shape is fixed, and it is invisible until a release newer than this build has been found. A verb that is usually a no-op is worse than one that is usually absent",

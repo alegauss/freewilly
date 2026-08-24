@@ -95,11 +95,12 @@ it.
 - **Tray icon**: the engine state as a *shape*, with colour only reinforcing it — a filled
   disc for running, a ring with a gap for starting, a plain ring for stopped. At 16 pixels a
   hue is a hint, and these three stay distinguishable in a screenshot printed in black and
-  white. The menu is deliberately short — six items: open window, start engine, stop engine,
-  "start engine with FreeWilly", "check for updates", and quit. A seventh installs an update and
-  is hidden until one exists. **Quitting the tray takes the engine with it**: a running engine
-  holds a WSL2 virtual machine, and until DD128 the only way to get that memory back was to
-  remember a second menu item before pressing Quit. Signing out or shutting down does the same.
+  white. The menu is deliberately short — five items: open window, start engine, stop engine,
+  "start engine with FreeWilly", and quit. A sixth installs an update and is hidden until one
+  exists, and the check that finds it runs on every launch with nothing to enable (DD171).
+  **Quitting the tray takes the engine with it**: a running engine holds a WSL2 virtual
+  machine, and until DD128 the only way to get that memory back was to remember a second menu
+  item before pressing Quit. Signing out or shutting down does the same.
   The distribution this tool owns is terminated and no other WSL distribution is touched.
 - **The window**: one window, and it is the list of containers — name, image, state, the
   daemon's own status sentence, and the ports. A published TCP port is a link that opens
