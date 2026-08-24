@@ -164,6 +164,7 @@
 - ✅ **DD144** **The agent budget gate is red on a clean checkout: the shaped surface measures 812 tokens against 813 recorded** — The figure is 812, which is what the task cost on the commit that recorded 813 and never measured it, so the gate is green and exact again.
 - ✅ **DD147** **A budget figure is typed rather than produced, so an exact gate can bind a number nobody measured** — The measurement writes the figures it produced when asked to, so a recorded number is one a run produced rather than one somebody typed.
 - ✅ **DD148** **do compose up takes no arguments, so a project that names its own files cannot use the verb at all** — The verb takes -f the way compose does: given any, they are the project and no convention is consulted; given none, the directory answers as before.
+- ✅ **DD178** **the shaped surface figure moves with the calendar, so an exact gate goes red on a tree nobody touched** — The clock reaches read doctor through the machine seam and the shaped measurement pins it beside the fixtures, so the exact token figure is the fixtures' and no longer the calendar's.
 
 ## Block H — The public surface (the site a reader and an agent both read)
 

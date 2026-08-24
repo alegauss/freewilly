@@ -44,6 +44,27 @@ public sealed class RivalEngines : IRivalEngines
     public IReadOnlyList<RivalEngine> Found() => new WindowsMachineFacts().RivalEngines;
 }
 
+/// <summary>When it is, behind a seam.</summary>
+/// <remarks>
+/// The one input on this list that is not a read of the machine at all, which is why no seam named it
+/// for three tasks (DD178). A row that states a span rather than a date is as much a function of the
+/// clock as of the fixture behind it, so a figure measured to the token is a figure the calendar can
+/// move.
+/// </remarks>
+public interface IClock
+{
+    /// <summary>Read the time.</summary>
+    /// <returns>Now.</returns>
+    DateTimeOffset Now();
+}
+
+/// <summary>The real read, which is this machine's own clock.</summary>
+public sealed class SystemClock : IClock
+{
+    /// <inheritdoc/>
+    public DateTimeOffset Now() => DateTimeOffset.UtcNow;
+}
+
 /// <summary>
 /// What a read verb learns from Windows rather than from the engine (DD78).
 /// </summary>
@@ -107,4 +128,19 @@ public sealed class MachineReads
     /// fixtures instead of running <c>wsl.exe</c>.
     /// </remarks>
     public IBindSources Sources { get; init; } = new BindSources();
+
+    /// <summary>When the verb is reading, for a row that states a span rather than a date.</summary>
+    /// <remarks>
+    /// The seventh, and the one three tasks of seam-finding walked past because it is not a read of
+    /// Windows: <c>read doctor</c>'s restarts row says how long ago the container last started, the
+    /// fixture's <c>StartedAt</c> is a fixed date, and <c>DateTimeOffset.UtcNow</c> inside the verb
+    /// made the width of that string a function of today. The span went from <c>9d</c> to <c>10d</c>
+    /// eleven days after the fixture was written, and the exact figure DD78 made exact went red on a
+    /// tree nobody had touched — the same defect as a response that grew, with no commit to blame.
+    ///
+    /// <para><c>ReadChanges</c> already took its own <c>now</c> for this reason and now defaults to
+    /// this one, so the surface has a single clock rather than a seam and a parameter that could
+    /// disagree.</para>
+    /// </remarks>
+    public IClock Clock { get; init; } = new SystemClock();
 }

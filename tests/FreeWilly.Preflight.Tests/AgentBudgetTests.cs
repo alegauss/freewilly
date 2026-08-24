@@ -329,6 +329,13 @@ public sealed class AgentBudgetTests
     /// <para>Chosen to agree with the fixtures rather than to be convenient. The pack states the
     /// engine running, so the CLI points at <c>default</c> and reaches it; the container the task is
     /// about was OOM-killed and exited, so nothing on the host holds its published port.</para>
+    ///
+    /// <para>The clock is the fourth (DD178), and it was the one left because it is not a read of
+    /// Windows: <c>read doctor</c>'s restarts row states how long ago the container last started, so
+    /// with <c>UtcNow</c> behind it the width of that string was a function of the day the build ran.
+    /// It went from <c>9d</c> to <c>10d</c> eleven days after the fixture was written and took the
+    /// exact figure with it, on a tree nobody had touched — which is the same defect as a response
+    /// that grew, arriving without a commit to blame.</para>
     /// </remarks>
     private static MachineReads FixedMachine() => new()
     {
@@ -336,7 +343,22 @@ public sealed class AgentBudgetTests
         Client = new FixedContext(),
         Service = new NeverProbed(),
         Sources = new FixedSource(),
+        Clock = new FixedClock(),
     };
+
+    /// <summary>When the shaped task is read, so a span is the fixture's and not the calendar's.</summary>
+    /// <remarks>
+    /// Three days after the inspect fixture's <c>StartedAt</c>, and both halves of that are chosen.
+    /// Days, because the restarts row it feeds turns <c>Fail</c> at three restarts inside ten minutes
+    /// and this fixture has exactly three — a pin nearer the crash would rewrite the row, its remedy
+    /// and the verdict, which is a different payload rather than a fixed one. Three of them, because
+    /// <c>3d</c> is the width the recorded figure was measured at, so this pins the number rather than
+    /// moving it: the diff is a seam and not a raise.
+    /// </remarks>
+    private sealed class FixedClock : IClock
+    {
+        public DateTimeOffset Now() => new(2026, 8, 16, 9, 12, 45, TimeSpan.Zero);
+    }
 
     private sealed class NoListeners : IHostPorts
     {

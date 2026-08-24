@@ -276,7 +276,7 @@ public static class AgentSurface
         }
 
         session ??= SessionLabel.Resolve();
-        var until = now ?? DateTimeOffset.UtcNow;
+        var until = now ?? machine.Clock.Now();
 
         try
         {
@@ -606,7 +606,7 @@ public static class AgentSurface
                 Inspect: inspect,
                 ListeningHostPorts: machine.Ports.Listening(),
                 StandardError: summary is null ? [] : StandardErrorTail(engine, summary.Id),
-                Now: DateTimeOffset.UtcNow,
+                Now: machine.Clock.Now(),
                 BindSources: sources));
 
             output.Write(json
