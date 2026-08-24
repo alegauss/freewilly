@@ -88,6 +88,7 @@
 - ✅ **DD166** **A container's image column prints a full sha256 digest, so what is running is truncated mid-hash** — A bare digest now reads as the twelve characters docker ps prints, spelled once in ImageReference.Short and used by the window, the CLI list and the agent surface.
 - ✅ **DD167** **Nothing says a container's image left the store, so a digest row and an empty USED BY read as two lists disagreeing** — A container running on an image the store no longer has says image gone beside the digest, read off Image equalling ImageID, and the sample machine carries one.
 - ✅ **DD170** **A destination already ticked is shown by the caller's spelling, so a capture of volumes photographs the containers list** — ShowTab hands Show the button's own tag on both paths, so a destination named in any casing draws its own page, and a strip entry the switch does not answer now fails a test.
+- ✅ **DD176** **About sets the daemon's newest API version beside the pinned one, so a working pin reads as a mismatch** — The row leads with the pinned version and then states the range the daemon serves, one spelling for all three numbers.
 
 ## Block D — Container operations (what a user came to do)
 

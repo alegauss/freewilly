@@ -95,11 +95,7 @@ internal sealed partial class AboutPage : System.Windows.Controls.UserControl
             new(
                 "Engine",
                 engine is null ? "not answering" : $"{engine.Version} ({engine.Os}/{engine.Arch})"),
-            new(
-                "Engine API",
-                engine is null
-                    ? $"this client asks for {DockerApi.ApiVersion}"
-                    : $"{engine.ApiVersion} · this client asks for {DockerApi.ApiVersion}"),
+            new("Engine API", ApiLine(engine)),
         };
 
         // What the install pins, whether or not it has run. These are facts about the build rather
@@ -112,6 +108,47 @@ internal sealed partial class AboutPage : System.Windows.Controls.UserControl
         rows.Add(new Component("Distribution", EnginePaths.CurrentDistribution));
         Components.ItemsSource = rows;
     }
+
+    /// <summary>What the client asks for, and the range the daemon answers (DD176).</summary>
+    /// <param name="engine">What the daemon reported, or null where nothing answered.</param>
+    /// <returns>The Engine API row's value.</returns>
+    /// <remarks>
+    /// This row used to set the daemon's newest API version against the pinned one with a middot
+    /// between them and nothing saying how they relate — <c>1.55 · this client asks for v1.43</c> —
+    /// and it was read as a mismatch by the first person to see it. Two numbers a reader has to
+    /// compare is the defect; the fact that settles the comparison is a third number the daemon
+    /// already sends and this page already receives.
+    ///
+    /// <para><b>The range, not a second number.</b> <c>MinAPIVersion</c> is the oldest the daemon
+    /// still answers, so stating the span it serves makes the pin's place in it self-evident. The
+    /// console probe has printed all three all along; the window was the surface that dropped one.
+    /// A daemon old enough to omit the floor gets a ceiling and no invented lower bound.</para>
+    ///
+    /// <para><b>One spelling.</b> The <c>v</c> prefix was on one side and not the other because the
+    /// pin is a URL path segment and the daemon's is a JSON field. That is a fact about two call
+    /// sites, not about the versions, so it does not reach the row.</para>
+    /// </remarks>
+    private static string ApiLine(EngineVersion? engine)
+    {
+        var asked = $"this client asks for {Versioned(DockerApi.ApiVersion)}";
+        if (engine is null || engine.ApiVersion.Length == 0)
+        {
+            return asked;
+        }
+
+        var newest = Versioned(engine.ApiVersion);
+        var speaks = engine.MinApiVersion.Length == 0
+            ? $"the engine speaks up to {newest}"
+            : $"the engine speaks {Versioned(engine.MinApiVersion)}–{newest}";
+
+        return $"{asked} · {speaks}";
+    }
+
+    /// <summary>One spelling for a version, whichever side of the call it came from.</summary>
+    /// <param name="version">The version, with or without its prefix.</param>
+    /// <returns>The version, prefixed.</returns>
+    private static string Versioned(string version) =>
+        version.StartsWith('v') ? version : $"v{version}";
 
     /// <summary>Every host this build reaches, and what it asks each for (DD154).</summary>
     /// <remarks>
