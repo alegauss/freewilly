@@ -100,6 +100,18 @@ internal sealed class TrayApplication : ApplicationContext
             }
         };
 
+        // DD172. claude-tray installs from this click, and the balloon is the only thing on screen at
+        // the moment the news arrives — the menu item is an icon, a right-click and a read away.
+        // Guarded on the balloon showing now rather than on a release existing: this surface also
+        // carries failures, and a click on "the engine went away" must not start an install.
+        _icon.BalloonTipClicked += (_, _) =>
+        {
+            if (_balloonOffersUpdate)
+            {
+                InstallTheUpdate();
+            }
+        };
+
         _scale = new TrayScale(() => _ui.Post(_ => Show(_shown), null));
 
         // The image and the tooltip BEFORE visibility, and the order is the whole of DD82. Setting
@@ -209,12 +221,8 @@ internal sealed class TrayApplication : ApplicationContext
         {
             Balloon(
                 $"FreeWilly {release.Version.ToString(3)} has been released. "
-                + string.Format(
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    TrayMenu.InstallFormat,
-                    release.Version.ToString(3))
-                    .Replace("&", string.Empty, StringComparison.Ordinal)
-                + " is now in the tray menu.");
+                + "Click here to install it, or use the tray menu.",
+                offersUpdate: true);
         }
     }
 
@@ -493,18 +501,30 @@ internal sealed class TrayApplication : ApplicationContext
 
     /// <summary>Say something from the corner, without claiming anything went wrong.</summary>
     /// <param name="text">What to say.</param>
+    /// <param name="offersUpdate">
+    /// Whether clicking this balloon installs the release it is about (DD172). Default false, and
+    /// that default is the guard: every other caller says a failure, and a click on one of those
+    /// must not start an install.
+    /// </param>
     /// <remarks>
     /// <see cref="Complain"/>'s balloon, lifted out when DD154 needed the same surface for news that
     /// is not a failure: a release exists, or the update the user asked for did not verify. What
     /// Complain adds around this is the state repair — a start that failed is no longer pending — and
     /// that is exactly what an announcement must not do.
     /// </remarks>
-    private void Balloon(string text)
+    private void Balloon(string text, bool offersUpdate = false)
     {
+        // Set on every balloon and not only on the one that offers, because what the click has to
+        // know is which balloon is on screen now — a release announced an hour ago must not make a
+        // click on this afternoon's failure install anything.
+        _balloonOffersUpdate = offersUpdate;
         _icon.BalloonTipTitle = "FreeWilly";
         _icon.BalloonTipText = text;
         _icon.ShowBalloonTip(8000);
     }
+
+    /// <summary>Whether the balloon currently on screen is the one announcing a release (DD172).</summary>
+    private bool _balloonOffersUpdate;
 
     private void StopEngine()
     {

@@ -85,6 +85,33 @@ public sealed class ReleaseWatchTests
     }
 
     [Fact]
+    public void Only_the_release_balloon_offers_to_install_anything()
+    {
+        // DD172. The tray's balloon carries failures as well as news — an engine that went away, an
+        // update that did not verify — and clicking one of those must not start an install. The
+        // guard is a default-false argument, so what can go wrong is a second call site opting in,
+        // and that is what this counts. Read off the source because the surface is a NotifyIcon
+        // there is no way to raise a balloon click on in a test.
+        var program = File.ReadAllText(RepositoryFile(@"src\FreeWilly.Tray\Program.cs"));
+
+        Assert.Equal(
+            1,
+            program.Split("offersUpdate: true", StringSplitOptions.None).Length - 1);
+    }
+
+    private static string RepositoryFile(string relative)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeWilly.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        Assert.True(directory is not null, "the repository root was not found above the test binaries");
+        return Path.Combine(directory!.FullName, relative);
+    }
+
+    [Fact]
     public void Four_a_day_after_a_launch_it_does_not_compete_with()
     {
         // A release happens a few times a year, and sixty unauthenticated requests an hour is a
