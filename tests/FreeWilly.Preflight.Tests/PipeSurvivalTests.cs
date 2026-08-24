@@ -188,6 +188,91 @@ public sealed class PipeSurvivalTests
         Assert.Equal(0, relay.Stumbles);
     }
 
+    [Fact]
+    public async Task An_accept_loop_that_dies_says_what_killed_it()
+    {
+        // The defect, driven. The loop caught four exception types out of WaitForConnection and
+        // returned on all of them, so the one ending that leaves the pipe unserved for the rest of
+        // the process's life was indistinguishable from a clean stop — and wrote nothing either way.
+        // Measured on 24 August 2026 as six polls of "no connection within 3s" against a daemon that
+        // answered pidof throughout, with no line anywhere naming the relay.
+        var pipe = Pipe();
+        var attempt = 0;
+
+        await using var relay = new EnginePipeRelay(new Answering(), pipe);
+        relay.Listener = () =>
+        {
+            attempt++;
+
+            var server = NamedPipeServerStreamAcl.Create(
+                pipe,
+                PipeDirection.InOut,
+                NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous,
+                inBufferSize: 0,
+                outBufferSize: 0,
+                pipeSecurity: OnlyThisUser());
+
+            // The first is the one Start creates and it has to work, or the loop never reaches the
+            // wait this test is about. The replacement is handed over already closed, which is a
+            // handle lost from under the loop — the shape of the failure, arriving as the exception
+            // a clean stop also throws, which is exactly why the type cannot be what tells them
+            // apart.
+            if (attempt >= 2)
+            {
+                server.Dispose();
+            }
+
+            return server;
+        };
+
+        relay.Start();
+
+        // Takes the working listener, which is what makes the loop reach for the closed one.
+        Assert.True(await ReachableAsync(pipe), "the relay never served its first connection");
+
+        Assert.True(
+            await Reached(() => relay.WhatEndedAccepting is not null),
+            "the accept loop ended and left no account of it, so a pipe that stopped being served "
+            + "would read as a healthy engine for the rest of this process's life");
+
+        // The type is in the sentence because it is the whole of what a reader has: the loop is
+        // gone, nothing else on the machine observed the throw, and the journal line the host writes
+        // from this is the only place the event exists.
+        Assert.Contains(nameof(ObjectDisposedException), relay.WhatEndedAccepting!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_relay_that_was_stopped_blames_nothing()
+    {
+        // The other half, and it is not a formality. DisposeAsync ends the blocking wait by closing
+        // the handle underneath it, so a clean stop throws the same ObjectDisposedException a lost
+        // handle does — and a check written on the exception type would report every orderly
+        // shutdown in this product as a relay that died.
+        var pipe = Pipe();
+
+        var relay = new EnginePipeRelay(new Answering(), pipe);
+        relay.Start();
+        Assert.True(await ReachableAsync(pipe));
+
+        await relay.DisposeAsync();
+
+        Assert.Null(relay.WhatEndedAccepting);
+    }
+
+    [Fact]
+    public async Task The_host_can_read_what_killed_the_loop_without_reaching_inside_the_relay()
+    {
+        // Same seam as the stumble count, for the same reason: the relay has no journal and the
+        // supervisor does. A lifecycle with no relay yet answers null rather than throwing, because
+        // the loop that reads this runs before there is a relay at all.
+        await using var lifecycle = new EngineLifecycle(
+            new FakeWsl(), new FakeDaemon(), new Answering());
+
+        Assert.Null(lifecycle.WhatEndedAccepting);
+    }
+
     private static System.IO.Pipes.PipeSecurity OnlyThisUser()
     {
         var security = new System.IO.Pipes.PipeSecurity();

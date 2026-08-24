@@ -67,6 +67,31 @@ public sealed class EnginePipeRelay : IAsyncDisposable
     public int Stumbles { get; private set; }
 
     /// <summary>
+    /// What ended the accept loop, where something other than a stop did (DD179).
+    /// </summary>
+    /// <remarks>
+    /// Null on a relay that is still accepting and on one that was disposed, which is the whole
+    /// distinction this property exists to draw. The loop has always caught four exception types out
+    /// of <see cref="NamedPipeServerStream.WaitForConnection"/> and returned on all of them, and only
+    /// one of the four is a stop: <see cref="DisposeAsync"/> closes the handle underneath a blocking
+    /// wait on purpose, so the throw that follows is this class working as designed.
+    ///
+    /// <para><b>The other three are the loop dying, and it died silently.</b> Nothing replaces the
+    /// loop, so the pipe is unserved for the rest of the process's life — every docker client on the
+    /// machine fails together while the daemon inside the distribution goes on answering
+    /// <c>pidof</c>, which is a healthy engine by every measure the host has. Measured on 24 August
+    /// 2026: six polls of <c>no connection within 3s</c> against a daemon that was up, no stumble in
+    /// the journal, and a full stop and start was what brought the pipe back.</para>
+    ///
+    /// <para>DD142 closed this same hole on the other side of the loop — a throw from creating the
+    /// next listener used to end it, unobserved, with the identical consequence — and left this side
+    /// open. Read by the host rather than logged from here, the way <see cref="Stumbles"/> is: this
+    /// class has no journal and should not grow one, and the supervisor is already asking it
+    /// questions every two seconds.</para>
+    /// </remarks>
+    public string? WhatEndedAccepting { get; private set; }
+
+    /// <summary>
     /// How the next listener is made. Replaced only by a test that needs creation to fail (DD142).
     /// </summary>
     /// <remarks>
@@ -157,6 +182,16 @@ public sealed class EnginePipeRelay : IAsyncDisposable
             catch (Exception exception) when (exception is OperationCanceledException
                 or ObjectDisposedException or IOException or InvalidOperationException)
             {
+                // DD179. Two exits, and until now they were one. A dispose cancels before it closes
+                // the handle, so a stop always arrives here with the token already set — which makes
+                // the token, and not the exception type, the thing that tells a shutdown from a
+                // death. Typing the four apart would not: ObjectDisposedException is what a clean
+                // stop throws and also what a handle lost some other way does.
+                if (!cancellation.IsCancellationRequested)
+                {
+                    WhatEndedAccepting = $"{exception.GetType().Name}: {exception.Message}";
+                }
+
                 return;
             }
 

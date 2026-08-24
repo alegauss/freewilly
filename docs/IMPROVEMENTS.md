@@ -2,27 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD179 A relay that stops accepting says nothing
-
-Measured on 24 August 2026: the host reported `no connection within 3s` for six polls
-running while `pidof dockerd` answered and the distribution was listed as up. Nothing
-else was written — the stumble counter never moved — and a full stop and start of the
-engine was what brought the pipe back.
-
-That combination points at the relay rather than the daemon, and the reason it can only
-be pointed at is that the accept loop has a way out that says nothing. `AcceptLoop`
-catches `IOException`, `InvalidOperationException`, `ObjectDisposedException` and
-`OperationCanceledException` from `WaitForConnection` and returns. Cancellation is the
-expected one. The other three are the loop dying, and when it dies the pipe stops being
-served for the rest of the host's life: every docker client on the machine fails
-together, the daemon goes on answering `pidof`, and the journal carries no record of the
-one event that explains it.
-
-DD142 closed exactly this hole on the other side of the loop — a throw from creating the
-next listener used to end it, unobserved, with the same consequence — and left this side
-open. The remedy is the same shape: separate the cancellation exit from the failure
-exit, and write the failure down before returning.
-
 ### §DD180 A connection failure that names no relay
 
 DD173 split the ping's timeout into the stage that ran out of budget, and the first

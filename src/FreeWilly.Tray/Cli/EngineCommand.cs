@@ -249,6 +249,11 @@ internal static class EngineCommand
         // What the relay had already stumbled over when this loop began, so only a move is news.
         var stumbled = lifecycle.Stumbles;
 
+        // Whether the accept loop's death has been reported for the relay now serving (DD179).
+        // Reset where a revival replaces the relay, because the next one can die too and a flag
+        // left standing would let the second death go the way the first one used to.
+        var mourned = false;
+
         using var ending = CancellationTokenSource.CreateLinkedTokenSource(
             stopping.Token, asked.Token);
 
@@ -283,6 +288,21 @@ internal static class EngineCommand
                     stumbled = lifecycle.Stumbles;
                 }
 
+                // DD179. The stumble above is the relay surviving something; this is the relay
+                // having stopped. Nothing puts the accept loop back, so from here on the pipe has no
+                // free instance and every docker client on the machine fails together — while the
+                // daemon inside the distribution goes on answering, which is what makes this the one
+                // failure a healthy-looking supervisor cannot otherwise account for.
+                //
+                // Said once, for the reason every other crossing in this file is: the loop is gone
+                // for the rest of this relay's life, and repeating it every two seconds would report
+                // a state where the journal only keeps events.
+                if (!mourned && lifecycle.WhatEndedAccepting is { } ended)
+                {
+                    Note(journal, $"  relay     stopped accepting — {ended}");
+                    mourned = true;
+                }
+
                 if (watch.KeepServing(now) && !(justResumed && !now.Usable))
                 {
                     // DD174. Written from inside the quiet path, and it is the one thing written
@@ -311,8 +331,12 @@ internal static class EngineCommand
                 }
 
                 // Back to a clean slate: the engine answered, so the run of silence that led here
-                // describes an engine that no longer exists.
+                // describes an engine that no longer exists. The relay is a new one too — Revive
+                // stops and starts the lifecycle, which builds another — so what killed the last
+                // one's accept loop is said about a relay that is gone, and the next one is owed
+                // the same sentence if it dies the same way (DD179).
                 watch = new EngineWatch();
+                mourned = false;
             }
         }
         catch (OperationCanceledException)

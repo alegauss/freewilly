@@ -59,6 +59,17 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// for any client on the machine and nothing anywhere that named the reason.
     /// </remarks>
     public int Stumbles => _relay?.Stumbles ?? 0;
+
+    /// <summary>
+    /// What ended the relay's accept loop, where anything other than a stop did (DD179).
+    /// </summary>
+    /// <remarks>
+    /// Exposed here for the reason <see cref="Stumbles"/> is: the relay counts and the host speaks,
+    /// and a lifecycle with no relay yet answers null rather than throwing, because the supervisor
+    /// reads this on every turn including the ones before there is a relay at all.
+    /// </remarks>
+    public string? WhatEndedAccepting => _relay?.WhatEndedAccepting;
+
     private bool _launched;
 
     /// <summary>

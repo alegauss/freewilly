@@ -43,6 +43,7 @@
 - ✅ **DD173** **A ping timeout reads the same whether the pipe never connected or the daemon never replied** — A ping that runs out of budget now says which stage it ran out on, so the journal separates a connection nothing accepted from a daemon that went quiet.
 - ✅ **DD174** **The first five quiet polls write nothing, so the journal cannot say when an outage began** — The host now writes the poll that starts a run of silence, so an incident is dated at both ends instead of only at the verdict six polls later.
 - ✅ **DD175** **The journal says the daemon is running when what was checked is the wsl.exe handle on this side** — A silent poll now asks the machine what is there, so the journal names a distribution that stopped, a daemon that died, or the launcher it could only see.
+- ✅ **DD179** **The pipe accept loop returns without a word when a connection wait throws, so a dead relay reads as a healthy engine** — The loop now tells a stop from a death by the cancellation token rather than the exception type, records what killed it, and the host writes that as a relay line on its next poll.
 
 ## Block B — The daemon client (talk to the engine)
 
