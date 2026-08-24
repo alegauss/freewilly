@@ -4,6 +4,10 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD173** (deps: —) **A ping timeout reads the same whether the pipe never connected or the daemon never replied** — Naming which stage ran out of budget, the connection or the reply, separates a relay that could not open its hop from a daemon that stopped serving. → §DD173
+- 📋 **DD174** (deps: —) **The first five quiet polls write nothing, so the journal cannot say when an outage began** — Writing the first poll that finds silence dates the start of a failure, which today is a twelve-to-thirty second window a reader has to infer from the verdict. → §DD174
+- 📋 **DD175** (deps: —) **The journal says the daemon is running when what was checked is the wsl.exe handle on this side** — The launcher outlives a virtual machine that has gone, so the line asserts more than the check behind it knows and a reader has no way to tell. → §DD175
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
