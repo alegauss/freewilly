@@ -133,6 +133,7 @@
 - ✅ **DD152** **the release page offers a bare .exe beside the installer** — release.yml now attaches the installer and its SHA256SUMS.txt, and nothing else; the bare .exe stays a thing build.cmd produces.
 - ✅ **DD154** **an installed copy never learns a newer version exists** — The tray asks the release API once on launch and every six hours, off unless turned on, and offers an installer only after checking it against the SHA-256 the release publishes.
 - ✅ **DD161** **the release is created by CI on a tag rather than by the script that built it** — build\update-release.cmd upload now creates the release itself, from the installer it built, with the versioned asset and its SHA-256 attached.
+- ✅ **DD171** **The release check ships off, so an install learns a version exists only if somebody found the menu item first** — Reversing DD154: the tray asks on every launch, the setting and its menu tick are gone, and the site and About state the second host rather than qualifying it as a switch.
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 

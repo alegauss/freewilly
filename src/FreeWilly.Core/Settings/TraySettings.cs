@@ -13,13 +13,14 @@ namespace FreeWilly.Core.Settings;
 /// save is the other one's reset. So the type is named after the file rather than after either
 /// setting, and a third setting joins it here.
 ///
-/// <para><b>Still not a settings system.</b> Two values in one small file beside everything else this
+/// <para><b>Still not a settings system.</b> One value in a small file beside everything else this
 /// tool owns, read the way <c>WindowMemory</c> is read: every failure answers with the defaults,
 /// because a truncated preference file is not a reason to refuse to start an engine.</para>
 ///
-/// <para><b>The two defaults point in opposite directions, and that is deliberate.</b> The engine
-/// comes up with the tray because opening this tool usually means wanting one. The release check does
-/// not, because it is outbound traffic — see <see cref="CheckForReleases"/>.</para>
+/// <para><b>DD171 took the second setting back out.</b> <c>CheckForReleases</c> lived here and shipped
+/// off, and a check nobody turns on is a check nobody has. The tray now asks on every launch the way
+/// claude-tray does, so there is no switch to remember — and a file written by an older install still
+/// carrying the property is read without it, because an unknown member is not an error.</para>
 /// </remarks>
 public sealed record TraySettings
 {
@@ -31,28 +32,10 @@ public sealed record TraySettings
     /// </remarks>
     public const bool EngineShipsOn = true;
 
-    /// <summary>What an install with nothing written down does about looking for releases.</summary>
-    /// <remarks>
-    /// Off, and this is the one default in this file that is a promise rather than a convenience. The
-    /// site says the only network traffic this project makes is downloading the five pinned artefacts
-    /// during a provision the user asked for; a check that shipped on would make that sentence false
-    /// on every machine before anybody had chosen anything.
-    /// </remarks>
-    public const bool ReleaseCheckShipsOn = false;
-
     private static readonly JsonSerializerOptions Layout = new() { WriteIndented = true };
 
     /// <summary>Whether opening the tray also starts the engine (DD135).</summary>
     public bool StartWithTheTray { get; init; } = EngineShipsOn;
-
-    /// <summary>Whether this install looks for a newer release (DD154).</summary>
-    /// <remarks>
-    /// Off unless turned on, and the switch is what the promise about outbound traffic is qualified
-    /// by. Nothing about the user goes out either way — the request carries a user agent and asks for
-    /// one release's tag — but it does reach a host the rest of this tool never touches, which a
-    /// proxy may block and whose unauthenticated budget a shared NAT shares.
-    /// </remarks>
-    public bool CheckForReleases { get; init; } = ReleaseCheckShipsOn;
 
     /// <summary>Read the settings.</summary>
     /// <param name="path">The file <see cref="Write"/> wrote.</param>

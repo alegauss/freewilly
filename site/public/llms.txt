@@ -164,15 +164,15 @@ it.
 
 ## Data and network
 
-- The only network traffic is downloading the five pinned artefacts — the Alpine rootfs, the
-  static Linux engine, the Windows CLI, and the Compose and Buildx plugins — from
-  `dl-cdn.alpinelinux.org`, `download.docker.com` and `github.com`, during a provision the
-  user asked for. Each is checked against a digest recorded in the repository.
-- One optional addition, off unless the user turns it on: "Check for updates" in the tray menu
-  asks `api.github.com` for the latest release tag, once on launch and every six hours after.
-  The request carries the product name and version and nothing about the user, and an installer
-  it offers is checked against the SHA-256 published beside it before it is run. Untouched, the
-  setting makes no request.
+- Downloads the five pinned artefacts — the Alpine rootfs, the static Linux engine, the
+  Windows CLI, and the Compose and Buildx plugins — from `dl-cdn.alpinelinux.org`,
+  `download.docker.com` and `github.com`, during a provision the user asked for. Each is
+  checked against a digest recorded in the repository.
+- Asks `api.github.com` for the latest release tag, once on launch and every six hours after,
+  so the tray can say when a newer version exists. There is no switch: this was optional and
+  off until DD171, and a check nobody turns on is a check nobody has. The request carries the
+  product name and version and nothing about the user, and an installer it offers is checked
+  against the SHA-256 published beside it before it is run.
 - Everything installed lives under `%LOCALAPPDATA%\FreeWilly` (verified downloads, the
   distribution's disk, `bin\docker.exe`).
 - Nothing is uploaded, nothing is measured, and there is no account.

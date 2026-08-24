@@ -721,18 +721,19 @@ export const notResident = {
     // found stating three artefacts against five, and it is the one on the page where being
     // wrong is a privacy claim rather than a detail.
     [
-      `Nothing is uploaded, there is no account, and there is nothing to log into. The only network traffic this project makes is downloading the ${spelled(artefactCount())} pinned artefacts, from `,
+      `Nothing is uploaded, there is no account, and there is nothing to log into. This tool downloads the ${spelled(artefactCount())} pinned artefacts, from `,
       ...hostRuns(product.artefacts.hosts),
       ", during a provision you asked for.",
     ] as Rich,
+    // DD171 reversed DD154's off-by-default check, so this paragraph stopped being about a switch
+    // and became a plain statement of the second host. A promise quietly outgrown is worse than one
+    // openly revised, which is why it says four a day rather than saying less.
     [
-      "One thing can be added to that list, and only by you. ",
-      { b: "Check for updates" },
-      " in the tray menu is ",
-      { b: "off unless you turn it on" },
-      "; ticked, it asks ",
+      "It also asks ",
       { code: "api.github.com" },
-      " four times a day what the latest release tag is. That request carries this product's name and version and nothing about you — there is no id, no token and no account to attach one to — and the installer it offers is checked against the SHA-256 published beside it before anything runs. Left alone, it makes no request at all.",
+      " four times a day what the latest release tag is, so it can tell you when a version exists. That request ",
+      { b: "carries this product's name and version and nothing about you" },
+      " — there is no id, no token and no account to attach one to — and an installer it offers is checked against the SHA-256 published beside it before anything runs. It is not a switch, because a check nobody turns on is a check nobody has.",
     ] as Rich,
   ],
 };

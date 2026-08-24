@@ -119,30 +119,20 @@ internal sealed partial class AboutPage : System.Windows.Controls.UserControl
     /// what that costs, so the count comes off the manifest whose rows are directly above this line —
     /// a sixth artefact changes both together or neither.
     ///
-    /// <para><b>And the release check is named as a switch rather than as a state.</b> A page that
-    /// said "on" or "off" would be a fourth place the setting is stated, and the tray menu is where it
-    /// is changed. What a reader needs here is that there is a second host at all, that reaching it is
-    /// their choice, and that nothing about them is in the request.</para>
+    /// <para><b>And the release check is stated plainly now that it is not a switch</b> (DD171). It
+    /// used to be named as a menu tick a reader could go and find; it happens on every launch, so what
+    /// this page owes them is the host, the frequency and what the request carries — the three facts
+    /// somebody deciding whether they mind would actually ask for.</para>
     /// </remarks>
     private static string WhatItReaches()
     {
         var artefacts = EngineManifest.Current.Artefacts.Count();
         return $"Nothing is uploaded, there is no account and nothing is measured. This build "
             + $"downloads {artefacts} pinned artefacts, by digest, during a provision you asked for. "
-            + $"With \"{ReleaseCheckItem}\" ticked in the tray menu it also asks "
-            + $"{ReleaseCheck.Host} four times a day for the latest release tag — which sends nothing "
-            + "about you, and is off until you turn it on.";
+            + $"It also asks {ReleaseCheck.Host} four times a day for the latest release tag, so it "
+            + "can tell you a version exists — that request carries this product's name and version "
+            + "and nothing about you.";
     }
-
-    /// <summary>
-    /// The menu item this page points at, without the accelerator's ampersand.
-    /// </summary>
-    /// <remarks>
-    /// Quoted off the menu rather than typed, so renaming the item renames the sentence that sends a
-    /// reader to it. The window and the tray are one assembly, which is what makes that reachable.
-    /// </remarks>
-    private static string ReleaseCheckItem =>
-        TrayMenu.ReleaseCheckText.Replace("&", string.Empty, StringComparison.Ordinal);
 
     /// <summary>The manifest's own id, spelled the way a reader would say it.</summary>
     private static string Named(string id) => id switch

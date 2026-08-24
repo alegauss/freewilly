@@ -52,8 +52,7 @@ public sealed class TrayMenuTests
     private const int Start = 2;
     private const int Stop = 3;
     private const int OnLaunch = 4;
-    private const int ReleaseCheck = 5;
-    private const int Install = 6;
+    private const int Install = 5;
 
     private static void Nothing()
     {
@@ -69,23 +68,37 @@ public sealed class TrayMenuTests
             //
             // DD135 spent one item here, and it is placed with the two engine verbs rather than off
             // with the window because it qualifies them: what the engine does when nobody is asking.
-            // DD154 spent the next one beside it, on the same question about a different subject —
-            // and the install item after it is hidden, so a photograph is one line longer and not two.
+            // DD154 spent the next one beside it and DD171 gave it back — the check needs no switch —
+            // so what follows is the install item, hidden until there is something to install.
             //
             // The window is first since DD140, alone above its rule: the icon's own click opens it,
             // so the menu's first line names what the click does and the engine follows.
             using var menu = Menu().Strip;
 
-            Assert.Equal(9, menu.Items.Count);
+            Assert.Equal(8, menu.Items.Count);
             Assert.Equal(TrayMenu.WindowText, menu.Items[Window].Text);
             Assert.IsType<ToolStripSeparator>(menu.Items[1]);
             Assert.Equal(TrayMenu.StartText, menu.Items[Start].Text);
             Assert.Equal(TrayMenu.StopText, menu.Items[Stop].Text);
             Assert.Equal(TrayMenu.OnLaunchText, menu.Items[OnLaunch].Text);
-            Assert.Equal(TrayMenu.ReleaseCheckText, menu.Items[ReleaseCheck].Text);
             Assert.Equal(TrayMenu.InstallText, menu.Items[Install].Text);
-            Assert.IsType<ToolStripSeparator>(menu.Items[7]);
-            Assert.Equal(TrayMenu.QuitText, menu.Items[8].Text);
+            Assert.IsType<ToolStripSeparator>(menu.Items[6]);
+            Assert.Equal(TrayMenu.QuitText, menu.Items[7].Text);
+        });
+
+    [Fact]
+    public void No_item_offers_to_turn_the_release_check_on_or_off() =>
+        OnUiThread(() =>
+        {
+            // DD171. The check is not a setting any more, so the menu must not carry a tick that
+            // implies it is one — asserted over the whole strip rather than at an index, because the
+            // defect this guards is the item coming back somewhere else.
+            using var strip = Menu().Strip;
+
+            Assert.DoesNotContain(
+                strip.Items.OfType<ToolStripMenuItem>(),
+                item => item.Text?.Contains("update", StringComparison.OrdinalIgnoreCase) == true
+                    && item.CheckOnClick);
         });
 
     [Fact]
@@ -124,39 +137,31 @@ public sealed class TrayMenuTests
             // of the user's answer, and the one thing a setting has to do is survive being changed.
             using var flipped = new TrayMenu(
                 Nothing, Nothing, Nothing, Nothing,
-                new TraySettings { StartWithTheTray = false, CheckForReleases = true }).Strip;
+                new TraySettings { StartWithTheTray = false }).Strip;
             using var shipped = new TrayMenu(Nothing, Nothing, Nothing, Nothing).Strip;
 
             Assert.False(((ToolStripMenuItem)flipped.Items[OnLaunch]).Checked);
-            Assert.True(((ToolStripMenuItem)flipped.Items[ReleaseCheck]).Checked);
-
             Assert.Equal(
                 TraySettings.EngineShipsOn, ((ToolStripMenuItem)shipped.Items[OnLaunch]).Checked);
-            Assert.Equal(
-                TraySettings.ReleaseCheckShipsOn,
-                ((ToolStripMenuItem)shipped.Items[ReleaseCheck]).Checked);
         });
 
     [Fact]
-    public void Ticking_a_setting_reports_every_setting_as_the_user_is_looking_at_them() =>
+    public void Ticking_the_setting_reports_it_as_the_user_is_looking_at_it() =>
         OnUiThread(() =>
         {
             // CheckOnClick flips the tick before the handler runs, so what is reported is the new
-            // answer and nothing has to negate anything — settings written from what is on screen
+            // answer and nothing has to negate anything — a setting written from what is on screen
             // cannot disagree with what is on screen.
-            //
-            // The whole record and not the one flag that moved, because the file holds both: a saver
-            // handed one would have to read the other back before it could write (DD154).
             var told = new List<TraySettings>();
             var menu = new TrayMenu(Nothing, Nothing, Nothing, Nothing, new TraySettings(), told.Add);
             using var strip = menu.Strip;
 
-            ((ToolStripMenuItem)strip.Items[ReleaseCheck]).PerformClick();
+            ((ToolStripMenuItem)strip.Items[OnLaunch]).PerformClick();
             ((ToolStripMenuItem)strip.Items[OnLaunch]).PerformClick();
 
             Assert.Equal(2, told.Count);
-            Assert.Equal(new TraySettings { StartWithTheTray = true, CheckForReleases = true }, told[0]);
-            Assert.Equal(new TraySettings { StartWithTheTray = false, CheckForReleases = true }, told[1]);
+            Assert.Equal(new TraySettings { StartWithTheTray = false }, told[0]);
+            Assert.Equal(new TraySettings { StartWithTheTray = true }, told[1]);
         });
 
     [Fact]
@@ -168,11 +173,9 @@ public sealed class TrayMenuTests
             using var strip = Menu().Strip;
 
             ((ToolStripMenuItem)strip.Items[OnLaunch]).PerformClick();
-            ((ToolStripMenuItem)strip.Items[ReleaseCheck]).PerformClick();
             strip.Items[Install].PerformClick();
 
             Assert.False(((ToolStripMenuItem)strip.Items[OnLaunch]).Checked);
-            Assert.True(((ToolStripMenuItem)strip.Items[ReleaseCheck]).Checked);
         });
 
     [Theory]

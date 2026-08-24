@@ -11,10 +11,11 @@ namespace FreeWilly.Tray;
 /// spending somebody's rate-limit budget to learn nothing. Sixty unauthenticated requests an hour is
 /// a shared NAT's whole allowance, so four a day per machine is the point.
 ///
-/// <para><b>The setting is read on every tick rather than at construction.</b> Turning it off has to
-/// stop the traffic without restarting anything, and turning it on has to start it — a watch that
-/// captured the answer once would make the menu item a lie until the next launch. Off means no
-/// request is made and no feed is even constructed.</para>
+/// <para><b>There is no switch (DD171).</b> The check shipped off and was gated on a menu tick, and a
+/// check nobody turns on is a check nobody has — the 1.0.1 notes already had to tell readers that
+/// upgrading from 1.0.0 was a manual download, and off by default is that same failure by choice.
+/// claude-tray asks on every launch with nothing to enable, and this is the surface it is the
+/// reference for.</para>
 ///
 /// <para><b>It announces a version once.</b> The menu item stays offered for as long as the release
 /// is newer, but a balloon every six hours about the same release is nagging, and this product's
@@ -33,7 +34,6 @@ internal sealed class ReleaseWatch : IDisposable
     /// <summary>How often it asks after that.</summary>
     internal static readonly TimeSpan Every = TimeSpan.FromHours(6);
 
-    private readonly Func<bool> _wanted;
     private readonly Func<IReleaseFeed> _feed;
     private readonly Action<AvailableRelease, bool> _found;
     private readonly Lock _gate = new();
@@ -41,22 +41,18 @@ internal sealed class ReleaseWatch : IDisposable
     private Version? _announced;
 
     /// <summary>Construct a watch.</summary>
-    /// <param name="wanted">Whether the user has turned the check on, asked at every tick.</param>
     /// <param name="found">
     /// What to do about a newer release, and whether this is the first tick to name that version —
     /// which is what separates offering it from announcing it. Called off the UI thread; the caller
     /// marshals.
     /// </param>
     /// <param name="feed">
-    /// How to build a feed when one is wanted. A factory rather than a feed, so an install with the
-    /// setting off never constructs the one thing here that touches the network.
+    /// How to build a feed. A factory rather than a feed, so the one thing here that touches the
+    /// network is constructed per check and disposed with it.
     /// </param>
-    internal ReleaseWatch(
-        Func<bool> wanted, Action<AvailableRelease, bool> found, Func<IReleaseFeed>? feed = null)
+    internal ReleaseWatch(Action<AvailableRelease, bool> found, Func<IReleaseFeed>? feed = null)
     {
-        ArgumentNullException.ThrowIfNull(wanted);
         ArgumentNullException.ThrowIfNull(found);
-        _wanted = wanted;
         _found = found;
         _feed = feed ?? (() => new GitHubReleaseFeed());
     }
@@ -73,18 +69,13 @@ internal sealed class ReleaseWatch : IDisposable
     }
 
     /// <summary>Ask now, whatever the timer was going to do.</summary>
-    /// <returns>The release, or <see langword="null"/> — including where the setting is off.</returns>
+    /// <returns>The release, or <see langword="null"/> where there is none or nothing answered.</returns>
     /// <remarks>
     /// Awaitable because a test has to be able to observe one check without waiting twenty seconds
     /// for a timer. <see cref="Tick"/> is the same call with the result dropped.
     /// </remarks>
     internal async Task<AvailableRelease?> CheckAsync(CancellationToken cancellation = default)
     {
-        if (!_wanted())
-        {
-            return null;
-        }
-
         IReleaseFeed feed;
         try
         {

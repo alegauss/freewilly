@@ -47,16 +47,15 @@ public sealed class TraySettingsTests
     }
 
     [Fact]
-    public void An_install_nobody_has_changed_anything_on_makes_no_release_request()
+    public void The_file_holds_one_setting_and_the_release_check_is_not_it()
     {
-        // The one default in this file that is a promise rather than a convenience (DD154). The site
-        // says the only network traffic this project makes is the five pinned artefacts during a
-        // provision the user asked for, and a check that shipped on would make that false on every
-        // machine before anybody had chosen anything.
-        using var scratch = new Scratch();
-
-        Assert.False(TraySettings.Read(scratch.File).CheckForReleases);
-        Assert.False(TraySettings.ReleaseCheckShipsOn);
+        // DD171 reversing DD154. The check shipped off behind a tick here, and a check nobody turns
+        // on is a check nobody has — so it is not a setting any more and there is nothing in this
+        // file that can stop it. Asserted on the shape of the record rather than on a value, because
+        // the defect this guards is somebody reintroducing the switch.
+        Assert.DoesNotContain(
+            typeof(TraySettings).GetProperties(),
+            property => property.Name.Contains("Release", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -81,55 +80,19 @@ public sealed class TraySettingsTests
     }
 
     [Fact]
-    public void The_release_check_round_trips_on_its_own_terms()
-    {
-        using var scratch = new Scratch();
-        new TraySettings { CheckForReleases = true }.Write(scratch.File);
-
-        Assert.True(TraySettings.Read(scratch.File).CheckForReleases);
-    }
-
-    [Fact]
-    public void Saving_one_setting_does_not_reset_the_other()
-    {
-        // This is why the type is named after the file rather than after either setting (DD154).
-        // Write serialises the object it is called on, so two records over one path would each
-        // round-trip only their own property — and every save would be the other one's reset.
-        using var scratch = new Scratch();
-
-        new TraySettings { StartWithTheTray = false, CheckForReleases = true }.Write(scratch.File);
-        var read = TraySettings.Read(scratch.File);
-
-        Assert.False(read.StartWithTheTray);
-        Assert.True(read.CheckForReleases);
-
-        // And the record's own copy semantics, which is what the menu hands back on a tick.
-        (read with { CheckForReleases = false }).Write(scratch.File);
-        var again = TraySettings.Read(scratch.File);
-
-        Assert.False(again.StartWithTheTray);
-        Assert.False(again.CheckForReleases);
-    }
-
-    [Fact]
     public void A_file_that_cannot_be_read_answers_with_the_defaults_rather_than_throwing()
     {
         // A preference file truncated by a power cut is not a reason to refuse to start an engine,
-        // and this runs in a constructor where throwing takes the tray icon with it. It is also the
-        // one path where the release check's default has to hold: a corrupt file must not be able to
-        // turn outbound traffic on.
+        // and this runs in a constructor where throwing takes the tray icon with it.
         using var scratch = new Scratch();
         Directory.CreateDirectory(Path.GetDirectoryName(scratch.File)!);
         File.WriteAllText(scratch.File, "{ this is not json");
 
-        var read = TraySettings.Read(scratch.File);
-
-        Assert.True(read.StartWithTheTray);
-        Assert.False(read.CheckForReleases);
+        Assert.True(TraySettings.Read(scratch.File).StartWithTheTray);
     }
 
     [Fact]
-    public void A_file_written_before_DD154_keeps_its_answer_and_gains_the_new_default()
+    public void A_file_written_before_DD154_keeps_its_answer()
     {
         // What is actually on the machines this ships to: settings.json holding the one property
         // DD135 wrote. Renaming the type must not have renamed the property, or every install that
@@ -138,10 +101,22 @@ public sealed class TraySettingsTests
         Directory.CreateDirectory(Path.GetDirectoryName(scratch.File)!);
         File.WriteAllText(scratch.File, "{\n  \"StartWithTheTray\": false\n}");
 
-        var read = TraySettings.Read(scratch.File);
+        Assert.False(TraySettings.Read(scratch.File).StartWithTheTray);
+    }
 
-        Assert.False(read.StartWithTheTray);
-        Assert.False(read.CheckForReleases);
+    [Fact]
+    public void A_file_written_while_the_release_check_was_a_setting_is_read_without_it()
+    {
+        // The upgrade path DD171 has to survive: every install that ever opened the menu wrote
+        // CheckForReleases, most of them false. An unknown member is not an error, so the property
+        // is ignored — a copy that had it off must not stay off now that there is no off.
+        using var scratch = new Scratch();
+        Directory.CreateDirectory(Path.GetDirectoryName(scratch.File)!);
+        File.WriteAllText(
+            scratch.File,
+            "{\n  \"StartWithTheTray\": false,\n  \"CheckForReleases\": false\n}");
+
+        Assert.False(TraySettings.Read(scratch.File).StartWithTheTray);
     }
 
     [Fact]

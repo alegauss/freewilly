@@ -80,7 +80,6 @@ internal sealed class TrayApplication : ApplicationContext
         // callback is posted: it reveals a menu item and may show a balloon, and both are the UI
         // thread's — the timer's is not.
         _releases = new ReleaseWatch(
-            () => _settings.CheckForReleases,
             (release, first) => _ui.Post(_ => Offer(release, first), null));
 
         // The primary button, which the icon answered with nothing at all until DD140. NotifyIcon
@@ -172,36 +171,27 @@ internal sealed class TrayApplication : ApplicationContext
             StartEngine();
         }
 
-        // After the engine, and the watch's own delay is on top of that: a release check is the least
-        // urgent thing this process does, and the first twenty seconds of a launch may be provisioning
-        // a distribution.
-        if (_settings.CheckForReleases)
-        {
-            _releases.Start();
-        }
+        // Always, with nothing to enable (DD171). After the engine, and the watch's own delay is on
+        // top of that: a release check is the least urgent thing this process does, and the first
+        // twenty seconds of a launch may be provisioning a distribution.
+        _releases.Start();
     }
 
-    /// <summary>Remember what the menu's boxes now say (DD135, DD154).</summary>
+    /// <summary>Remember what the menu's box now says (DD135).</summary>
     /// <param name="wanted">Every setting, as the menu has it.</param>
     /// <remarks>
     /// Deliberately does not start or stop the engine. That setting is about the next launch, and a
     /// tick that also started one would make the box a verb — there are already two of those directly
     /// above it, and a user who wanted the engine now would have pressed one.
     ///
-    /// <para>It does arm the release watch, and that is not the same thing: turning the check on is a
-    /// request to be told about releases, and one that took effect only after a restart would be a
-    /// box that appears to do nothing. Turning it off needs no counterpart — the watch asks this
-    /// setting at every tick, so off is a timer that makes no request.</para>
+    /// <para>It used to arm the release watch too, because that check was a second tick here. DD171
+    /// took the tick away and the watch starts with the tray, so there is nothing left for a save to
+    /// set in motion.</para>
     /// </remarks>
     private void Save(TraySettings wanted)
     {
         _settings = wanted;
         _settings.Write(_paths.Settings);
-
-        if (_settings.CheckForReleases)
-        {
-            _releases.Start();
-        }
     }
 
     /// <summary>Say a release exists, and offer it (DD154).</summary>
@@ -219,8 +209,12 @@ internal sealed class TrayApplication : ApplicationContext
         {
             Balloon(
                 $"FreeWilly {release.Version.ToString(3)} has been released. "
-                + $"{TrayMenu.ReleaseCheckText.Replace("&", string.Empty, StringComparison.Ordinal)}"
-                + " in the tray menu now offers to install it.");
+                + string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    TrayMenu.InstallFormat,
+                    release.Version.ToString(3))
+                    .Replace("&", string.Empty, StringComparison.Ordinal)
+                + " is now in the tray menu.");
         }
     }
 

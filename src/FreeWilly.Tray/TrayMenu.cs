@@ -30,11 +30,12 @@ namespace FreeWilly.Tray;
 /// case, so what is left of this menu's job is to name what the click does — first, where a reader
 /// looks — and then the engine, which the click says nothing about.</para>
 ///
-/// <para><b>DD154 spent the budget's other item, and one that is usually invisible.</b> The release
-/// check joins the group that is already "how it behaves when you are not asking", which is what it
-/// is; the install item beside it is hidden until there is something to install, so the menu a
-/// photograph shows is one line longer than before and not two. It is here rather than in the window
-/// because an update that could only be applied from a page is one a user has to go and find.</para>
+/// <para><b>DD154 spent the budget's other item, and DD171 gave it back.</b> The release check was a
+/// tick beside the engine's, and a check nobody turns on is a check nobody has — so the tray asks on
+/// every launch the way claude-tray does and the tick is gone. What is left is the install item,
+/// hidden until there is something to install, so the resting menu is exactly the length it was
+/// before DD154. It is here rather than in the window because an update that could only be applied
+/// from a page is one a user has to go and find.</para>
 /// </remarks>
 internal sealed class TrayMenu
 {
@@ -46,9 +47,6 @@ internal sealed class TrayMenu
 
     /// <inheritdoc cref="StartText"/>
     internal const string OnLaunchText = "Start engine &with FreeWilly";
-
-    /// <inheritdoc cref="StartText"/>
-    internal const string ReleaseCheckText = "Chec&k for updates";
 
     /// <summary>What the hidden install item says before a release has named itself (DD154).</summary>
     /// <remarks>
@@ -70,7 +68,6 @@ internal sealed class TrayMenu
     private readonly ToolStripMenuItem _start = new(StartText);
     private readonly ToolStripMenuItem _stop = new(StopText);
     private readonly ToolStripMenuItem _onLaunch = new(OnLaunchText) { CheckOnClick = true };
-    private readonly ToolStripMenuItem _releaseCheck = new(ReleaseCheckText) { CheckOnClick = true };
     private readonly ToolStripMenuItem _install = new(InstallText) { Visible = false };
     private readonly ToolStripMenuItem _window = new(WindowText);
 
@@ -122,16 +119,9 @@ internal sealed class TrayMenu
         // cannot disagree with it.
         var opened = settings ?? new TraySettings();
         _onLaunch.Checked = opened.StartWithTheTray;
-        _releaseCheck.Checked = opened.CheckForReleases;
 
-        void Ticked() => save?.Invoke(new TraySettings
-        {
-            StartWithTheTray = _onLaunch.Checked,
-            CheckForReleases = _releaseCheck.Checked,
-        });
-
-        _onLaunch.CheckedChanged += (_, _) => Ticked();
-        _releaseCheck.CheckedChanged += (_, _) => Ticked();
+        _onLaunch.CheckedChanged += (_, _) =>
+            save?.Invoke(new TraySettings { StartWithTheTray = _onLaunch.Checked });
 
         Strip = new ContextMenuStrip();
 
@@ -147,10 +137,9 @@ internal sealed class TrayMenu
         // thing to say about the engine and not a third place to go.
         Strip.Items.Add(_onLaunch);
 
-        // Beside it because it answers the same question about a different subject: what this tool
-        // does when nobody is asking it to do anything. The install item follows it rather than
-        // leading it, so a release that arrives does not move the setting a user is reaching for.
-        Strip.Items.Add(_releaseCheck);
+        // Where the release check's tick used to sit (DD171). Hidden until a release exists, so this
+        // is the line a resting menu does not have — and when it appears it appears under the engine
+        // group rather than beside the window, because installing it stops the engine.
         Strip.Items.Add(_install);
         Strip.Items.Add(new ToolStripSeparator());
         Strip.Items.Add(new ToolStripMenuItem(QuitText, null, (_, _) => quit()));

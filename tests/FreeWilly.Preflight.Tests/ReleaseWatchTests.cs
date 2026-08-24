@@ -33,32 +33,10 @@ public sealed class ReleaseWatchTests
         """;
 
     [Fact]
-    public async Task Off_makes_no_request_at_all()
-    {
-        // Not "makes a request and ignores the answer". The setting is a promise about outbound
-        // traffic, so the feed is not even constructed while it is off — asserted by counting the
-        // times the factory ran, because a feed built and never used would still have opened a
-        // client.
-        var built = 0;
-        using var watch = new ReleaseWatch(
-            () => false,
-            (_, _) => Assert.Fail("nothing should have been found"),
-            () =>
-            {
-                built++;
-                return new Feed(Release("v9.0.0"));
-            });
-
-        Assert.Null(await watch.CheckAsync());
-        Assert.Equal(0, built);
-    }
-
-    [Fact]
-    public async Task On_finds_a_newer_release_and_hands_it_over()
+    public async Task It_finds_a_newer_release_and_hands_it_over()
     {
         var found = new List<(AvailableRelease Release, bool Announce)>();
         using var watch = new ReleaseWatch(
-            () => true,
             (release, announce) => found.Add((release, announce)),
             () => new Feed(Release("v99.0.0")));
 
@@ -70,6 +48,25 @@ public sealed class ReleaseWatchTests
     }
 
     [Fact]
+    public async Task Nothing_has_to_be_turned_on_first()
+    {
+        // DD171. The check shipped off behind a menu tick, and a check nobody turns on is a check
+        // nobody has — the 1.0.1 notes had to tell readers that upgrading from 1.0.0 was a manual
+        // download, and off by default is that same failure by choice. There is now no setting to
+        // pass and no way to construct a watch that declines to ask.
+        var settings = new TraySettings();
+        var feed = new Feed(Release("v99.0.0"));
+        using var watch = new ReleaseWatch((_, _) => { }, () => feed);
+
+        Assert.NotNull(await watch.CheckAsync());
+        Assert.Equal(1, feed.Asked);
+
+        // And nothing a user can write down changes that: the file holds one setting, about the
+        // engine, and it is not consulted here.
+        Assert.Equal(TraySettings.EngineShipsOn, settings.StartWithTheTray);
+    }
+
+    [Fact]
     public async Task The_same_release_is_offered_every_tick_and_announced_once()
     {
         // A balloon every six hours about a release the user has already been told about is nagging,
@@ -77,7 +74,6 @@ public sealed class ReleaseWatchTests
         // still has to be offered on every tick, because a menu is rebuilt from what it was told.
         var announcements = new List<bool>();
         using var watch = new ReleaseWatch(
-            () => true,
             (_, announce) => announcements.Add(announce),
             () => new Feed(Release("v99.0.0")));
 
@@ -86,29 +82,6 @@ public sealed class ReleaseWatchTests
         await watch.CheckAsync();
 
         Assert.Equal([true, false, false], announcements);
-    }
-
-    [Fact]
-    public async Task The_setting_is_read_at_every_tick_rather_than_captured()
-    {
-        // Turning the check on has to take effect without a restart, or the menu item is a box that
-        // appears to do nothing until tomorrow. Turning it off has to stop the traffic for the same
-        // reason, and neither can work off an answer read once at construction.
-        var settings = new TraySettings { CheckForReleases = false };
-        var feed = new Feed(Release("v99.0.0"));
-        using var watch = new ReleaseWatch(
-            () => settings.CheckForReleases, (_, _) => { }, () => feed);
-
-        Assert.Null(await watch.CheckAsync());
-        Assert.Equal(0, feed.Asked);
-
-        settings = settings with { CheckForReleases = true };
-        Assert.NotNull(await watch.CheckAsync());
-        Assert.Equal(1, feed.Asked);
-
-        settings = settings with { CheckForReleases = false };
-        Assert.Null(await watch.CheckAsync());
-        Assert.Equal(1, feed.Asked);
     }
 
     [Fact]
@@ -126,9 +99,10 @@ public sealed class ReleaseWatchTests
     [Fact]
     public void Starting_twice_arms_one_timer()
     {
-        // Save calls Start on every tick of the box, because turning the check on mid-session has to
-        // arm a watch that was never armed. Doing that must not leave a second timer behind.
-        using var watch = new ReleaseWatch(() => false, (_, _) => { }, () => new Feed("{}"));
+        // Start is idempotent by construction rather than by the caller remembering. It had a second
+        // caller — the menu tick DD171 removed — and the guard stays because a timer left behind
+        // would double the traffic this file is otherwise careful about.
+        using var watch = new ReleaseWatch((_, _) => { }, () => new Feed("{}"));
 
         watch.Start();
         watch.Start();
