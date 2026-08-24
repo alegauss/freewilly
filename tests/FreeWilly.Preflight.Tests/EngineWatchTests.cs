@@ -194,6 +194,59 @@ public sealed class EngineWatchTests
         Assert.DoesNotContain("polls in a row", said, StringComparison.Ordinal);
     }
 
+    /// <summary>A poll that never got a handle on the pipe, in the words DD173 gave it.</summary>
+    private static EngineStatus NeverConnected() =>
+        new(EngineState.Starting,
+            $"the daemon is running and {EnginePing.NoConnection} within 3s");
+
+    [Fact]
+    public void A_poll_that_never_connected_names_the_relay_that_did_not_answer()
+    {
+        // DD180. The failure of 24 August 2026 said "no connection" against a daemon that answered
+        // pidof throughout — the client was refused by this process, not by the engine — and the
+        // line naming that carried nothing whatsoever about the relay. A reader was left unable to
+        // tell a relay refilling too slowly from one that had stopped accepting altogether, which is
+        // the difference between a busy machine and DD179's defect.
+        var watch = new EngineWatch();
+        var first = NeverConnected();
+        watch.KeepServing(first);
+
+        var said = watch.WhenItWentQuiet(first, "the relay accepted 214 and is still accepting");
+
+        Assert.Contains("first quiet poll", said, StringComparison.Ordinal);
+        Assert.Contains("the relay accepted 214", said, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_daemon_that_went_quiet_after_connecting_leaves_the_relay_out_of_it()
+    {
+        // The other half, and it is the point rather than a formality. A connection that opened and
+        // then heard nothing is the daemon behind the pipe, so relay bookkeeping in that sentence
+        // sends a reader to the Windows side of a machine whose problem is inside the distribution —
+        // which is the wasted hour DD162 is written about, in a different file.
+        var watch = new EngineWatch();
+        var first = Quiet();
+        watch.KeepServing(first);
+
+        var said = watch.WhenItWentQuiet(first, "the relay accepted 214 and is still accepting");
+
+        Assert.DoesNotContain("the relay", said, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_host_with_no_relay_yet_says_nothing_about_one()
+    {
+        // Null travels from a lifecycle that has not served anything, and it must not become a
+        // sentence about zero: "accepted 0 and has stopped accepting" is the exact signature of the
+        // failure DD179 hunts, and manufacturing it for every poll taken during a start would put
+        // that signature in the journal on a machine where nothing is wrong.
+        var watch = new EngineWatch();
+        var first = NeverConnected();
+        watch.KeepServing(first);
+
+        Assert.DoesNotContain("relay", watch.WhenItWentQuiet(first, null), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void The_tolerance_outlasts_the_window_a_caller_was_promised()
     {

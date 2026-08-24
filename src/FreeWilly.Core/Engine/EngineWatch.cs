@@ -91,8 +91,11 @@ public sealed class EngineWatch
         return !now.Conclusive && QuietPolls < ToleratedQuietPolls;
     }
 
-    /// <summary>What to say about the poll that began the silence (DD174).</summary>
+    /// <summary>What to say about the poll that began the silence (DD174, DD180).</summary>
     /// <param name="first">The first thing observed after a run of answers.</param>
+    /// <param name="relay">
+    /// The relay's account of itself, or <see langword="null"/> where there is no relay to ask.
+    /// </param>
     /// <returns>The line.</returns>
     /// <remarks>
     /// Without this, the journal's first word about any failure is <see cref="WhyItStopped"/>, and
@@ -105,11 +108,27 @@ public sealed class EngineWatch
     /// <see cref="WhyItStopped"/> carries: there is nothing to count yet. Naming it as the first
     /// keeps the two lines from reading as the same observation written twice, which is what they
     /// would otherwise be — the same state, the same detail, ten seconds apart.</para>
+    ///
+    /// <para><b>The relay is named only where the ping never connected (DD180).</b> That detail is a
+    /// statement about the Windows side of the pipe, and it is the one case where the relay's own
+    /// figures are the evidence — a client that got no handle at all was refused by this process, not
+    /// by the daemon. Where the connection opened and the daemon then said nothing, the relay did its
+    /// job and dragging its bookkeeping into the sentence would point the reader at the wrong end of
+    /// the machine.</para>
+    ///
+    /// <para>The decision is made here rather than by the host so it can be driven by a test, and
+    /// matched on <see cref="EnginePing.NoConnection"/> rather than on a literal so the two ends
+    /// cannot be reworded apart.</para>
     /// </remarks>
-    public string WhenItWentQuiet(EngineStatus first)
+    public string WhenItWentQuiet(EngineStatus first, string? relay = null)
     {
         ArgumentNullException.ThrowIfNull(first);
-        return $"{first.State,-8}  {first.Detail} — first quiet poll";
+
+        var line = $"{first.State,-8}  {first.Detail} — first quiet poll";
+        return relay is not null
+            && first.Detail.Contains(EnginePing.NoConnection, StringComparison.Ordinal)
+                ? $"{line}, {relay}"
+                : line;
     }
 
     /// <summary>What to say about the run of silence that ended the watch.</summary>

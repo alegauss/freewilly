@@ -70,6 +70,16 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// </remarks>
     public string? WhatEndedAccepting => _relay?.WhatEndedAccepting;
 
+    /// <summary>
+    /// The relay's account of itself, or <see langword="null"/> where there is no relay (DD180).
+    /// </summary>
+    /// <remarks>
+    /// Null and not a sentence about zero. A poll taken before this lifecycle has served anything has
+    /// no relay to report on, and manufacturing "accepted 0 and has stopped accepting" for it would
+    /// put the signature of the failure DD179 hunts into every line written during a start.
+    /// </remarks>
+    public string? RelayFigures => _relay?.Figures;
+
     private bool _launched;
 
     /// <summary>

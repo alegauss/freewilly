@@ -66,6 +66,35 @@ public sealed class EnginePipeRelay : IAsyncDisposable
     /// </remarks>
     public int Stumbles { get; private set; }
 
+    /// <summary>Whether the accept thread is still alive (DD180).</summary>
+    /// <remarks>
+    /// Asked of the thread rather than inferred from <see cref="WhatEndedAccepting"/>, because the
+    /// two answer different questions: that property says why a loop ended and this says whether one
+    /// is running, and a relay that was never started has neither a reason nor a thread.
+    /// </remarks>
+    public bool Accepting => _accepting?.IsAlive ?? false;
+
+    /// <summary>
+    /// The relay's own account of itself, for the line that reports a silence (DD180).
+    /// </summary>
+    /// <remarks>
+    /// DD173 split a ping's timeout into the stage that ran out of budget, and the first outage
+    /// recorded with that vocabulary said <c>no connection</c> — the client never got a handle on the
+    /// pipe. That is a statement about this class, and this class was the one participant the journal
+    /// said nothing about: only <see cref="Stumbles"/> was ever written, and only when it moved, so a
+    /// silence with no stumble in it left a reader unable to tell a relay refilling too slowly from
+    /// one that had stopped accepting altogether.
+    ///
+    /// <para>Three figures and no more. What has been accepted says whether this relay was ever
+    /// working, the stumbles say whether the machine was refusing instances, and the thread says
+    /// whether there is still a loop to refill them — which between them name every way the Windows
+    /// side of the pipe can be the reason a client got nothing.</para>
+    /// </remarks>
+    public string Figures =>
+        $"the relay accepted {Accepted}"
+        + (Stumbles > 0 ? $" over {Stumbles} stumbles" : "")
+        + (Accepting ? " and is still accepting" : " and has stopped accepting");
+
     /// <summary>
     /// What ended the accept loop, where something other than a stop did (DD179).
     /// </summary>

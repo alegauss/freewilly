@@ -2,26 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD180 A connection failure that names no relay
-
-DD173 split the ping's timeout into the stage that ran out of budget, and the first
-outage recorded with that vocabulary said `no connection` — the client never got a
-handle on the pipe at all. That is a statement about the relay, and the relay is the one
-participant in the incident that the journal says nothing about.
-
-The numbers already exist. `EnginePipeRelay` counts what it has `Accepted` and what it
-has stumbled over creating, and it owns a named thread whose liveness is a question a
-`Thread` object answers. Only the stumble count is ever written, and only when it moves
-— so a silence with no stumble in it, which is what this incident was, leaves a reader
-with nothing to distinguish a relay that is refilling too slowly from one that stopped
-accepting altogether.
-
-The line to carry them is the one DD174 added: the first quiet poll, written once at the
-crossing. It is already the sentence that dates the failure, and a connection failure is
-the case where the relay's own figures are the evidence. Attached only to a connection
-failure, so a daemon that is merely slow to reply does not drag relay bookkeeping into a
-sentence that is not about it.
-
 ### §DD181 A cached reading read as a current one
 
 DD175 stopped the host claiming "the daemon is running" from a Windows process handle

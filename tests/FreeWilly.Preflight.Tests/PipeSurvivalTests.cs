@@ -273,6 +273,73 @@ public sealed class PipeSurvivalTests
         Assert.Null(lifecycle.WhatEndedAccepting);
     }
 
+    [Fact]
+    public async Task A_working_relay_reports_what_it_has_served_and_that_it_is_still_serving()
+    {
+        // DD180. The figures are only worth carrying if a healthy relay reads as healthy in them,
+        // which is what makes the other reading worth acting on — the same property the stumble
+        // count is held to above.
+        var pipe = Pipe();
+
+        await using var relay = new EnginePipeRelay(new Answering(), pipe);
+        relay.Start();
+
+        Assert.True(await ReachableAsync(pipe));
+        Assert.True(await Reached(() => relay.Accepted == 1));
+
+        Assert.Equal("the relay accepted 1 and is still accepting", relay.Figures);
+    }
+
+    [Fact]
+    public async Task A_relay_whose_loop_died_says_so_in_its_figures()
+    {
+        // The reading the journal exists to carry: a relay that accepted work and then stopped. It
+        // is the sentence that separates DD179's defect from a machine merely too busy to refill a
+        // pipe instance in time, and neither is visible from a status that only ever says Starting.
+        var pipe = Pipe();
+        var attempt = 0;
+
+        await using var relay = new EnginePipeRelay(new Answering(), pipe);
+        relay.Listener = () =>
+        {
+            attempt++;
+
+            var server = NamedPipeServerStreamAcl.Create(
+                pipe,
+                PipeDirection.InOut,
+                NamedPipeServerStream.MaxAllowedServerInstances,
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous,
+                inBufferSize: 0,
+                outBufferSize: 0,
+                pipeSecurity: OnlyThisUser());
+
+            if (attempt >= 2)
+            {
+                server.Dispose();
+            }
+
+            return server;
+        };
+
+        relay.Start();
+        Assert.True(await ReachableAsync(pipe));
+        Assert.True(await Reached(() => relay.WhatEndedAccepting is not null));
+
+        Assert.Equal("the relay accepted 1 and has stopped accepting", relay.Figures);
+    }
+
+    [Fact]
+    public async Task The_host_reads_the_figures_through_the_lifecycle()
+    {
+        // Same seam as the other two, and the same answer before there is a relay: null rather than
+        // a sentence, because a start has polls in it and none of them has a relay to describe.
+        await using var lifecycle = new EngineLifecycle(
+            new FakeWsl(), new FakeDaemon(), new Answering());
+
+        Assert.Null(lifecycle.RelayFigures);
+    }
+
     private static System.IO.Pipes.PipeSecurity OnlyThisUser()
     {
         var security = new System.IO.Pipes.PipeSecurity();

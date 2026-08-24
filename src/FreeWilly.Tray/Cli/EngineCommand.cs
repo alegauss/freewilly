@@ -312,7 +312,10 @@ internal static class EngineCommand
                     // instead of twice, here and there, about the same observation.
                     if (watch.JustWentQuiet)
                     {
-                        Note(journal, $"  {watch.WhenItWentQuiet(now)}");
+                        // The relay's figures travel with it since DD180, and the watch decides
+                        // whether they belong: a ping that never got a handle on the pipe was
+                        // refused by this process, and a ping the daemon left unanswered was not.
+                        Note(journal, $"  {watch.WhenItWentQuiet(now, lifecycle.RelayFigures)}");
                     }
 
                     continue;

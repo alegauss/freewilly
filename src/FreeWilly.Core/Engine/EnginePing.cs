@@ -22,6 +22,19 @@ public static class EnginePing
     /// <summary>The smallest request the Engine API answers.</summary>
     private const string Request = "GET /_ping HTTP/1.1\r\nHost: docker\r\nConnection: close\r\n\r\n";
 
+    /// <summary>
+    /// What a ping says when it never got a handle on the pipe at all (DD173, DD180).
+    /// </summary>
+    /// <remarks>
+    /// A constant rather than a literal because two places now depend on the wording: this class
+    /// writes it, and <see cref="EngineWatch.WhenItWentQuiet"/> reads it to decide whether the
+    /// relay's own figures belong in the sentence. That is the coupling
+    /// <see cref="EngineRevival.RestartMark"/> exists for and is spelled the same way — nothing fails
+    /// to compile when a sentence is reworded, the second reader simply stops matching, and the
+    /// journal quietly loses the half of the line that made it worth reading.
+    /// </remarks>
+    public const string NoConnection = "no connection";
+
     /// <summary>Ask the engine on <paramref name="pipeName"/> whether it is answering.</summary>
     /// <param name="pipeName">The pipe to ask.</param>
     /// <param name="timeout">How long to wait for the connection and the reply.</param>
@@ -44,7 +57,7 @@ public static class EnginePing
         // a connection nothing accepted is the relay and its wsl.exe hop, the load story DD133 is
         // about, while a connection that opened and then went quiet is the daemon behind it. The
         // two send a reader to opposite ends of the machine, so the sentence has to pick one.
-        var whatRanOut = "no connection";
+        var whatRanOut = NoConnection;
 
         try
         {
