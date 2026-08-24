@@ -24,15 +24,25 @@ internal sealed class FakeBackend(string? reply) : IEngineBackend
 
     internal string Received => string.Concat(_requests);
 
+    /// <summary>
+    /// What it answers with now, or <see langword="null"/> to refuse like a dead daemon.
+    /// </summary>
+    /// <remarks>
+    /// Settable, so one engine can go quiet, answer, and go quiet again inside a single test. A
+    /// backend fixed at construction can only describe an engine that was always one thing, and the
+    /// finding a silence produces is supposed to belong to that silence rather than to the process.
+    /// </remarks>
+    internal string? Reply { get; set; } = reply;
+
     public IEngineChannel Open()
     {
         Interlocked.Increment(ref _opened);
-        if (reply is null)
+        if (Reply is not { } answer)
         {
             throw new IOException("pretend the daemon socket is not there");
         }
 
-        return new Channel(_requests, reply);
+        return new Channel(_requests, answer);
     }
 
     private sealed class Channel : IEngineChannel
@@ -512,6 +522,126 @@ public sealed class EngineLifecycleTests
         var said = WslDaemonProcess.Sentence(1, []);
 
         Assert.Equal("wsl.exe exited 1 without a word", said);
+    }
+
+    // ---- what is actually there, rather than what the handle implies (DD175) ------------------
+
+    /// <summary>A lifecycle whose ping never answers, so every reading is a silent one.</summary>
+    /// <param name="wsl">The machine, with its answers already queued.</param>
+    /// <param name="backend">The backend, held by the caller where it needs to change.</param>
+    /// <returns>The lifecycle.</returns>
+    private static EngineLifecycle Silent(FakeWsl wsl, FakeBackend backend) =>
+        new(wsl, new FakeDaemon(), backend, Pipe(), Owned);
+
+    /// <summary>How many times the machine was asked which distributions are running.</summary>
+    private static int RunningLists(FakeWsl wsl) =>
+        wsl.Invocations.Count(argv => argv.Contains("--running"));
+
+    [Fact]
+    public async Task A_distribution_that_stopped_running_is_named_rather_than_called_a_daemon()
+    {
+        // DD175, and the failure the whole supervisor exists for. WSL2 does not survive every
+        // suspend, and the wsl.exe handle on this side survives the virtual machine going — so this
+        // exact machine used to be reported as "the daemon is running".
+        var wsl = new FakeWsl();
+        wsl.Answer(0, "freewilly\r\n").Answer(0, "\r\n");
+
+        await using var engine = Silent(wsl, new FakeBackend(null));
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(1));
+
+        Assert.Equal(EngineState.Starting, status.State);
+        Assert.Contains($"{Owned} is not running", status.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("the daemon is running", status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_distribution_that_is_not_running_is_never_asked_to_run_anything()
+    {
+        // Not a detail of the implementation. `wsl -d <name> --exec` starts a distribution that is
+        // down, so asking it about the daemon would boot a virtual machine to answer a question
+        // about whether one was there — and leave the next poll looking at a fresh distribution
+        // with no daemon in it. A status probe does not get to change what it is reporting on.
+        var wsl = new FakeWsl();
+        wsl.Answer(0, "freewilly\r\n").Answer(0, "\r\n");
+
+        await using var engine = Silent(wsl, new FakeBackend(null));
+        await engine.StartAsync(TimeSpan.FromSeconds(1));
+
+        Assert.Null(wsl.WithVerb("-d"));
+    }
+
+    [Fact]
+    public async Task A_daemon_gone_from_a_distribution_that_is_up_is_reported_gone()
+    {
+        // The other world the reader is trying to tell apart: the virtual machine is fine and the
+        // process inside it is not, which is a log to go and read rather than a relay to suspect.
+        var wsl = new FakeWsl();
+        wsl.Answer(0, "freewilly\r\n").Answer(0, "freewilly\r\n").Answer(1, "");
+
+        await using var engine = Silent(wsl, new FakeBackend(null));
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(1));
+
+        Assert.Contains("the daemon is not running", status.Detail, StringComparison.Ordinal);
+        Assert.NotNull(wsl.WithVerb("-d"));
+    }
+
+    [Fact]
+    public async Task A_machine_that_will_not_answer_leaves_the_line_talking_about_the_launcher()
+    {
+        // DD134's direction, arriving here. Load makes wsl.exe late exactly when the ping beside it
+        // is late, and folding late into "gone" would manufacture the one reading the watch is
+        // entitled to act on out of a busy machine. So the fallback is the honest version of the
+        // sentence this replaced: the launcher has not exited, and that is all anybody knows.
+        var wsl = new FakeWsl();
+        wsl.Answer(0, "freewilly\r\n").Answer(null, "", "wsl.exe did not answer in 15s");
+
+        await using var engine = Silent(wsl, new FakeBackend(null));
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(1));
+
+        Assert.Contains("the launcher is alive", status.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("the daemon is", status.Detail, StringComparison.Ordinal);
+        Assert.Null(wsl.WithVerb("-d"));
+    }
+
+    [Fact]
+    public async Task The_machine_is_asked_once_for_a_silence_and_not_once_a_poll()
+    {
+        // The bound DD134 put on this path, kept. A subprocess per poll is the load that times out
+        // the ping, and here it would close a loop: each quiet poll spawning two more wsl.exe
+        // children makes the poll after it likelier to be quiet as well.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+
+        await using var engine = Silent(wsl, new FakeBackend(null));
+        await engine.StartAsync(TimeSpan.FromSeconds(1));
+        await engine.StatusAsync();
+        await engine.StatusAsync();
+        await engine.StatusAsync();
+
+        Assert.Equal(1, RunningLists(wsl));
+    }
+
+    [Fact]
+    public async Task An_engine_that_answers_and_goes_quiet_again_is_asked_about_again()
+    {
+        // The finding belongs to the silence and not to the process. Without the clearing, an engine
+        // that recovered and failed a second time would carry the first failure's answer for the
+        // rest of the host's life — which is the shape of wrong this task is about, only cached.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var backend = new FakeBackend(null);
+
+        await using var engine = Silent(wsl, backend);
+        await engine.StartAsync(TimeSpan.FromSeconds(1));
+        Assert.Equal(1, RunningLists(wsl));
+
+        backend.Reply = Ok200;
+        Assert.Equal(EngineState.Running, (await engine.StatusAsync()).State);
+
+        backend.Reply = null;
+        await engine.StatusAsync();
+
+        Assert.Equal(2, RunningLists(wsl));
     }
 
     /// <summary>A launcher that went quietly leaves the pointer exactly as it was (DD162).</summary>

@@ -42,6 +42,7 @@
 - ✅ **DD164** **The host gives up after five attempts, so an engine that could not come back stays down until somebody clicks Start** — The five quick attempts still run and still say so, but the host now settles into a five-minute interval instead of exiting, and the tray says once that it is working on it.
 - ✅ **DD173** **A ping timeout reads the same whether the pipe never connected or the daemon never replied** — A ping that runs out of budget now says which stage it ran out on, so the journal separates a connection nothing accepted from a daemon that went quiet.
 - ✅ **DD174** **The first five quiet polls write nothing, so the journal cannot say when an outage began** — The host now writes the poll that starts a run of silence, so an incident is dated at both ends instead of only at the verdict six polls later.
+- ✅ **DD175** **The journal says the daemon is running when what was checked is the wsl.exe handle on this side** — A silent poll now asks the machine what is there, so the journal names a distribution that stopped, a daemon that died, or the launcher it could only see.
 
 ## Block B — The daemon client (talk to the engine)
 

@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD175** (deps: —) **The journal says the daemon is running when what was checked is the wsl.exe handle on this side** — The launcher outlives a virtual machine that has gone, so the line asserts more than the check behind it knows and a reader has no way to tell. → §DD175
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

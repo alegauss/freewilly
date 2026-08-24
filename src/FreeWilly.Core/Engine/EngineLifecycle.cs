@@ -61,6 +61,23 @@ public sealed class EngineLifecycle : IAsyncDisposable
     public int Stumbles => _relay?.Stumbles ?? 0;
     private bool _launched;
 
+    /// <summary>
+    /// What the machine said about the daemon, kept for the run of silence in progress (DD175).
+    /// </summary>
+    /// <remarks>
+    /// Asked once and reused, and the alternative is what DD134 removed. A subprocess on every poll
+    /// is the load that times out the ping beside it, and here it would close a loop: each quiet
+    /// poll would spawn two more <c>wsl.exe</c> children onto a machine whose pings are already
+    /// losing a race for process creation, making the next poll likelier to be quiet too.
+    ///
+    /// <para>Cleared by any answer, so it never outlives the failure it describes. Within one
+    /// failure it does go stale — the verdict line carries what was found up to thirty seconds
+    /// earlier — and that is the trade taken deliberately: the finding belongs to the incident
+    /// rather than to the poll, and the line that first reports it is written at the moment it was
+    /// asked (DD174).</para>
+    /// </remarks>
+    private string? _found;
+
     /// <summary>Construct a lifecycle.</summary>
     /// <param name="wsl">The WSL command.</param>
     /// <param name="daemon">The daemon process.</param>
@@ -133,6 +150,9 @@ public sealed class EngineLifecycle : IAsyncDisposable
             .ConfigureAwait(false);
         if (ping.Answered)
         {
+            // The engine proved itself, so whatever was found about a previous silence describes an
+            // engine that no longer exists (DD175).
+            _found = null;
             return new EngineStatus(EngineState.Running,
                 $"the engine answered on \\\\.\\pipe\\{_pipeName}", ping.ApiVersion);
         }
@@ -144,12 +164,21 @@ public sealed class EngineLifecycle : IAsyncDisposable
         // the load that timed out the ping above.
         if (_launched)
         {
-            return _daemon.Alive
-                ? new EngineStatus(EngineState.Starting, $"the daemon is running and {ping.Detail}")
-                : new EngineStatus(EngineState.Stopped, WhatTookTheDaemon())
+            if (!_daemon.Alive)
+            {
+                return new EngineStatus(EngineState.Stopped, WhatTookTheDaemon())
                 {
                     Conclusive = true,
                 };
+            }
+
+            // DD175. The handle above says the launcher has not exited, and this sentence used to
+            // report that as "the daemon is running" — a claim about a Linux process, made from a
+            // Windows one. They come apart exactly where it matters: a virtual machine lost to a
+            // suspend leaves the wsl.exe on this side perfectly alive, which is the failure the
+            // whole supervisor exists for and the one the line described as a healthy daemon.
+            _found ??= WhatIsThere();
+            return new EngineStatus(EngineState.Starting, $"{_found} and {ping.Detail}");
         }
 
         // Nothing of ours has been launched, so the question is whether there is anything to launch.
@@ -190,6 +219,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
             .ConfigureAwait(false);
         if (already.Answered)
         {
+            _found = null;
             return new EngineStatus(EngineState.Running,
                 "the engine was already answering", already.ApiVersion);
         }
@@ -225,6 +255,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
                 _pipeName, TimeSpan.FromSeconds(2), cancellation).ConfigureAwait(false);
             if (ping.Answered)
             {
+                _found = null;
                 return new EngineStatus(EngineState.Running,
                     $"the engine answered on \\\\.\\pipe\\{_pipeName}", ping.ApiVersion);
             }
@@ -233,8 +264,12 @@ public sealed class EngineLifecycle : IAsyncDisposable
             await Task.Delay(TimeSpan.FromMilliseconds(500), cancellation).ConfigureAwait(false);
         }
 
+        // The same claim the poll used to make, and corrected the same way (DD175). Asked here
+        // rather than cached, because a whole start budget has been spent since anything was
+        // looked at, and this line is written once at the end of it rather than on every turn.
+        _found = WhatIsThere();
         return new EngineStatus(EngineState.Starting,
-            $"the daemon is running and the pipe did not answer within {budget.TotalSeconds:0}s "
+            $"{_found} and the pipe did not answer within {budget.TotalSeconds:0}s "
             + $"({lastDetail})");
     }
 
@@ -246,6 +281,8 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// <returns>Stopped, and what was done.</returns>
     public async Task<EngineStatus> StopAsync(CancellationToken cancellation = default)
     {
+        // Whatever was found about the engine being stopped here is about to stop being true of it.
+        _found = null;
         var done = new List<string>();
 
         if (_relay is not null)
@@ -272,6 +309,52 @@ public sealed class EngineLifecycle : IAsyncDisposable
         _ = cancellation;
         return new EngineStatus(EngineState.Stopped,
             done.Count == 0 ? "nothing was running" : string.Join(", ", done));
+    }
+
+    /// <summary>
+    /// What is actually there, asked of the machine rather than inferred from a handle (DD175).
+    /// </summary>
+    /// <returns>The clause a journal line carries in place of a guess.</returns>
+    /// <remarks>
+    /// Four answers, and they are the worlds a reader of the journal is trying to tell apart: the
+    /// daemon is fine and something between here and it broke; the daemon died inside a
+    /// distribution that is still up; the distribution itself is gone, which is what a suspend does;
+    /// and the machine would not say, which is the honest version of the sentence this replaced.
+    ///
+    /// <para><b>The cheap question gates the expensive one</b>, and not only for the load. Asking
+    /// <c>--exec</c> of a distribution that is not running would <em>start</em> it — a status probe
+    /// that boots a virtual machine has changed the thing it was reporting on, and would leave a
+    /// booted distribution with no daemon in it for the next poll to be confused by. So the running
+    /// list is asked first, and it can only ever cost one call in the case that matters most.</para>
+    ///
+    /// <para>A probe that did not answer resolves to the launcher and never to a verdict, the same
+    /// direction <see cref="Registration"/> takes and for the same reason (DD134): load can make
+    /// <c>wsl.exe</c> late, and folding late into "gone" manufactures evidence out of a busy
+    /// machine.</para>
+    /// </remarks>
+    private string WhatIsThere()
+    {
+        var running = _wsl.Run("--list", "--running", "--quiet");
+        if (!running.Succeeded)
+        {
+            return "the launcher is alive";
+        }
+
+        var up = running.Output
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Any(line => line.Trim().Equals(Distribution, StringComparison.OrdinalIgnoreCase));
+
+        if (!up)
+        {
+            return $"{Distribution} is not running";
+        }
+
+        // Spelled the way the launch is, because it is the same process being asked about: `-u root`
+        // and a shell, rather than trusting a path for `pidof` that this project does not install.
+        var daemon = _wsl.Run(
+            "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", "pidof dockerd");
+
+        return daemon.Succeeded ? "the daemon is running" : "the daemon is not running";
     }
 
     /// <summary>
