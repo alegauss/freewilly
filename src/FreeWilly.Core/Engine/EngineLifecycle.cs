@@ -96,6 +96,11 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// earlier — and that is the trade taken deliberately: the finding belongs to the incident
     /// rather than to the poll, and the line that first reports it is written at the moment it was
     /// asked (DD174).</para>
+    ///
+    /// <para>Since DD181 the staleness is in the sentence rather than only in this remark. The
+    /// first poll of a silence states the finding flat, because it is being made and reported in the
+    /// same breath; every poll after it says the finding is as of that first one. A reader who wants
+    /// the clock follows the pointer to DD174's line, which has it.</para>
     /// </remarks>
     private string? _found;
 
@@ -198,8 +203,27 @@ public sealed class EngineLifecycle : IAsyncDisposable
             // Windows one. They come apart exactly where it matters: a virtual machine lost to a
             // suspend leaves the wsl.exe on this side perfectly alive, which is the failure the
             // whole supervisor exists for and the one the line described as a healthy daemon.
-            _found ??= WhatIsThere();
-            return new EngineStatus(EngineState.Starting, $"{_found} and {ping.Detail}");
+            // DD181. The reading is cached for the load — asking `wsl --exec` six times over a
+            // machine whose pings are already losing a race for process creation would make the next
+            // poll likelier to be quiet too — and every poll after the first is therefore quoting an
+            // older observation. Measured on 24 August 2026: the verdict line read "the daemon is
+            // running and no connection within 3s — 6 polls in a row", and that opening clause was
+            // established twenty-six seconds earlier.
+            //
+            // A reader takes an undated clause as the state at the verdict, and in the failure this
+            // supervisor exists for — a virtual machine lost under the host's feet — those seconds
+            // are exactly where the daemon stops being there. So the reuse is marked, and marked by
+            // pointing at the line that carries the timestamp rather than by restating one: DD174
+            // already wrote the crossing, it is a few lines up the same file, and a clock of its own
+            // here would be a second answer to a question already answered.
+            if (_found is null)
+            {
+                _found = WhatIsThere();
+                return new EngineStatus(EngineState.Starting, $"{_found} and {ping.Detail}");
+            }
+
+            return new EngineStatus(EngineState.Starting,
+                $"{_found} as of the {EngineWatch.FirstQuietPoll} and {ping.Detail}");
         }
 
         // Nothing of ours has been launched, so the question is whether there is anything to launch.

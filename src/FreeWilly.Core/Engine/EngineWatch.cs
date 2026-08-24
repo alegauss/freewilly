@@ -30,6 +30,18 @@ namespace FreeWilly.Core.Engine;
 /// </remarks>
 public sealed class EngineWatch
 {
+    /// <summary>
+    /// What the poll that begins a silence is called, spelled once (DD174, DD181).
+    /// </summary>
+    /// <remarks>
+    /// Two places now name it: the line below, and the clause
+    /// <see cref="EngineLifecycle.StatusAsync"/> uses to say that a finding it is repeating was
+    /// established at that poll rather than at this one. The second is a pointer at the first — a
+    /// reader follows it up the file to find the timestamp — so a rewording that moved only one of
+    /// them would leave the pointer aimed at a line that no longer exists.
+    /// </remarks>
+    public const string FirstQuietPoll = "first quiet poll";
+
     /// <summary>How long the engine may stay quiet before this stops believing in it.</summary>
     /// <remarks>
     /// Expressed as a count of polls rather than a clock, because the poll interval is a constant
@@ -124,7 +136,7 @@ public sealed class EngineWatch
     {
         ArgumentNullException.ThrowIfNull(first);
 
-        var line = $"{first.State,-8}  {first.Detail} — first quiet poll";
+        var line = $"{first.State,-8}  {first.Detail} — {FirstQuietPoll}";
         return relay is not null
             && first.Detail.Contains(EnginePing.NoConnection, StringComparison.Ordinal)
                 ? $"{line}, {relay}"

@@ -4,7 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD181** (deps: —) **The clause naming what is on the machine is measured once and reused, so a verdict quotes evidence half a minute old** — The reading is dated where it is reused, so a reader tells a fact established at the crossing from one established at the verdict. → §DD181
 - 📋 **DD182** (deps: DD174 ✅) **A restart line names the attempt and not the outage, so how long the engine was away is a subtraction across two lines** — The line that reports a revival now carries how long the engine was unreachable, so an incident is legible from the sentence that closes it. → §DD182
 - 📋 **DD183** (deps: DD164 ✅) **The balloon fires the instant the engine stops answering, so a blip the host heals in ten seconds interrupts the user** — The announcement waits for the first revival attempt to fail, so a user hears about an outage that is lasting and never about one already over. → §DD183
 

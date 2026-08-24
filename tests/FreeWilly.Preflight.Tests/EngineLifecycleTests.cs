@@ -644,6 +644,91 @@ public sealed class EngineLifecycleTests
         Assert.Equal(2, RunningLists(wsl));
     }
 
+    // ---- a repeated finding says which poll established it (DD181) ----------------------------
+
+    /// <summary>An engine that started, answered, and then went quiet — the real sequence.</summary>
+    /// <remarks>
+    /// Through a start that lands rather than one that times out, because that is the only way the
+    /// supervisor is ever reached: <c>Serve</c> returns before supervising anything the start could
+    /// not make usable. So the run of silence the caching is about always begins with
+    /// <see cref="EngineLifecycle._found"/> cleared by an answer, and a test that skipped the answer
+    /// would be measuring a state the host cannot be in.
+    /// </remarks>
+    private static async Task<EngineLifecycle> WentQuietAfterAnsweringAsync(
+        FakeWsl wsl, FakeBackend backend)
+    {
+        var engine = Silent(wsl, backend);
+        backend.Reply = Ok200;
+        Assert.Equal(EngineState.Running, (await engine.StartAsync(TimeSpan.FromSeconds(2))).State);
+        backend.Reply = null;
+        return engine;
+    }
+
+    [Fact]
+    public async Task The_poll_that_establishes_a_finding_states_it_flat()
+    {
+        // Nothing to date: this poll is making the observation and reporting it in the same breath,
+        // and DD174's line — the one this poll produces — carries the timestamp itself.
+        var wsl = new FakeWsl { Default = new WslResult(0, "freewilly\r\n", null) };
+        var backend = new FakeBackend(null);
+
+        await using var engine = await WentQuietAfterAnsweringAsync(wsl, backend);
+        var first = await engine.StatusAsync();
+
+        Assert.Contains("the daemon is running and", first.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain(EngineWatch.FirstQuietPoll, first.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_poll_that_repeats_a_finding_says_which_poll_established_it()
+    {
+        // DD181, and the line it was measured from. On 24 August 2026 the verdict read "the daemon
+        // is running and no connection within 3s — 6 polls in a row", and that opening clause was
+        // twenty-six seconds old — the age being exactly where a virtual machine lost under the
+        // host's feet would have gone. Undated, a reader takes it as the state at the verdict.
+        var wsl = new FakeWsl { Default = new WslResult(0, "freewilly\r\n", null) };
+        var backend = new FakeBackend(null);
+
+        await using var engine = await WentQuietAfterAnsweringAsync(wsl, backend);
+        await engine.StatusAsync();
+        var later = await engine.StatusAsync();
+
+        Assert.Contains(
+            $"the daemon is running as of the {EngineWatch.FirstQuietPoll}",
+            later.Detail,
+            StringComparison.Ordinal);
+
+        // The pointer is only worth writing if it aims at a line that exists, and the machine is
+        // still asked once per silence — the marking is a sentence, not a second measurement.
+        Assert.Equal(1, RunningLists(wsl));
+    }
+
+    [Fact]
+    public async Task An_answer_makes_the_next_finding_a_fresh_one_again()
+    {
+        // The clearing DD175 put in, seen from the sentence. An engine that recovered and failed
+        // again is a new incident with a new crossing, so pointing its first line back at the
+        // previous silence's would send a reader to a timestamp belonging to another failure.
+        var wsl = new FakeWsl { Default = new WslResult(0, "freewilly\r\n", null) };
+        var backend = new FakeBackend(null);
+
+        await using var engine = await WentQuietAfterAnsweringAsync(wsl, backend);
+        await engine.StatusAsync();
+        Assert.Contains(
+            EngineWatch.FirstQuietPoll,
+            (await engine.StatusAsync()).Detail,
+            StringComparison.Ordinal);
+
+        backend.Reply = Ok200;
+        Assert.Equal(EngineState.Running, (await engine.StatusAsync()).State);
+        backend.Reply = null;
+
+        Assert.DoesNotContain(
+            EngineWatch.FirstQuietPoll,
+            (await engine.StatusAsync()).Detail,
+            StringComparison.Ordinal);
+    }
+
     /// <summary>A launcher that went quietly leaves the pointer exactly as it was (DD162).</summary>
     [Fact]
     public async Task A_daemon_that_died_after_answering_says_so_with_what_the_launcher_said()

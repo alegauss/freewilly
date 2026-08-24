@@ -2,25 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD181 A cached reading read as a current one
-
-DD175 stopped the host claiming "the daemon is running" from a Windows process handle
-and made it ask the machine instead. The answer is cached in `_found` and reused for
-every poll of the same silence, which is right for the load — `wsl --exec` on a machine
-that is already struggling is the last thing to run six times — and wrong for the
-sentence.
-
-The incident of 24 August 2026 shows the cost. The verdict line at 14:01:12 reads "the
-daemon is running and no connection within 3s — 6 polls in a row", and the clause it
-opens with was measured at 14:00:46, twenty-six seconds earlier. A reader takes it as
-the state at the verdict. In the failure this whole supervisor exists for — a virtual
-machine lost under the host's feet — those twenty-six seconds are exactly where the
-daemon stops being there, so the one line that would show it is the one repeating an
-older reading.
-
-Keeping the cache and dating the clause costs nothing and answers the reader's actual
-question, which is not "was the daemon up" but "was it up when you gave up on it".
-
 ### §DD182 A restart that does not name its outage
 
 `brought the engine back (restart 1)` reports the attempt. What a reader wants from it
