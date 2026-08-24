@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD183** (deps: DD164 ✅) **The balloon fires the instant the engine stops answering, so a blip the host heals in ten seconds interrupts the user** — The announcement waits for the first revival attempt to fail, so a user hears about an outage that is lasting and never about one already over. → §DD183
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

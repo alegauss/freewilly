@@ -52,6 +52,15 @@ internal sealed class TrayApplication : ApplicationContext
     /// </remarks>
     private bool _stopAsked;
     private CancellationTokenSource? _landing;
+
+    /// <summary>
+    /// The wait between the engine going and the balloon that says so (DD183).
+    /// </summary>
+    /// <remarks>
+    /// Cancelled the moment the engine answers, which is what makes a self-healing blip cost the
+    /// user nothing at all rather than a notification and a correction.
+    /// </remarks>
+    private CancellationTokenSource? _grace;
     private EngineState _shown = EngineState.Stopped;
     private AvailableRelease? _available;
     private bool _installing;
@@ -532,6 +541,11 @@ internal sealed class TrayApplication : ApplicationContext
         _stopAsked = true;
         _startRequested = false;
         StopWatchingTheStart();
+
+        // A stop somebody asked for is not an outage (DD183). The callback checks _stopAsked and
+        // would decline anyway; dropping the timer here means the tool is not holding a pending
+        // announcement about an engine the user themselves put down.
+        StopWaitingOutTheBlip();
         Show(EngineState.Stopped);
         Complain(_holder.Stop());
     }
@@ -546,6 +560,11 @@ internal sealed class TrayApplication : ApplicationContext
             // elapse into a check that finds nothing: a tray left open all day would otherwise hold
             // one of these per start it ever made.
             StopWatchingTheStart();
+
+            // And the engine answering is the whole of what makes an outage a blip (DD183). The
+            // check inside the callback would catch this too; cancelling here is what keeps a tray
+            // that flaps all afternoon from holding one pending timer per spell.
+            StopWaitingOutTheBlip();
         }
 
         var changed = _shown != state;
@@ -618,12 +637,73 @@ internal sealed class TrayApplication : ApplicationContext
         // one that could be mistaken for nothing happening — a tray that silently sits on Stopped
         // while a hidden process works is how somebody ends up clicking Start on an engine that was
         // already being restarted.
+        //
+        // Armed rather than shown, since DD183. The line above is written at the crossing and stays
+        // there, because the journal wants the event dated; the announcement is the one that has to
+        // wait, because it costs somebody their attention and a crossing is not yet an outage.
         if (now is EngineState.Stopped && was is EngineState.Running && !_stopAsked)
         {
-            Balloon(
-                "The engine stopped answering. FreeWilly is trying to bring it back, and keeps "
-                + "trying until it does — there is nothing to click.");
+            WaitOutTheBlip();
         }
+    }
+
+    /// <summary>
+    /// Hold the announcement back until the engine has been gone long enough to be worth one
+    /// (DD183).
+    /// </summary>
+    /// <remarks>
+    /// DD164's reasoning for the balloon holds and is not being undone: a host that keeps trying
+    /// instead of exiting is a host that can look like nothing happening, and a grey dot with no
+    /// explanation is how somebody ends up clicking Start on an engine already being restarted.
+    /// What it did not separate is the outage from the blip. On 24 August 2026 the crossing lasted
+    /// ten seconds — gone at 14:01:14, back at 14:01:24 — and the user was pulled away from what
+    /// they were doing to be told about a failure that had already been repaired.
+    ///
+    /// <para>The same shape as <see cref="WatchTheStart"/>, and for the same reasons: a timer that
+    /// is cancelled rather than one that is checked, so an engine that comes back leaves nothing
+    /// running behind it, and a continuation posted through the event stream's context because
+    /// <see cref="Balloon"/> touches the NotifyIcon.</para>
+    ///
+    /// <para>This process cannot see the host's attempts — they are two processes and the only thing
+    /// between them is the pipe — so what is waited out is the clock and not an outcome. That is why
+    /// the sentence below says how long the engine has been gone rather than what the host has tried:
+    /// the tray knows the first exactly and the second not at all, and claiming the second would be
+    /// the mistake DD175 removed from the host's own line.</para>
+    /// </remarks>
+    private void WaitOutTheBlip()
+    {
+        StopWaitingOutTheBlip();
+
+        var grace = new CancellationTokenSource();
+        _grace = grace;
+        _ = Task.Delay(EngineRevival.BlipGrace, grace.Token).ContinueWith(
+            _ => _ui.Post(_ => SayTheEngineIsStillGone(), null),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnRanToCompletion,
+            TaskScheduler.Default);
+    }
+
+    private void StopWaitingOutTheBlip()
+    {
+        _grace?.Cancel();
+        _grace?.Dispose();
+        _grace = null;
+    }
+
+    private void SayTheEngineIsStillGone()
+    {
+        // It may have come back between the delay elapsing and this reaching the UI thread, and a
+        // stop pressed in that window is the same question — either way there is nothing to
+        // announce, which is the check GiveUpOnTheStart makes for the same reason.
+        if (_shown is EngineState.Running || _stopAsked)
+        {
+            return;
+        }
+
+        Balloon(
+            $"The engine has not answered for {EngineRevival.BlipGrace.TotalSeconds:0} seconds. "
+            + "FreeWilly is trying to bring it back, and keeps trying until it does — there is "
+            + "nothing to click.");
     }
 
     /// <summary>

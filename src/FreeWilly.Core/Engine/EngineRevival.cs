@@ -71,6 +71,28 @@ public sealed class EngineRevival
     /// </remarks>
     public static readonly TimeSpan PatientWait = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// How long an engine may be gone before it is worth interrupting somebody about (DD183).
+    /// </summary>
+    /// <remarks>
+    /// Derived rather than chosen: <see cref="FirstWait"/> before the host tries at all, then a stop
+    /// and a start, which on a warm machine is a terminate and a daemon launch. Measured on 24 August
+    /// 2026 the whole of that was ten seconds — the tray announced a failure at 14:01:14 and the
+    /// engine was answering again at 14:01:24 — so this is that, with room for a machine that is
+    /// slower than the one it was measured on.
+    ///
+    /// <para><b>It lives here because it is a fact about the retry policy, not about the tray.</b>
+    /// The number the balloon has to outlast is however long one revival attempt takes, and that is
+    /// decided a few lines up this file; a copy in the tray would go stale the first time
+    /// <see cref="FirstWait"/> moved, and nothing would fail to compile when it did.</para>
+    ///
+    /// <para>Deliberately not a budget for the whole recovery. <see cref="Attempts"/> quick tries
+    /// spend about a minute and the patient interval runs for as long as the machine is broken — an
+    /// announcement that waited for those would be one nobody ever saw, which is the silence DD164
+    /// removed.</para>
+    /// </remarks>
+    public static readonly TimeSpan BlipGrace = TimeSpan.FromSeconds(15);
+
     /// <summary>How many attempts in a row have failed since the last time it came back.</summary>
     public int Failures { get; private set; }
 

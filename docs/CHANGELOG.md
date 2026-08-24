@@ -47,6 +47,7 @@
 - ✅ **DD180** **A poll that could not connect names no relay figure, so a silence with no stumble in it is a dead end for the reader** — A ping that never connected now carries what the relay accepted, what it stumbled over and whether its loop is alive, so the Windows side of the pipe is named where it is the suspect.
 - ✅ **DD181** **The clause naming what is on the machine is measured once and reused, so a verdict quotes evidence half a minute old** — The poll that establishes a finding states it flat and every poll that repeats it says it is as of the first quiet poll, so a verdict no longer passes off older evidence as current.
 - ✅ **DD182** **A restart line names the attempt and not the outage, so how long the engine was away is a subtraction across two lines** — The revival line now ends with how long the engine was unreachable, measured from the poll that first missed it, so an incident's cost is in the sentence that closes it.
+- ✅ **DD183** **The balloon fires the instant the engine stops answering, so a blip the host heals in ten seconds interrupts the user** — The balloon is armed at the crossing and fires only if the engine is still gone fifteen seconds later, so a blip the host heals costs the user nothing and a real outage still speaks.
 
 ## Block B — The daemon client (talk to the engine)
 

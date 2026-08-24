@@ -286,4 +286,49 @@ public sealed class EngineRevivalTests
 
         Assert.Equal(1, JournalDigest.Of([$"2026-08-24 14:01:24  {written}"]).Restarts);
     }
+
+    // ---- the wait before an outage is worth interrupting somebody about (DD183) ---------------
+
+    [Fact]
+    public void The_grace_outlasts_the_wait_before_the_host_even_tries()
+    {
+        // The ordering is the claim, the same shape TrayTests holds the start budget to. A balloon
+        // that fired before the first attempt had been made would be announcing an outage nothing
+        // had yet been done about, which is the crossing and not the outage.
+        Assert.True(
+            EngineRevival.BlipGrace > EngineRevival.FirstWait,
+            $"the balloon fires {EngineRevival.BlipGrace.TotalSeconds:0}s in, before the host's "
+            + $"first attempt at {EngineRevival.FirstWait.TotalSeconds:0}s");
+    }
+
+    [Fact]
+    public void The_grace_covers_the_blip_that_was_actually_measured()
+    {
+        // 24 August 2026: gone at 14:01:14, back at 14:01:24. That incident is the whole reason for
+        // this number, so a grace that would still have interrupted the user through it fails.
+        Assert.True(
+            EngineRevival.BlipGrace >= TimeSpan.FromSeconds(10),
+            $"{EngineRevival.BlipGrace.TotalSeconds:0}s would have announced the ten-second blip "
+            + "of 24 August 2026 anyway");
+    }
+
+    [Fact]
+    public void The_grace_does_not_wait_out_the_whole_recovery()
+    {
+        // The other end, and it is DD164's ground being defended. An announcement held until the
+        // quick attempts were spent would be one nobody ever saw — a tray sitting silently on
+        // Stopped while a hidden process works is exactly the silence that task removed.
+        var revival = new EngineRevival();
+        var quick = TimeSpan.Zero;
+        while (revival.WorthAnotherTry)
+        {
+            quick += revival.Wait;
+            revival.Failed();
+        }
+
+        Assert.True(
+            EngineRevival.BlipGrace < quick,
+            $"{EngineRevival.BlipGrace.TotalSeconds:0}s outlasts the {quick.TotalSeconds:0}s of "
+            + "quick attempts, so the user hears nothing while the host is still working");
+    }
 }
