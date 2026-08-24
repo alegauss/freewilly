@@ -2,23 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD182 A restart that does not name its outage
-
-`brought the engine back (restart 1)` reports the attempt. What a reader wants from it
-is the outage: how long this machine had no engine. Today that is a subtraction across
-two lines and a scroll — the crossing DD174 writes, and this one — and it is the number
-somebody skimming a night's journal is actually counting.
-
-It matters most where the journal is skimmed rather than read. A host that brought the
-engine back four times overnight is a different machine depending on whether each gap
-was ten seconds or four minutes, and the restart count alone — the number the window
-already draws from these lines — cannot tell those apart.
-
-The host knows both ends: the first quiet poll is when the engine was last seen, and
-this line is written the moment it answered again. Carrying the span in the sentence
-that closes the incident keeps the whole event legible from one line, which is the
-property the rest of this file is written for.
-
 ### §DD183 A balloon for a failure already repaired
 
 DD164 gave the tray a balloon for an engine that went away on its own, and the reasoning

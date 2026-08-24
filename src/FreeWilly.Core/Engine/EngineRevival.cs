@@ -129,16 +129,55 @@ public sealed class EngineRevival
 
     /// <summary>What to say about a restart that worked.</summary>
     /// <param name="back">The state it came back in.</param>
+    /// <param name="down">
+    /// How long the engine was unreachable, or <see langword="null"/> where the caller cannot say.
+    /// </param>
     /// <returns>The line.</returns>
     /// <remarks>
     /// Every restart it attempted, kept — which is the half of DD137 the console could never give
     /// anybody: a host that got the engine back four times overnight and one that never lost it look
     /// identical the morning after.
+    ///
+    /// <para><b>And how long it was away, since DD182.</b> The count says how often; it cannot say
+    /// how bad. A host that revived four times over a night is a different machine to be sitting in
+    /// front of depending on whether each gap was ten seconds or four minutes, and the restart count
+    /// — which is also what the window draws from these lines — cannot tell those apart. Working it
+    /// out meant subtracting two timestamps a scroll apart, which is not what somebody skimming a
+    /// night's journal does.</para>
+    ///
+    /// <para>Optional because the span is the caller's to measure and not this type's. Counted
+    /// rather than timed is the rule the rest of this class is built on, and taking a clock here to
+    /// serve one sentence would put one in the type whose testability depends on not having one.</para>
     /// </remarks>
-    public string BroughtItBack(EngineStatus back)
+    public string BroughtItBack(EngineStatus back, TimeSpan? down = null)
     {
         ArgumentNullException.ThrowIfNull(back);
-        return $"{back.State,-8}  {RestartMark} (restart {Revivals})";
+
+        var line = $"{back.State,-8}  {RestartMark} (restart {Revivals})";
+        return down is { } gap ? $"{line} — {Spell(gap)} down" : line;
+    }
+
+    /// <summary>An outage in the units somebody reads it in (DD182).</summary>
+    /// <param name="down">How long the engine was unreachable.</param>
+    /// <returns>The span, spelled.</returns>
+    /// <remarks>
+    /// Two shapes and no more, on the same reasoning
+    /// <see cref="Preflight.Windows.ProcessOutput"/> spells a budget with: under a minute the
+    /// seconds are the whole story, and past it the minutes are what a reader is comparing and the
+    /// seconds are the detail that makes two of them distinguishable. A negative span is folded to
+    /// zero rather than printed — a clock that went backwards under a resume is a real thing on the
+    /// machines this supervisor exists for, and "-3s down" reads as a defect in the tool.
+    /// </remarks>
+    private static string Spell(TimeSpan down)
+    {
+        if (down < TimeSpan.Zero)
+        {
+            down = TimeSpan.Zero;
+        }
+
+        return down < TimeSpan.FromMinutes(1)
+            ? $"{down.TotalSeconds:0}s"
+            : $"{(int)down.TotalMinutes}m {down.Seconds}s";
     }
 
     /// <summary>Record that the engine came back.</summary>

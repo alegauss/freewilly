@@ -211,4 +211,79 @@ public sealed class EngineRevivalTests
         Assert.True(total >= TimeSpan.FromSeconds(30), $"only {total} spent before giving up");
         Assert.True(total <= TimeSpan.FromMinutes(3), $"{total} is longer than anybody waits");
     }
+
+    // ---- how long the engine was away, not only how often (DD182) -----------------------------
+
+    private static EngineStatus Back() =>
+        new(EngineState.Running, @"the engine answered on \\.\pipe\docker_engine", "1.55");
+
+    [Fact]
+    public void A_restart_says_how_long_the_engine_was_unreachable()
+    {
+        // DD182. The count says how often and never how bad, and on 24 August 2026 the answer was
+        // ten seconds — which a reader could only get by subtracting two timestamps a scroll apart.
+        var revival = new EngineRevival();
+        revival.Revived();
+
+        var said = revival.BroughtItBack(Back(), TimeSpan.FromSeconds(38));
+
+        Assert.Contains("(restart 1)", said, StringComparison.Ordinal);
+        Assert.Contains("38s down", said, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_outage_past_a_minute_is_spelled_in_minutes_and_seconds()
+    {
+        // Past a minute the minutes are what a reader compares two incidents on, and the seconds are
+        // what keeps two of them from reading as the same number.
+        var revival = new EngineRevival();
+        revival.Revived();
+
+        Assert.Contains(
+            "4m 12s down",
+            revival.BroughtItBack(Back(), TimeSpan.FromSeconds(252)),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_clock_that_went_backwards_is_not_reported_as_a_negative_outage()
+    {
+        // Not hypothetical on the machines this supervisor exists for: a resume is exactly where a
+        // clock steps, and "-3s down" reads as a defect in the tool rather than a fact about the
+        // engine — which is the one thing a journal line must never do.
+        var revival = new EngineRevival();
+        revival.Revived();
+
+        Assert.Contains(
+            "0s down",
+            revival.BroughtItBack(Back(), TimeSpan.FromSeconds(-3)),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_caller_that_cannot_time_the_outage_still_gets_the_line_it_always_had()
+    {
+        // The span is optional because measuring it is the host's job, not this type's — counted
+        // rather than timed is what the rest of this class is built on.
+        var revival = new EngineRevival();
+        revival.Revived();
+
+        Assert.Equal(
+            $"Running   {EngineRevival.RestartMark} (restart 1)",
+            revival.BroughtItBack(Back()));
+    }
+
+    [Fact]
+    public void The_window_still_counts_a_restart_that_carries_its_outage()
+    {
+        // The coupling DD165 exists for, re-asserted against the new tail. The digest matches on
+        // the mark, so an appended clause is safe — and this is the assertion that keeps it safe,
+        // because nothing fails to compile when the sentence grows a suffix that breaks the match.
+        var revival = new EngineRevival();
+        revival.Revived();
+
+        var written = revival.BroughtItBack(Back(), TimeSpan.FromSeconds(38));
+
+        Assert.Equal(1, JournalDigest.Of([$"2026-08-24 14:01:24  {written}"]).Restarts);
+    }
 }

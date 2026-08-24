@@ -254,6 +254,9 @@ internal static class EngineCommand
         // left standing would let the second death go the way the first one used to.
         var mourned = false;
 
+        // When the engine was last answering, so a revival can say how long it was away (DD182).
+        var quietSince = DateTimeOffset.UtcNow;
+
         using var ending = CancellationTokenSource.CreateLinkedTokenSource(
             stopping.Token, asked.Token);
 
@@ -303,7 +306,19 @@ internal static class EngineCommand
                     mourned = true;
                 }
 
-                if (watch.KeepServing(now) && !(justResumed && !now.Usable))
+                var serving = watch.KeepServing(now) && !(justResumed && !now.Usable);
+
+                // When the engine was last seen, for the line that closes the incident (DD182).
+                // Read off the first poll that missed it rather than off the verdict, because the
+                // verdict is six polls and up to thirty seconds late — and taken here rather than
+                // inside the quiet branch below so a conclusive reading, which goes straight to the
+                // verdict without ever writing a crossing, still dates its own outage.
+                if (watch.JustWentQuiet)
+                {
+                    quietSince = DateTimeOffset.UtcNow;
+                }
+
+                if (serving)
                 {
                     // DD174. Written from inside the quiet path, and it is the one thing written
                     // there that is not a stumble: the crossing out of a working engine. Placed
@@ -325,7 +340,7 @@ internal static class EngineCommand
                 // line here is always something that happened. The `continue` above is the quiet
                 // engine, and it writes nothing — which is what keeps this file worth opening.
                 Note(journal, $"  {watch.WhyItStopped(now)}");
-                if (!Revive(lifecycle, revival, ending.Token, journal))
+                if (!Revive(lifecycle, revival, ending.Token, journal, quietSince))
                 {
                     // Reachable only by cancellation since DD164 — Revive no longer runs out of
                     // patience, so the one way it comes back empty-handed is somebody asking this
@@ -358,6 +373,7 @@ internal static class EngineCommand
     /// <param name="revival">How long to wait, and whether the quick attempts are spent.</param>
     /// <param name="ending">Cancelled by Ctrl+C or an announced stop.</param>
     /// <param name="journal">Where every attempt is kept (DD137).</param>
+    /// <param name="quietSince">When the engine was last answering, for the outage (DD182).</param>
     /// <returns><see langword="true"/> where it came back, <see langword="false"/> on cancellation.</returns>
     /// <remarks>
     /// The stop before the start is not tidiness. Whatever is left of the previous engine is holding
@@ -376,7 +392,8 @@ internal static class EngineCommand
         EngineLifecycle lifecycle,
         EngineRevival revival,
         CancellationToken ending,
-        EngineHostLog journal)
+        EngineHostLog journal,
+        DateTimeOffset quietSince)
     {
         while (!ending.IsCancellationRequested)
         {
@@ -389,8 +406,10 @@ internal static class EngineCommand
                 revival.Revived();
 
                 // Spelled by EngineRevival since DD165, because the window counts these lines and
-                // the sentence was previously typed here and matched there.
-                Note(journal, $"  {revival.BroughtItBack(back)}");
+                // the sentence was previously typed here and matched there. The outage travels with
+                // it since DD182: this is the moment the engine answered again, and the poll that
+                // first missed it is where the span starts.
+                Note(journal, $"  {revival.BroughtItBack(back, DateTimeOffset.UtcNow - quietSince)}");
                 return true;
             }
 
