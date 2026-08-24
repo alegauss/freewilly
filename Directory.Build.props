@@ -21,7 +21,7 @@
          already reads it off the assembly, which is what the version verb and the window's About
          print. (An XML comment cannot contain two hyphens in a row, so no flag can be spelled
          here as it is typed.) -->
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <!-- Keep ProductVersion exactly "x.y.z". The SDK otherwise appends "+<commit>", and the
          installer would carry a version string Windows shows in Add/Remove Programs with a hash
          in it. BuildVersion trims the suffix for its own reasons; the installer cannot. -->
