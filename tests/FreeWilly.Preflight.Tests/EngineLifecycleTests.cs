@@ -130,6 +130,82 @@ internal sealed class FakeBackend(string? reply) : IEngineBackend
     }
 }
 
+/// <summary>A backend that takes everything and answers nothing — a daemon gone quiet (DD173).</summary>
+/// <remarks>
+/// The half of the split <see cref="FakeBackend"/> cannot express. Its refusing form throws before a
+/// channel exists, so the relay closes the connection under the client and the ping comes back
+/// having read nothing at all — a fast, conclusive answer. A wedged daemon does the opposite: it
+/// accepts the connection, swallows the request, and leaves the reply to a deadline. That is the
+/// only way to spend the budget on the read rather than on the connect, which is the one distinction
+/// DD173 exists to make.
+/// </remarks>
+internal sealed class SilentBackend : IEngineBackend
+{
+    public IEngineChannel Open() => new Channel();
+
+    private sealed class Channel : IEngineChannel
+    {
+        public Stream ToEngine { get; } = new SwallowingStream();
+
+        public Stream FromEngine { get; } = new SilentStream();
+
+        public void Dispose()
+        {
+            ToEngine.Dispose();
+            FromEngine.Dispose();
+        }
+    }
+
+    /// <summary>Takes the request and does nothing with it.</summary>
+    private sealed class SwallowingStream : WriteOnlyStream
+    {
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+        }
+    }
+
+    /// <summary>Never returns, until the connection it belongs to is torn down.</summary>
+    /// <remarks>
+    /// Waits on the token rather than returning zero. Zero is end-of-stream, which the relay reads
+    /// as a finished response and answers by closing the client — the ping would come back at once,
+    /// having read nothing, and that is the failure this class is not.
+    /// </remarks>
+    private sealed class SilentStream : Stream
+    {
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => 0;
+
+        public override long Position { get => 0; set { } }
+
+        public override void Flush()
+        {
+        }
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+    }
+}
+
 /// <summary>The uninteresting half of a one-way stream.</summary>
 internal abstract class WriteOnlyStream : Stream
 {
@@ -313,6 +389,27 @@ public sealed class EngineLifecycleTests
         var ping = await EnginePing.AskAsync(Pipe(), TimeSpan.FromSeconds(2));
 
         Assert.False(ping.Answered);
+
+        // DD173. The connection is where the whole budget went, and the sentence has to say so:
+        // "no answer" would send a reader to a daemon this ping never got near.
+        Assert.Equal("no connection within 2s", ping.Detail);
+    }
+
+    [Fact]
+    public async Task A_relay_that_takes_the_request_and_stays_quiet_is_a_reply_that_never_came()
+    {
+        // The other half of DD173, and the one the 24 August incident was. The pipe accepted, the
+        // request went, and the silence belongs to what is behind the relay rather than to the relay
+        // — which is the opposite conclusion to the test above, from a sentence that used to be the
+        // same one.
+        var pipe = Pipe();
+        await using var relay = new EnginePipeRelay(new SilentBackend(), pipe);
+        relay.Start();
+
+        var ping = await EnginePing.AskAsync(pipe, TimeSpan.FromSeconds(2));
+
+        Assert.False(ping.Answered);
+        Assert.Equal("no answer within 2s", ping.Detail);
     }
 
     // ---- the state machine -----------------------------------------------------------------

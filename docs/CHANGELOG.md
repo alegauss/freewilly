@@ -40,6 +40,7 @@
 - ✅ **DD162** **A start that fails inside wsl.exe blames the daemon log, and that log is empty because the daemon never ran** — A refused launch now reads wsl.exe exited -1 with the message it wrote, decoded from the UTF-16LE it writes on stdout, and the daemon log is only named where a daemon actually ran.
 - ✅ **DD163** **The journal records the engine and nothing around it, so a suspend, a logoff and a killed host read as one silence** — The journal now carries the host coming up and going down, a suspend, a resume, the session ending, and the tray's own view of the engine and of every click - one timeline, not half.
 - ✅ **DD164** **The host gives up after five attempts, so an engine that could not come back stays down until somebody clicks Start** — The five quick attempts still run and still say so, but the host now settles into a five-minute interval instead of exiting, and the tray says once that it is working on it.
+- ✅ **DD173** **A ping timeout reads the same whether the pipe never connected or the daemon never replied** — A ping that runs out of budget now says which stage it ran out on, so the journal separates a connection nothing accepted from a daemon that went quiet.
 
 ## Block B — The daemon client (talk to the engine)
 

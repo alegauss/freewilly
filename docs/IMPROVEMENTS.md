@@ -2,27 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD173 A ping that fails should say where it failed
-
-The 24 August incident is the case for this. The host wrote `the daemon is running and
-no answer within 3s — 6 polls in a row`, restarted, and had the engine back ten seconds
-later; the daemon's own log showed it alive and processing a signal half a minute after
-the pipe had gone quiet. So the daemon was not the fault — and the journal could not say
-which part of the path to it was.
-
-`EnginePing.AskAsync` catches the cancellation once, around a block that connects,
-writes and reads. All three deadlines produce the same sentence. They are not the same
-failure: a connection that never opens is the relay and its `wsl.exe`/socat hop, which
-is the load story DD133 is about, while a connection that opens and then says nothing is
-the daemon. The two send a reader to opposite ends of the machine, and today the file
-picks neither.
-
-Carrying the stage into the detail costs a local variable, and changes nothing about the
-budget, the verdict, or what the supervisor does with it. It is the smallest change that
-lets an incident be classified from the journal alone rather than by shelling into the
-distribution afterwards to read a log the restart is about to destroy — which is what
-this incident actually took.
-
 ### §DD174 When the silence started is worth a line
 
 `Supervise` writes only where the watch has already decided, which is the rule that

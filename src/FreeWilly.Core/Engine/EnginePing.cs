@@ -38,11 +38,20 @@ public static class EnginePing
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(budget);
 
+        // What ran out of budget, in the words the caller will read (DD173). One catch covers a
+        // connect, a write and a read, and every one of them used to come back saying "no answer" —
+        // which is true of the read and a guess about the other two. They are not the same failure:
+        // a connection nothing accepted is the relay and its wsl.exe hop, the load story DD133 is
+        // about, while a connection that opened and then went quiet is the daemon behind it. The
+        // two send a reader to opposite ends of the machine, so the sentence has to pick one.
+        var whatRanOut = "no connection";
+
         try
         {
             await using var pipe = new NamedPipeClientStream(
                 ".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             await pipe.ConnectAsync(deadline.Token).ConfigureAwait(false);
+            whatRanOut = "the request did not go";
 
             // ASCII and no encoder preamble. A UTF-8 writer puts a byte-order mark in front of the
             // request line, and the daemon answers that with 400 — measured, and confusing enough
@@ -50,6 +59,7 @@ public static class EnginePing
             var bytes = Encoding.ASCII.GetBytes(Request);
             await pipe.WriteAsync(bytes, deadline.Token).ConfigureAwait(false);
             await pipe.FlushAsync(deadline.Token).ConfigureAwait(false);
+            whatRanOut = "no answer";
 
             var buffer = new byte[4096];
             var read = await pipe.ReadAsync(buffer, deadline.Token).ConfigureAwait(false);
@@ -64,7 +74,7 @@ public static class EnginePing
         catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
         {
             return new PingResult(false, null,
-                $"no answer within {budget.TotalSeconds:0.#}s");
+                $"{whatRanOut} within {budget.TotalSeconds:0.#}s");
         }
         catch (Exception exception) when (exception is IOException
             or TimeoutException or UnauthorizedAccessException or ObjectDisposedException)
