@@ -1204,6 +1204,22 @@ footer .wrap {
   color: var(--accent-strong);
 }
 
+/* ---------- house ad (DD186) ----------
+   The band contributes nothing of its own: all of the spacing is the slot's margin, so a
+   slot the loader collapses — an unreachable catalogue, a browser with no shadow DOM —
+   takes the gap with it instead of leaving a blank strip above the footer.
+
+   min-height is the loader's own reserved height for the in-content format. Declared here
+   too because the loader only reserves once it runs, which is after hydration: without
+   this the banner would arrive into a box of zero height and push the footer down the
+   page. Nothing else is styled — the banner is drawn inside a shadow root and this
+   stylesheet cannot reach it, which is the point of the slot being one. */
+.ad {
+  max-width: 780px;
+  min-height: 140px;
+  margin: 8px auto 0;
+}
+
 /* ---------- sponsor block ----------
    Mirrors alegauss.github.io/sponsor.json. Sits between the footer links and the
    disclaimer. Product tiles keep a white plate under the logo so the marks render as

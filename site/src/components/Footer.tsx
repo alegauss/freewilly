@@ -1,7 +1,21 @@
 import { footer, sponsor } from "../lib/site-content";
+import { Ad } from "./ui/Ad";
 import { Waves } from "./ui/Waves";
 
 export function Footer() {
+  return (
+    <>
+      {/* DD186 — the house ad, above the footer rather than inside it: it belongs to the
+          end of the page's content, not to the chrome. Placed here because every route
+          ends in this component, so a page added later cannot forget it and no page can
+          end up with two. */}
+      <Ad slot="page-end" />
+      <FooterChrome />
+    </>
+  );
+}
+
+function FooterChrome() {
   return (
     <footer>
       <Waves className="waves--footer" />
