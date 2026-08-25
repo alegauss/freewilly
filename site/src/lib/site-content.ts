@@ -51,7 +51,7 @@ function hostRuns(hosts: readonly string[]): Rich {
 /* ------------------------------------------------------------------ meta + chrome */
 
 export const meta = {
-  title: "FreeWilly — Docker on Windows, without Docker Desktop",
+  title: "FreeWilly: Docker on Windows, without Docker Desktop",
   description:
     "A free Windows desktop app that installs upstream Moby into a WSL2 distribution it owns, serves the docker_engine pipe your existing tools already look for, and shows your containers in one window. Per-user install, no admin, nothing resident.",
   og: {
@@ -98,7 +98,7 @@ export const footer = {
   // so the claim is now the shape — a link to LICENSE — rather than the string "not written
   // yet", which is exactly the S1 corollary that survived Shio's 195-file licence change.
   disclaimer:
-    "Unofficial / community project — not affiliated with, endorsed by, or sponsored by Docker, Inc. “Docker” and “Docker Desktop” are trademarks of Docker, Inc.; this tool installs the Apache-2.0 licensed Moby engine and Docker CLI as published upstream, unmodified, and pins each artefact to a version and a digest. Apache-2.0 is this project's stated licence, in LICENSE, with a NOTICE covering the bundled upstream binaries. © 2026 Alexandre Oliveira.",
+    "Unofficial / community project. Not affiliated with, endorsed by, or sponsored by Docker, Inc. “Docker” and “Docker Desktop” are trademarks of Docker, Inc.; this tool installs the Apache-2.0 licensed Moby engine and Docker CLI as published upstream, unmodified, and pins each artefact to a version and a digest. Apache-2.0 is this project's stated licence, in LICENSE, with a NOTICE covering the bundled upstream binaries. © 2026 Alexandre Oliveira.",
 } as const;
 
 /* --------------------------------------------------------------- sponsor */
@@ -114,7 +114,7 @@ export const sponsor = {
   siteLabel: "viglet.org",
   logo: "/freewilly/viglet/viglet-logo.png",
   summary:
-    "Open source search and content tools for organisations with a lot to publish — run on your own servers, with no per-user licence.",
+    "Open source search and content tools for organisations with a lot to publish. Run on your own servers, with no per-user licence.",
   products: [
     {
       name: "Viglet Turing ES",
@@ -146,10 +146,14 @@ export const hero = {
     { code: "docker_engine" },
     " pipe every tool you already have looks for, and shows your containers in one window. Per-user install, no administrator prompt, and nothing left running that you did not ask for.",
   ] as Rich,
+  // No emoji on these three, and that is a writing rule rather than a taste: an emoji glued
+  // to the front of a feature line is the most recognisable mannerism of a generated landing
+  // page, and these strings are also bullets in the Markdown twin an agent reads (S5). The
+  // card icons below sit in an icon slot of their own; these were decoration on prose.
   meta: [
-    "🔓 Free at any headcount",
-    "🚫 No telemetry, no account",
-    "💤 Not a background service",
+    "Free at any headcount",
+    "No telemetry, no account",
+    "Not a background service",
   ],
   pills: [
     [{ b: ".NET 10" }, " · WinForms tray + WPF window"] as Rich,
@@ -195,12 +199,12 @@ export const heroSession = {
     {
       cmd: "freewilly read logs api --dedup --budget 1500 --out .freewilly/logs/api.log",
       cost: "~300 tok",
-      out: "1 unique line ×3 (deduped from 41), written to file — then Grep, paying for matches only",
+      out: "1 unique line ×3 (deduped from 41), written to file, then Grep, paying for matches only",
     },
     {
       cmd: "freewilly do compose up --wait",
       cost: "~100 tok",
-      out: "shop  3/3 ready  ·  api healthy in 4.2s  (this one still asks — it writes)",
+      out: "shop  3/3 ready  ·  api healthy in 4.2s  (this one still asks, because it writes)",
     },
     {
       cmd: "freewilly read verify svc:shop/api",
@@ -211,11 +215,11 @@ export const heroSession = {
   today: "Docker today: 15–30 calls · 30–60k tokens · 1–3 interruptions",
   target: "This session: ≈5 calls · ~2–5k tokens · 0 interruptions",
   note: [
-    "A scripted session — the costs are ",
+    "A scripted session. The costs are ",
     { b: "targets the benchmark must prove or falsify" },
-    ", acceptance criteria and not measurements. Steps 1, 2, 3 and 5 are reads, so one allowlist line — ",
+    ", acceptance criteria and not measurements. Steps 1, 2, 3 and 5 are reads, so one allowlist line, ",
     { code: "Bash(freewilly read:*)" },
-    " — removes every prompt on the inspection path while step 4 still asks.",
+    ", removes every prompt on the inspection path while step 4 still asks.",
   ] as Rich,
 };
 
@@ -229,7 +233,7 @@ export const operator = {
   eyebrow: "Who operates this",
   heading: "The operator is an agent. You install and approve.",
   intro: [
-    "FreeWilly is a Docker installation whose primary operator is a coding agent. The agent runs, inspects and diagnoses; you install, approve and intervene. Every decision on the agent surface is judged in tokens rather than clicks — which is why the site opens on a session and not a screenshot.",
+    "FreeWilly is a Docker installation whose primary operator is a coding agent. The agent runs, inspects and diagnoses; you install, approve and intervene. Every decision on the agent surface is judged in tokens rather than clicks, which is why the site opens on a session and not a screenshot.",
   ] as Rich,
   actors: [
     {
@@ -246,7 +250,7 @@ export const operator = {
     },
   ],
   actorsNote: [
-    "The desktop path is not sacrificed — the installer, the tray and the window are what it is for, and they landed before the agent surface did rather than after.",
+    "The desktop path is not sacrificed: the installer, the tray and the window are what it is for, and they landed before the agent surface did rather than after.",
   ] as Rich,
   lawsEyebrow: "The design laws",
   lawsHeading: "Ten laws, in the order an agent meets them",
@@ -257,11 +261,11 @@ export const operator = {
     { id: "P1", title: "The shell is the surface", body: "Every agent-facing capability is a freewilly CLI verb first. An MCP tool is a second head over the same method, or it does not exist." },
     { id: "P2", title: "One call replaces a session", body: "Learning what the machine is running is a product feature, not a docs problem. Needing six commands to learn the engine's state is a defect in FreeWilly." },
     { id: "P3", title: "Tokens are a measured budget", body: "Every response has a size ceiling and the canonical task has a measured cost. “It got cheaper” has to be a number, and a regression fails the build." },
-    { id: "P4", title: "A file beats a stream", body: "An unbounded log read is the largest token sink here. Write it to disk and let the agent Grep it — it pays for the lines that match, not for the whole log." },
-    { id: "P5", title: "Names, not ids", body: "A 64-hex id changes on every recreate. The address is the name — svc:<project>/<service>, or the container name — so ids stop being currency threaded across calls." },
-    { id: "P6", title: "Errors are instructions", body: "Every refusal carries what was wrong, what is allowed, the nearest match, a correct example — and the Windows fact that explains it. An error that costs a round trip to read is a defect." },
+    { id: "P4", title: "A file beats a stream", body: "An unbounded log read is the largest token sink here. Write it to disk and let the agent Grep it, so it pays for the lines that match, not for the whole log." },
+    { id: "P5", title: "Names, not ids", body: "A 64-hex id changes on every recreate. The address is the name: svc:<project>/<service>, or the container name. Ids stop being currency threaded across calls." },
+    { id: "P6", title: "Errors are instructions", body: "Every refusal carries what was wrong, what is allowed, the nearest match, a correct example, and the Windows fact that explains it. An error that costs a round trip to read is a defect." },
     { id: "P7", title: "Never surprise you", body: "Read and write are split at the argv level so an allowlist can tell them apart. Destructive calls take a confirm token, and everything the agent creates is labelled with its session." },
-    { id: "P8", title: "The agent cannot see", body: "Give it cheap textual proof that what it started works — the port listens from Windows, the mount resolved, the service answered — or every mistake costs a trip back to you." },
+    { id: "P8", title: "The agent cannot see", body: "Give it cheap textual proof that what it started works (the port listens from Windows, the mount resolved, the service answered), or every mistake costs a trip back to you." },
     { id: "P9", title: "Session N+1 is cheaper than N", body: "A cursor and a change feed, so a follow-up session reads the delta rather than re-deriving the whole machine from nothing." },
     { id: "P10", title: "Compose, don't fork", body: "The surface is a shape over the Engine API and facts Windows already knows. It is not a second Docker CLI and never grows a build, a push or a compose up of its own." },
   ],
@@ -291,7 +295,7 @@ export const why = {
       body: [
         "No Windows service, no scheduled task, and autostart is ",
         { b: "off" },
-        " until you turn it on. The engine runs for exactly as long as something is running it — an engine that holds gigabytes from every boot is the complaint this project starts from.",
+        " until you turn it on. The engine runs for exactly as long as something is running it. An engine that holds gigabytes from every boot is the complaint this project starts from.",
       ] as Rich,
     },
     {
@@ -309,7 +313,7 @@ export const why = {
       icon: "📦",
       title: "Upstream, not a fork",
       body: [
-        "Alpine's minirootfs, Docker's own static Linux binaries, Docker's own Windows CLI — each pinned to a version ",
+        "Alpine's minirootfs, Docker's own static Linux binaries, Docker's own Windows CLI, each pinned to a version ",
         { b: "and a SHA-256 this project states itself" },
         ". Nothing is patched, so nothing here can be blamed for how the engine behaves.",
       ] as Rich,
@@ -341,7 +345,7 @@ export const preflight = {
   // DD159. The count is PreflightInspection.Rows', not a number typed here: DD157 found this
   // saying four where the product reported five, which is the one class of claim a page cannot
   // notice about itself.
-  heading: `Why Docker will not run here — in ${spelled(rowCount())} rows`,
+  heading: `Why Docker will not run here, in ${spelled(rowCount())} rows`,
   intro: [
     `“It does not work on my machine” has ${spelled(rowCount())} common causes on Windows, and they have ${spelled(rowCount())} different remedies. `,
     { code: "freewilly --preflight" },
@@ -354,22 +358,22 @@ export const preflight = {
   // rows with what is true of every row cannot be held to the number the heading states, and
   // holding it to that number is the whole of why the heading no longer types one.
   rows: [
-    ["Windows build", " — 19041 or later, because below it no amount of configuration gets a WSL2 kernel"],
+    ["Windows build", ": 19041 or later, because below it no amount of configuration gets a WSL2 kernel"],
     [
       "Hardware virtualization",
-      " — and it reads the hypervisor first: Windows reports the firmware bit as off once something has claimed it, so the naive order sends you into a BIOS to enable what is already on",
+      ": and it reads the hypervisor first: Windows reports the firmware bit as off once something has claimed it, so the naive order sends you into a BIOS to enable what is already on",
     ],
     [
       "WSL2",
-      " — missing wsl.exe, a half-installed feature with no kernel behind it, and “new distros default to WSL1” are three different states with three different lines",
+      ": a missing wsl.exe, a half-installed feature with no kernel behind it, and “new distros default to WSL1” are three different states with three different lines",
     ],
     [
       "Container engine",
-      " — anything else that owns the docker command or the docker_engine pipe, because two engines competing for one pipe leaves neither working",
+      ": anything else that owns the docker command or the docker_engine pipe, because two engines competing for one pipe leaves neither working",
     ],
     [
       "Docker context",
-      " — where your own docker command points, because an engine that is running and a client aimed at something else fail with the same sentence, and only one of them is fixed by starting anything",
+      ": where your own docker command points, because an engine that is running and a client aimed at something else fail with the same sentence, and only one of them is fixed by starting anything",
     ],
   ] as [string, string][],
   // What is true of every row, rather than a row. Rendered in the same list, and deliberately
@@ -377,14 +381,14 @@ export const preflight = {
   notes: [
     [
       "Every row carries its remedy",
-      " — the command that fixes it, wrapped and marked once, because repeating the arrow per line reads as several actions where there is one",
+      ": the command that fixes it, wrapped and marked once, because repeating the arrow per line reads as several actions where there is one",
     ],
-    ["Or as JSON", " — --json gives an installer the same report, verdicts and remedies included"],
+    ["Or as JSON", ": --json gives an installer the same report, verdicts and remedies included"],
   ] as [string, string][],
   note: [
     "The same check runs inside the installer, and the same report is what ",
     { b: "a clean Windows 11 virtual machine" },
-    " is driven through on the way to a release — because a red row nobody has ever executed is not a check.",
+    " is driven through on the way to a release, because a red row nobody has ever executed is not a check.",
   ] as Rich,
 };
 
@@ -396,14 +400,14 @@ export const engine = {
   // against the same enum — so three files agree about the number instead of two.
   heading: `${Spelled(stepCount())} steps, and it stops at the one that broke`,
   intro: [
-    "Provisioning runs from an installer, where there is no terminal to answer a prompt in. So every step is unattended, every step is named, and the run stops at the first failure — a report listing six failures where there was one is a report nobody can act on.",
+    "Provisioning runs from an installer, where there is no terminal to answer a prompt in. So every step is unattended, every step is named, and the run stops at the first failure. A report listing six failures where there was one is a report nobody can act on.",
   ] as Rich,
   steps: [
     {
       n: "1",
       title: "Acquire, and verify",
       body: [
-        `${Spelled(acquireCount())} of the ${spelled(stepCount())} steps, one per artefact: the Alpine root filesystem, the static Linux engine, the Windows CLI zip, and the Compose and Buildx plugins — each downloaded and checked against a `,
+        `${Spelled(acquireCount())} of the ${spelled(stepCount())} steps, one per artefact: the Alpine root filesystem, the static Linux engine, the Windows CLI zip, and the Compose and Buildx plugins, each downloaded and checked against a `,
         { b: "digest recorded in this repository" },
         ", not one served by the same host as the file. Already verified on disk means no second download.",
       ] as Rich,
@@ -449,7 +453,7 @@ export const engine = {
         { code: "/usr/local/bin" },
         ", and ",
         { code: "systemd=false" },
-        " — nothing here is a service.",
+        ", because nothing here is a service.",
       ] as Rich,
     },
     {
@@ -470,7 +474,7 @@ export const engine = {
         { code: "docker compose up" },
         " and ",
         { code: "docker buildx build" },
-        " work from the install rather than from a second download — pinned by digest like everything else here. Every build the daemon kept is a page in the window, which is also where the ",
+        " work from the install rather than from a second download, pinned by digest like everything else here. Every build the daemon kept is a page in the window, which is also where the ",
         { code: "docker-desktop://" },
         " link buildx prints at the end of a build lands.",
       ] as Rich,
@@ -483,7 +487,7 @@ export const engine = {
         { code: "--plan" },
         " prints every pinned version, digest and path and reaches nothing at all. ",
         { code: "--acquire" },
-        " downloads and verifies, and stops before WSL2 is touched — both change nothing outside this tool's own directory.",
+        " downloads and verifies, and stops before WSL2 is touched. Both change nothing outside this tool's own directory.",
       ] as Rich,
     },
   ],
@@ -492,7 +496,7 @@ export const engine = {
   // travels here by itself. What was typed here had already drifted from the real output in
   // two places — it named a pipe the help text does not print, and it opened with a summary
   // line the command has never said.
-  helpTitle: "freewilly --help — the engine verbs",
+  helpTitle: "freewilly --help: the engine verbs",
   help: helpExcerpt("--plan", "--autostart"),
   helpNote:
     "Exit code 0 means the mode finished; 1 names the step it stopped at. For --status, 1 means the engine is not answering.",
@@ -510,7 +514,7 @@ export const pipe = {
   intro: [
     "A Linux ",
     { code: "dockerd" },
-    " cannot create a Windows named pipe — that is a Win32 object. So something on the Windows side has to, or every shell and every script you already have needs a ",
+    " cannot create a Windows named pipe, because that is a Win32 object. So something on the Windows side has to, or every shell and every script you already have needs a ",
     { code: "DOCKER_HOST" },
     ". FreeWilly is that something.",
   ] as Rich,
@@ -521,7 +525,7 @@ export const pipe = {
       body: [
         "The pipe is created for ",
         { b: "your account and nobody else" },
-        ". A forwarded port cannot say that, and full access to the Engine API is full access to the machine — so the hop runs over ",
+        ". A forwarded port cannot say that, and full access to the Engine API is full access to the machine, so the hop runs over ",
         { code: "wsl.exe" },
         "'s stdio instead.",
       ] as Rich,
@@ -537,7 +541,7 @@ export const pipe = {
       icon: "🧵",
       title: "An API client with no dependencies",
       body: [
-        "The app talks HTTP over the pipe directly — a named-pipe stream handed to .NET's own HTTP handler, pinned to Engine API ",
+        "The app talks HTTP over the pipe directly, a named-pipe stream handed to .NET's own HTTP handler, pinned to Engine API ",
         { code: "v1.43" },
         ". No NuGet package, and no shelling out to ",
         { code: "docker.exe" },
@@ -564,7 +568,7 @@ export const tray = {
       body: [
         "A filled disc. And it means the engine ",
         { b: "answered" },
-        " — the state comes from the event stream's own connection, not from remembering that a start was clicked.",
+        ": the state comes from the event stream's own connection, not from remembering that a start was clicked.",
       ] as Rich,
     },
     {
@@ -592,29 +596,29 @@ export const tray = {
   splitList: [
     [
       { b: "Open window" },
-      " — first, and alone above its rule, because it is what a left click on the icon already does. A menu whose opening line is not the thing the click does is a menu hiding it",
+      ": first, and alone above its rule, because it is what a left click on the icon already does. A menu whose opening line is not the thing the click does is a menu hiding it",
     ] as Rich,
     [
       { b: "Start engine" },
-      " — enabled only when there is not one running, and it launches the engine in a process the tray does not own. On a machine with no distribution imported it says so instead of pretending to start",
+      ": enabled only when there is not one running, and it launches the engine in a process the tray does not own. On a machine with no distribution imported it says so instead of pretending to start",
     ] as Rich,
     [
       { b: "Stop engine" },
-      " — stops serving the pipe, kills the daemon and terminates the distribution. WSL powers the virtual machine down itself once nothing else is using it",
+      ": it stops serving the pipe, kills the daemon and terminates the distribution. WSL powers the virtual machine down itself once nothing else is using it",
     ] as Rich,
     [
       { b: "Start engine with FreeWilly" },
-      " — what happens when you are not asking. Opening this tool usually means wanting an engine, so it ships on; turning it off restores the old behaviour exactly, or the setting is decoration",
+      ": what happens when you are not asking. Opening this tool usually means wanting an engine, so it ships on; turning it off restores the old behaviour exactly, or the setting is decoration",
     ] as Rich,
     [
       { b: "Quit" },
-      " — and the engine goes with it. It used to stay up, and the asymmetry was stated as the point; measured against the complaint this project exists over it cost more than it saved, because a running engine holds a WSL2 virtual machine and the only way to get those gigabytes back was remembering a second item first. Somebody who quits has said they are done",
+      ": the engine goes with it. It used to stay up, and the asymmetry was stated as the point; measured against the complaint this project exists over it cost more than it saved, because a running engine holds a WSL2 virtual machine and the only way to get those gigabytes back was remembering a second item first. Somebody who quits has said they are done",
     ] as Rich,
   ],
   // The item that is not on that list, and the reason the heading counts five rather than six.
   splitHidden: [
     { b: "One more appears, and only then" },
-    " — the item that installs an update exists so the menu's shape is fixed, and it is invisible until a release newer than this build has been found. A verb that is usually a no-op is worse than one that is usually absent",
+    ": the item that installs an update exists so the menu's shape is fixed, and it is invisible until a release newer than this build has been found. A verb that is usually a no-op is worse than one that is usually absent",
   ] as Rich,
 };
 
@@ -624,7 +628,7 @@ export const windowSection = {
   eyebrow: "The window",
   heading: "One window, and it is the list of containers",
   intro: [
-    "Because that is what the tool is opened for. Name, image, state, how long it has been up, and the ports — and the ports are links, because a published ",
+    "Because that is what the tool is opened for. Name, image, state, how long it has been up, and the ports. And the ports are links, because a published ",
     { code: "8080" },
     " is the thing you actually wanted and retyping ",
     { code: "localhost:8080" },
@@ -637,7 +641,7 @@ export const windowSection = {
     { b: "Whatever your Windows is." },
     " The window is WPF on the built-in Fluent theme with ",
     { code: "ThemeMode=\"System\"" },
-    " — light and dark follow the OS, with no extra package.",
+    ", so light and dark follow the OS, with no extra package.",
   ] as Rich,
   detailsEyebrow: "The details",
   detailsHeading: "Correct without being asked, and empty on purpose",
@@ -646,7 +650,7 @@ export const windowSection = {
       { b: "No refresh button." },
       " The list is a view of the engine: it reads ",
       { code: "/events" },
-      " as the daemon writes it, and only the events that change a container list cost a read — the rest would be a poll in disguise",
+      " as the daemon writes it, and only the events that change a container list cost a read, because the rest would be a poll in disguise",
     ] as Rich,
     [
       { b: "Started in a terminal, shown here." },
@@ -660,7 +664,7 @@ export const windowSection = {
     ] as Rich,
     [
       { b: "Empty is a designed state" },
-      ", and the two reasons a list is empty read differently — only one of them is something you can act on, and that one offers the button",
+      ", and the two reasons a list is empty read differently: only one of them is something you can act on, and that one offers the button",
     ] as Rich,
     [
       { b: "Duplicates folded." },
@@ -682,7 +686,7 @@ export const windowSection = {
       { b: `${Spelled(destinationCount())} destinations, and Builds is one.` },
       " Containers, images, volumes and ",
       { b: "what has been built here" },
-      " — which is also where the ",
+      ", which is also where the ",
       { code: "docker-desktop://" },
       " link buildx prints at the end of every build lands, because the record it names is one the daemon kept and only the address was dead",
     ] as Rich,
@@ -693,7 +697,7 @@ export const windowSection = {
       { b: "Engine is where an empty window explains itself." },
       " The host's own journal, followed while you watch it: every time the engine was brought back, what ",
       { code: "wsl.exe" },
-      " said the last time it would not start, and the suspend it did not survive — a file that outlives the run it describes, on the same footing as a container's log",
+      " said the last time it would not start, and the suspend it did not survive: a file that outlives the run it describes, on the same footing as a container's log",
     ] as Rich,
   ],
 };
@@ -705,7 +709,7 @@ export const notResident = {
   heading: "It is not running right now",
   body: [
     [
-      "There is no service and no scheduled task. The engine runs for exactly as long as something is holding it — quit that, and Windows is back to where it was. Autostart exists, it is a single per-user registry value, it is ",
+      "There is no service and no scheduled task. The engine runs for exactly as long as something is holding it. Quit that, and Windows is back to where it was. Autostart exists, it is a single per-user registry value, it is ",
       { b: "off unless you turn it on" },
       ", and turning it off ",
       { b: "removes" },
@@ -727,7 +731,7 @@ export const notResident = {
       { code: "api.github.com" },
       " four times a day what the latest release tag is, so it can tell you when a version exists. That request ",
       { b: "carries this product's name and version and nothing about you" },
-      " — there is no id, no token and no account to attach one to — and an installer it offers is checked against the SHA-256 published beside it before anything runs. It is not a switch, because a check nobody turns on is a check nobody has.",
+      " (there is no id, no token and no account to attach one to), and an installer it offers is checked against the SHA-256 published beside it before anything runs. It is not a switch, because a check nobody turns on is a check nobody has.",
     ] as Rich,
   ],
 };
@@ -777,9 +781,9 @@ export const nonGoals = {
 
 export const claudeCode = {
   meta: {
-    title: "FreeWilly for Claude Code — the friction it removes",
+    title: "FreeWilly for Claude Code: the friction it removes",
     description:
-      "What plain docker costs an agent — a table it cannot read, an inspect paid for four fields, a restart loop billed once per restart, and a permission prompt on every read — and the verb that replaces each one.",
+      "What plain docker costs an agent: a table it cannot read, an inspect paid for four fields, a restart loop billed once per restart, and a permission prompt on every read. And the verb that replaces each one.",
     ogTitle: "FreeWilly for Claude Code",
     ogDescription:
       "The friction plain docker puts on an agent, item by item, with the measured cost of each and the verb that replaces it.",
@@ -789,7 +793,7 @@ export const claudeCode = {
   intro: [
     "Listing containers and deleting a volume are one string to an allowlist, so a user either grants every ",
     { code: "docker" },
-    " call — which permits deleting a volume — or approves each one. Splitting the verbs in argv makes it one line of settings, and what that buys is not keystrokes: it is the removal of an interruption from the 90% of agent Docker work that mutates nothing.",
+    " call (which permits deleting a volume) or approves each one. Splitting the verbs in argv makes it one line of settings, and what that buys is not keystrokes: it is the removal of an interruption from the 90% of agent Docker work that mutates nothing.",
   ] as Rich,
   // The count is read off the verb registry itself (S1, S2), so what follows is the copy
   // around it and never the figure. The banner used to name the block the rest was designed
@@ -797,7 +801,7 @@ export const claudeCode = {
   // meeting "Block G" has no way to look it up and no reason to care.
   statusLead: "verbs, and every one of them exists.",
   status: [
-    "The list below is the registry the build reads, so a verb that has not landed is not on it — and the ceiling beside each one is the figure a build fails on rather than a number this page claims.",
+    "The list below is the registry the build reads, so a verb that has not landed is not on it. And the ceiling beside each one is the figure a build fails on rather than a number this page claims.",
   ] as Rich,
   allowlistHeading: "The one line that pays for it",
   allowlistLead: "One entry in .claude/settings.json:",
@@ -818,17 +822,17 @@ export const claudeCode = {
   // finds out this page was a plan. The mark went with them rather than the list being
   // unmarked, which would have made the same claim silently. `surface.test.mjs` still
   // fails on a row whose `k` the registry does not carry, so this list cannot drift back.
-  readHeading: "read — the inspection path (no prompt)",
+  readHeading: "read: the inspection path (no prompt)",
   read: [
-    { k: "read context", v: "context", d: "the whole machine in one budgeted, terse payload — engine, services, ports, disk, cursor" },
+    { k: "read context", v: "context", d: "the whole machine in one budgeted, terse payload: engine, services, ports, disk, cursor" },
     { k: "read doctor", v: "doctor <name>", d: "the diagnostic join: the verdict and the remedy for one container" },
-    { k: "read logs", v: "logs <name>", d: "deduped and budgeted, written to a file the agent Greps — paying for matches, not the whole log" },
+    { k: "read logs", v: "logs <name>", d: "deduped and budgeted, written to a file the agent Greps, paying for matches, not the whole log" },
     { k: "read ps", v: "ps", d: "the container list, addressed by name, with a cursor" },
     { k: "read ports", v: "ports", d: "what is published, and whether it actually listens from Windows" },
     { k: "read changes", v: "changes --since <cur>", d: "the delta since last session, so N+1 is cheaper than N" },
-    { k: "read verify", v: "verify <target>", d: "cheap textual proof a service answers — the agent cannot see" },
+    { k: "read verify", v: "verify <target>", d: "cheap textual proof a service answers, because the agent cannot see" },
   ],
-  doHeading: "do — the mutating path (still asks)",
+  doHeading: "do: the mutating path (still asks)",
   do: [
     { k: "do compose up", v: "compose up", d: "brings the project here up, stamped so do reclaim can take it back" },
     { k: "do engine", v: "engine", d: "start or stop the engine itself" },
@@ -836,11 +840,11 @@ export const claudeCode = {
   ],
   pluginHeading: "The plugin that makes it discoverable",
   pluginBody: [
-    "A surface nobody discovers is one nobody uses, and the moment it is discoverable is the moment the installer runs. So the Claude Code plugin — the skill, the allowlist entry, and a project brief generated from the live machine — ships with the install rather than being something to go and find.",
+    "A surface nobody discovers is one nobody uses, and the moment it is discoverable is the moment the installer runs. So the Claude Code plugin (the skill, the allowlist entry, and a project brief generated from the live machine) ships with the install rather than being something to go and find.",
   ] as Rich,
   refusesHeading: "What it deliberately refuses",
   refusesLead: [
-    "FreeWilly is the substrate; the intelligence is the caller's. It is a CLI over the Engine API and facts Windows already knows — not a second Docker CLI (P10).",
+    "FreeWilly is the substrate; the intelligence is the caller's. It is a CLI over the Engine API and facts Windows already knows, not a second Docker CLI (P10).",
   ] as Rich,
   refuses: [
     { t: "No model", b: "It calls no LLM." },
@@ -872,13 +876,13 @@ export const friction = {
   eyebrow: "The friction this removes",
   heading: "What plain docker costs an agent, and what replaces it",
   intro: [
-    "None of this is a defect in Docker. Every one of these is what a CLI built for a person at a keyboard does to a reader that pays per token, cannot see the screen, and has to ask permission — and the costs on the left are ",
+    "None of this is a defect in Docker. Every one of these is what a CLI built for a person at a keyboard does to a reader that pays per token, cannot see the screen, and has to ask permission. And the costs on the left are ",
     { b: "measured" },
     ", not estimated.",
   ] as Rich,
   baselineLead: "The canonical task, measured:",
   baselineNote: [
-    "Measured over the Engine API's compact payload, which is the transport this project's own surface is built on — so read it as a ",
+    "Measured over the Engine API's compact payload, which is the transport this project's own surface is built on, so read it as a ",
     { b: "floor" },
     " for today's cost, not a ceiling. ",
     { code: "docker inspect" },
@@ -893,16 +897,16 @@ export const friction = {
         cmd: "docker ps -a",
         shape: "containers.list",
         body: [
-          "Columns truncate, rows come back in creation order — which moves the moment anything is recreated, so two reads cannot be diffed — and nothing carries a cursor. So a session re-reads the whole machine three to five times as state moves, and that re-discovery, not the log, is the largest single driver of the total.",
+          "Columns truncate, rows come back in creation order (which moves the moment anything is recreated, so two reads cannot be diffed), and nothing carries a cursor. So a session re-reads the whole machine three to five times as state moves, and that re-discovery, not the log, is the largest single driver of the total.",
         ] as Rich,
       },
       here: {
         cmd: "freewilly read context",
         verb: "read context",
         body: [
-          "One payload: the engine, every container with its state and compose address, the published ports, the disk, and a cursor that fingerprints the machine. Sorted by name, so it caches and a diff means something. It also answers the canonical question — ",
+          "One payload: the engine, every container with its state and compose address, the published ports, the disk, and a cursor that fingerprints the machine. Sorted by name, so it caches and a diff means something. It also answers the canonical question, ",
           { code: "OOM  limit=512m" },
-          " — in the first call, with no second one.",
+          ", in the first call, with no second one.",
         ] as Rich,
       },
     },
@@ -912,7 +916,7 @@ export const friction = {
         cmd: "docker inspect api",
         shape: "container.inspect",
         body: [
-          "Three to six hundred lines of JSON, of which an agent reads four: the exit code, whether it was OOM-killed, the port bindings and the mounts. There is no projection to ask for, so the whole entity tree — every default, every piece of authoring metadata — is paid for to learn four things.",
+          "Three to six hundred lines of JSON, of which an agent reads four: the exit code, whether it was OOM-killed, the port bindings and the mounts. There is no projection to ask for, so the whole entity tree, every default and every piece of authoring metadata, is paid for to learn four things.",
         ] as Rich,
       },
       here: {
@@ -938,7 +942,7 @@ export const friction = {
         verb: "read logs",
         body: [
           { code: "--dedup" },
-          " collapses an identical line to one and a count, across the whole read rather than only adjacent ones — the copies of a trace are separated by everything each run printed. ",
+          " collapses an identical line to one and a count, across the whole read rather than only adjacent ones, because the copies of a trace are separated by everything each run printed. ",
           { code: "--level" },
           " keeps every line that did not say what it was, so the filter can narrow the log without hiding the answer. And ",
           { code: "--out" },
@@ -951,11 +955,11 @@ export const friction = {
       today: {
         cmd: "docker logs --tail 200 api | head",
         body: [
-          "A cut arrives looking exactly like the end of the output. Nothing in what comes back says a line was dropped or where to resume, so a reader draws a conclusion from a page that was never the whole story — and nobody finds out.",
+          "A cut arrives looking exactly like the end of the output. Nothing in what comes back says a line was dropped or where to resume, so a reader draws a conclusion from a page that was never the whole story, and nobody finds out.",
         ] as Rich,
       },
       here: {
-        cmd: "truncated 37 more line(s) — budget reached, read on from the cursor",
+        cmd: "truncated 37 more line(s): budget reached, read on from the cursor",
         body: [
           "Every budgeted payload here cuts from the end, states how much it cut, and prints the cursor to read on from. A silent truncation is the one thing a ceiling must not become, so it is the property the tests hold rather than the size.",
         ] as Rich,
@@ -989,9 +993,9 @@ export const friction = {
         body: [
           "This reports the mapping the daemon intends, which is not the same claim as ",
           { i: "8080 answers from Windows" },
-          " — a running container with a bound port can answer nothing. And when the bind fails, ",
+          ": a running container with a bound port can answer nothing. And when the bind fails, ",
           { code: "port is already allocated" },
-          " does not say what holds it, because the daemon does not know. So the agent cannot see whether its own work landed, and closing that gap means coming back to you to look — the most expensive unit in the system.",
+          " does not say what holds it, because the daemon does not know. So the agent cannot see whether its own work landed, and closing that gap means coming back to you to look, the most expensive unit in the system.",
         ] as Rich,
       },
       here: {
@@ -1018,13 +1022,13 @@ export const friction = {
           { code: "docker rm -f -v" },
           " are the same string to an allowlist. No Docker tool can express the rule a user actually wants, because ",
           { code: "docker" },
-          " mixes both in one verb namespace — so you either grant the lot, which permits deleting a volume, or approve every read by hand.",
+          " mixes both in one verb namespace, so you either grant the lot, which permits deleting a volume, or approve every read by hand.",
         ] as Rich,
       },
       here: {
         cmd: "Bash(freewilly read:*)",
         body: [
-          "Reads and writes are separate words in argv, so the rule is one line — and it is enforced under it: a read verb is written against a handle with no start, no remove and no prune on it, and a test drives every one of them and requires each request it made to be a GET.",
+          "Reads and writes are separate words in argv, so the rule is one line, and it is enforced under it: a read verb is written against a handle with no start, no remove and no prune on it, and a test drives every one of them and requires each request it made to be a GET.",
         ] as Rich,
       },
     },
@@ -1039,7 +1043,7 @@ export const friction = {
       here: {
         cmd: "freewilly read changes --since c:4f21a0",
         body: [
-          "Every pack already prints a state cursor, and the tray already holds the engine's event stream open for the window — so the delta is a cursor over a stream the user started rather than a daemon this adds. It is the only mechanism here that makes a second session cheaper than the first.",
+          "Every pack already prints a state cursor, and the tray already holds the engine's event stream open for the window, so the delta is a cursor over a stream the user started rather than a daemon this adds. It is the only mechanism here that makes a second session cheaper than the first.",
         ] as Rich,
       },
     },
@@ -1059,13 +1063,13 @@ export const compare = {
   meta: {
     title: "FreeWilly vs Docker Desktop, Rancher, Podman, plain WSL2",
     description:
-      "What FreeWilly does that Docker Desktop, Rancher Desktop, Podman Desktop or a hand-rolled WSL2 daemon does not — and what each of those is genuinely better at.",
-    ogTitle: "FreeWilly — the honest comparison",
+      "What FreeWilly does that Docker Desktop, Rancher Desktop, Podman Desktop or a hand-rolled WSL2 daemon does not, and what each of those is genuinely better at.",
+    ogTitle: "FreeWilly: the honest comparison",
     ogDescription:
       "Checkable rows grouped by the law each comes from, and a column for what every alternative wins.",
   },
   eyebrow: "Against the alternatives",
-  heading: "What this does that the others do not — and where they win",
+  heading: "What this does that the others do not, and where they win",
   intro: [
     "You arrive having already decided against something. A matrix that wins every row is one nobody believes, so this one is grouped by the law each row comes from, and every alternative keeps the column it genuinely wins.",
   ] as Rich,
@@ -1084,7 +1088,7 @@ export const compare = {
       ],
     },
     {
-      law: "Footprint — nothing resident",
+      law: "Footprint: nothing resident",
       rows: [
         { cap: "No service or VM held from every boot", cells: ["✓", "✗", "✗", "~", "~"] },
       ],
@@ -1107,7 +1111,7 @@ export const compare = {
       ],
     },
     {
-      law: "Breadth — where a rival wins",
+      law: "Breadth: where a rival wins",
       rows: [
         { cap: "Kubernetes built in", cells: ["✗", "✓", "✓", "~", "✗"] },
         { cap: "Extensions / build cloud", cells: ["✗", "✓", "✗", "✗", "✗"] },
@@ -1145,12 +1149,14 @@ export const download = {
     { code: "SHA256SUMS.txt" },
     " to check it against, and nothing else to choose between. It installs into ",
     { code: "%LOCALAPPDATA%\\FreeWilly" },
-    " for your account alone — which is what reaches a managed corporate laptop, the machine this project exists for. The WSL2 feature the engine needs may still want elevation of its own; the installer runs the preflight and says so rather than failing halfway through a download.",
+    " for your account alone, which is what reaches a managed corporate laptop, the machine this project exists for. The WSL2 feature the engine needs may still want elevation of its own; the installer runs the preflight and says so rather than failing halfway through a download.",
   ] as Rich,
+  // Emoji-free for the same reason as the hero's three, and the arrow on the button below is
+  // not the same thing: that one is what the control does, these were ornament on a fact.
   facts: [
-    "🪟 Windows 10 build 19041 or later, 64-bit",
-    "📦 No prerequisite — the .exe carries its own .NET runtime",
-    "🔒 SHA-256 published beside the file",
+    "Windows 10 build 19041 or later, 64-bit",
+    "No prerequisite: the .exe carries its own .NET runtime",
+    "SHA-256 published beside the file",
   ],
   cta: "⬇ Download for Windows",
   ctaShort: "⬇ Download",
@@ -1162,6 +1168,6 @@ export const download = {
     { b: "asks about what was created" },
     ". The ",
     { code: "freewilly" },
-    " distribution holds every image, container and volume you have, so it is never deleted without a question — and an unattended uninstall keeps it.",
+    " distribution holds every image, container and volume you have, so it is never deleted without a question, and an unattended uninstall keeps it.",
   ] as Rich,
 };

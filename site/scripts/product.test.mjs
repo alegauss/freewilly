@@ -224,9 +224,13 @@ test("llms.txt states the menu the tray has and the Quit the product does", () =
     "llms.txt still claims one menu item is the only thing that stops the engine",
   );
 
+  // Over the text with its wrapping collapsed, not over the file. llms.txt is hard-wrapped,
+  // so a caption falls across a line break the moment a sentence before it gets a word
+  // longer, and this asserted where the paragraph happened to fold rather than what it said.
+  const flat = llms.replace(/\s+/g, " ").toLowerCase();
   for (const item of product.tray.items.filter((i) => !i.hidden)) {
     assert.ok(
-      llms.toLowerCase().includes(item.caption.toLowerCase()),
+      flat.includes(item.caption.toLowerCase()),
       `llms.txt does not name the "${item.caption}" menu item`,
     );
   }

@@ -9,7 +9,7 @@ export function FeatureIndex() {
         <div className="sec-head reveal">
           <div className="eyebrow">In depth</div>
           <h2>Five pages, one per pillar</h2>
-          <p>Each section above has a page to link at — from a README, an issue, or a search result.</p>
+          <p>Each section above has a page to link at, whether from a README, an issue, or a search result.</p>
         </div>
         <div className="feature-index reveal">
           {features.map((f) => (

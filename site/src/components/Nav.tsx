@@ -10,7 +10,7 @@ export function Nav() {
             <img src="/freewilly/logo.svg" alt="" />
             FreeWilly
           </a>
-          <a className="parent" href={parentUrl} title="alegauss — small developer tools">
+          <a className="parent" href={parentUrl} title="alegauss: small developer tools">
             <span className="pre">part of</span>
             <b>alegauss</b>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

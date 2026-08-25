@@ -5,7 +5,7 @@
 > distribution it owns, serves the Windows named pipe `\\.\pipe\docker_engine` that the
 > `docker` CLI, Compose and every other client already look for, and shows containers in
 > one window. Per-user install under `%LOCALAPPDATA%\FreeWilly` with no administrator
-> prompt, no Windows service, no telemetry and no account. Built in C# (.NET 10 — WinForms
+> prompt, no Windows service, no telemetry and no account. Built in C# (.NET 10: WinForms
 > tray, WPF window on the built-in Fluent theme, and an Engine API client with no NuGet
 > dependency).
 
@@ -26,7 +26,7 @@ upstream, unmodified. Apache-2.0 is the project's stated licence, in `LICENSE`, 
 ## For agents
 
 This site answers a coding agent in files it can grep, not only in hydrated markup. Every
-route has a Markdown twin beside it — the same page, converted from the same render, with
+route has a Markdown twin beside it, the same page converted from the same render, with
 the navigation, the footer and the call to action dropped. Read `<route>/index.md` instead
 of the HTML: the landing page is
 [`/index.md`](https://alegauss.github.io/freewilly/index.md). The full list of routes,
@@ -35,7 +35,7 @@ their twins and their byte sizes is in
 
 ## Why it exists
 
-The engine is free and always was — Moby and the `docker` CLI are Apache-2.0. What costs
+The engine is free and always was: Moby and the `docker` CLI are Apache-2.0. What costs
 money, and what a managed corporate laptop often cannot install, is the desktop wrapper
 around them. FreeWilly is a different wrapper: same upstream engine, no licence to count
 seats against, nothing resident, and an uninstall that cannot take anything of yours with
@@ -43,16 +43,15 @@ it.
 
 ## Features
 
-- **Preflight (`freewilly --preflight`)**: five rows, each with the action that fixes it —
+- **Preflight (`freewilly --preflight`)**: five rows, each with the action that fixes it:
   Windows build (19041 or later), hardware virtualization, WSL2, any rival container engine
   that owns the `docker` command or the `docker_engine` pipe, and where this user's own
-  `docker` context points. It changes nothing,
-  prints a person-readable report or `--json` for an installer, and exits 1 while a
-  blocking row is not green, so nothing is copied to disk on a machine that cannot host an
-  engine. The virtualization row reads the hypervisor bit *before* the firmware bit,
-  because Windows reports the firmware bit as false once a hypervisor has claimed it — the
-  naive order tells a plainly virtualizing machine to go and enable virtualization in its
-  BIOS.
+  `docker` context points. It changes nothing, prints a person-readable report or `--json`
+  for an installer, and exits 1 while a blocking row is not green, so nothing is copied to
+  disk on a machine that cannot host an engine. The virtualization row reads the hypervisor
+  bit *before* the firmware bit, because Windows reports the firmware bit as false once a
+  hypervisor has claimed it, and the naive order tells a plainly virtualizing machine to go
+  and enable virtualization in its BIOS.
 - **Unattended provisioning (`freewilly --provision`)**: eleven named steps, stopping
   at the first failure rather than reporting six consequences of one cause. Downloads and
   verifies Alpine's minirootfs, Docker's static Linux engine binaries, Docker's Windows
@@ -67,13 +66,13 @@ it.
   reaches nothing; `--acquire` downloads and verifies and stops before WSL2 is involved.
 - **Start, stop, and a state that is never ahead of the truth (`--run`, `--stop`,
   `--status`)**: starts the distribution and the daemon and reports Running only once the
-  engine actually answers. The three ways it goes wrong — the distribution is not
+  engine actually answers. The three ways it goes wrong (the distribution is not
   provisioned, the daemon starts and dies, or the daemon runs and nothing on Windows serves
-  the pipe — are named separately because they have three different remedies.
+  the pipe) are named separately because they have three different remedies.
 - **The `docker_engine` named pipe**: a Linux `dockerd` cannot create a Windows named pipe,
   so FreeWilly serves it and forwards each connection over `wsl.exe`'s stdio to `socat`
   inside the distribution and on to `/var/run/docker.sock`. The pipe's ACL grants the
-  current user account and nobody else — which is the reason it is a pipe and not a
+  current user account and nobody else, which is the reason it is a pipe and not a
   forwarded TCP port, since the Engine API is equivalent to root on the machine and any
   local process can reach a port. Because the pipe name is the standard one, the CLI,
   Compose, Testcontainers and IDE plugins find the engine with no `DOCKER_HOST` and no
@@ -87,32 +86,35 @@ it.
 - **Engine API client with zero dependencies**: HTTP and JSON over the named pipe, pinned to
   Engine API `v1.43` (an unversioned path is answered with the daemon's newest version, so a
   daemon upgrade could change a response shape under a client that asked for nothing). It is
-  a `NamedPipeClientStream` handed to .NET's own `SocketsHttpHandler.ConnectCallback` — no
+  a `NamedPipeClientStream` handed to .NET's own `SocketsHttpHandler.ConnectCallback`: no
   NuGet package, and no spawning `docker.exe` once per refresh.
 - **The event stream**: reads `/events` as the daemon writes it and re-opens the stream after
   every break, so a container started in any terminal appears without a refresh, and nothing
   in this project polls. Only the events that change a container list cost a read.
-- **Tray icon**: the engine state as a *shape*, with colour only reinforcing it — a filled
+- **Tray icon**: the engine state as a *shape*, with colour only reinforcing it: a filled
   disc for running, a ring with a gap for starting, a plain ring for stopped. At 16 pixels a
   hue is a hint, and these three stay distinguishable in a screenshot printed in black and
-  white. The menu is deliberately short — five items: open window, start engine, stop engine,
-  "start engine with FreeWilly", and quit. A sixth installs an update and is hidden until one
-  exists, and the check that finds it runs on every launch with nothing to enable (DD171).
-  **Quitting the tray takes the engine with it**: a running engine holds a WSL2 virtual
-  machine, and until DD128 the only way to get that memory back was to remember a second menu
-  item before pressing Quit. Signing out or shutting down does the same.
-  The distribution this tool owns is terminated and no other WSL distribution is touched.
-- **The window**: one window, and it is the list of containers — name, image, state, the
+  white. The menu is deliberately short, at five items: open window, start engine, stop
+  engine, "start engine with FreeWilly", and quit. A sixth installs an update and is hidden
+  until one exists, and the check that finds it runs on every launch with nothing to enable
+  (DD171). **Quitting the tray takes the engine with it**: a running engine holds a WSL2
+  virtual machine, and until DD128 the only way to get that memory back was to remember a
+  second menu item before pressing Quit. Signing out or shutting down does the same. The
+  distribution this tool owns is terminated and no other WSL distribution is touched.
+- **The window**: one window, and it is the list of containers: name, image, state, the
   daemon's own status sentence, and the ports. A published TCP port is a link that opens
   `http://localhost:<port>`; a port that is only exposed, or a UDP port, is plain text rather
   than a link that lands on nothing. Ports published on both address families are folded into
   one cell. WPF on the built-in .NET Fluent theme with `ThemeMode="System"`, so light and dark
   follow the OS with no extra package. Empty is a designed state: "the engine is not running"
-  offers a Start button, "no containers" does not. Four destinations beside About —
-  containers, images, volumes and **builds**, the last being where the `docker-desktop://`
-  link buildx prints at the end of a build lands, since the record it names is one the daemon
-  kept and only the address was dead. Every heading sorts and every list has a filter box,
-  over the rows already in hand rather than a second call to the daemon.
+  offers a Start button, "no containers" does not. Five destinations beside About: containers,
+  images, volumes, **builds** and **engine**. Builds is where the `docker-desktop://` link
+  buildx prints at the end of a build lands, since the record it names is one the daemon kept
+  and only the address was dead; engine is the host's own journal, which is how an empty
+  window explains itself: every time the engine was brought back, what `wsl.exe` said the last
+  time it would not start, and the suspend it did not survive. Every heading sorts and every
+  list has a filter box, over the rows already in hand rather than a second call to the
+  daemon.
 - **Nothing resident**: no Windows service and no scheduled task. Autostart is a single
   per-user registry value under the `Run` key, off unless the user turns it on, and turning it
   off removes the value rather than setting it to zero. The engine runs for exactly as long as
@@ -124,8 +126,8 @@ it.
 ## Non-goals (stated, not accidental)
 
 - Feature parity with Docker Desktop.
-- A fork of the engine — upstream Moby, unpatched, pinned by digest.
-- macOS and Linux — the whole mechanism is WSL2 and a Windows named pipe.
+- A fork of the engine: upstream Moby, unpatched, pinned by digest.
+- macOS and Linux: the whole mechanism is WSL2 and a Windows named pipe.
 - Telemetry, accounts or a sign-in.
 - A resident background service.
 
@@ -143,7 +145,7 @@ it.
 - **Uninstalling asks about what was created.** The `freewilly` WSL2 distribution holds every
   image, container and volume, so it is never removed without a question, and an unattended
   uninstall keeps it.
-- **From source** — `dotnet build`, then `build\build.cmd` for the single-file `.exe`; needs
+- **From source**: `dotnet build`, then `build\build.cmd` for the single-file `.exe`; needs
   the .NET 10 SDK and Windows, and the installer additionally needs Inno Setup 6. Stated in
   the repository's own
   [README](https://github.com/alegauss/freewilly/blob/main/README.md#building). It is how a
@@ -151,22 +153,22 @@ it.
 
 ## Layout
 
-- `src/FreeWilly.Core` — the preflight judgement, the engine lifecycle and provisioning, and
+- `src/FreeWilly.Core`: the preflight judgement, the engine lifecycle and provisioning, and
   the Engine API client. No UI.
-- `src/FreeWilly.Tray` — the WinForms tray icon, the WPF window, and every verb: one
+- `src/FreeWilly.Tray`: the WinForms tray icon, the WPF window, and every verb: one
   executable is the tray, the window, `--preflight`, `--provision`, `--run` and the
   `freewilly read`/`do` agent surface. There is no second tool to find.
-- `src/FreeWilly.Shim` — the `docker.exe` forwarder. A separate project because a command a
+- `src/FreeWilly.Shim`: the `docker.exe` forwarder. A separate project because a command a
   shell waits for has to be a console application, and the tray is a windowed one.
-- `site/` — the public site (Vite + React + Tailwind); its build emits this file, a Markdown
+- `site/`: the public site (Vite + React + Tailwind); its build emits this file, a Markdown
   twin per route and `manifest.json`.
-- `docs/ROADMAP.md`, `docs/CHANGELOG.md`, `docs/IMPROVEMENTS.md` — governed by
+- `docs/ROADMAP.md`, `docs/CHANGELOG.md`, `docs/IMPROVEMENTS.md`: governed by
   [roadkeep](https://github.com/alegauss/roadkeep) and written by that tool, not by hand.
 
 ## Data and network
 
-- Downloads the five pinned artefacts — the Alpine rootfs, the static Linux engine, the
-  Windows CLI, and the Compose and Buildx plugins — from `dl-cdn.alpinelinux.org`,
+- Downloads the five pinned artefacts (the Alpine rootfs, the static Linux engine, the
+  Windows CLI, and the Compose and Buildx plugins) from `dl-cdn.alpinelinux.org`,
   `download.docker.com` and `github.com`, during a provision the user asked for. Each is
   checked against a digest recorded in the repository.
 - Asks `api.github.com` for the latest release tag, once on launch and every six hours after,
@@ -181,22 +183,22 @@ it.
 ## Sponsor
 
 Sponsored by **Viglet** (https://www.viglet.org). Open source search and
-content tools for organisations with a lot to publish — run on your own
+content tools for organisations with a lot to publish. Run on your own
 servers, with no per-user licence.
 
-- **Viglet Turing ES** (https://turing.viglet.org) — Search for sites with a
-  lot of content. People ask in their own words — “evening management course”,
-  “engineering at the north campus” — and find it, with filters that match how
+- **Viglet Turing ES** (https://turing.viglet.org). Search for sites with a
+  lot of content. People ask in their own words (“evening management course”,
+  “engineering at the north campus”) and find it, with filters that match how
   they actually choose. AI answers using only your own published content, so
   it never invents a price or a deadline. Runs on your servers, your data
   stays in house, and there is no per-user licence.
-- **Viglet Shio CMS** (https://shio.viglet.org) — A content system that takes
+- **Viglet Shio CMS** (https://shio.viglet.org). A content system that takes
   the page out of the development queue: AI builds it, your communications
   team reviews and approves it, seeing exactly how it will look before it goes
   live. Every version is kept, so you can see what changed and roll back. Runs
   on your servers, no per-user licence.
-- **Viglet Dumont** (https://www.viglet.org) — The same item of information
-  usually lives in several places at once — a portal, a back-office system, a
+- **Viglet Dumont** (https://www.viglet.org). The same item of information
+  usually lives in several places at once: a portal, a back-office system, a
   PDF, an old departmental site. This gathers it automatically from all of
   them and feeds it to the search, with nobody copying, pasting or keeping a
   spreadsheet up to date.

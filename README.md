@@ -1,6 +1,6 @@
 # FreeWilly
 
-**A free Docker Desktop alternative for Windows, under Apache-2.0 — no headcount
+**A free Docker Desktop alternative for Windows, under Apache-2.0: no headcount
 threshold, no revenue threshold, no licence to buy.** Docker Desktop is free only below
 its own limits, and the reason to look for an alternative is usually that your employer
 crossed one. This is the whole answer to that: [Apache-2.0](LICENSE), including the
@@ -13,29 +13,29 @@ the engine's state, and one window for containers, images and volumes.
 ## What it is
 
 - **A preflight, not a support case.** Every check states a fact, a verdict, and the one
-  action that changes it — before anything is installed.
+  action that changes it, before anything is installed.
 - **An owned distribution.** The engine lives in a WSL2 distribution called `freewilly`
   that this tool created. An `apt upgrade` or a `wsl --unregister` you ran for another
   reason cannot take the engine with it, and the uninstall is one command.
-- **A tray icon you can read at a glance — once Windows shows it.** Shape carries the
+- **A tray icon you can read at a glance, once Windows shows it.** Shape carries the
   state and colour only reinforces it, so it survives a taskbar, a colour-blind reader
   and a black-and-white screenshot. Windows 11 files an icon it has not seen before into
   the overflow behind the chevron, and nothing here promotes itself out of there: drag it
   onto the taskbar once and Windows remembers. Until then the state is on hover.
 - **One window.** Containers with their state in a chip that says *which kind of stopped*
-  — a clean exit is muted, a kill is not — their ports as links, their logs de-framed and
+  (a clean exit is muted, a kill is not), their ports as links, their logs de-framed and
   followed, and a shell in the terminal you already have. Three controls per row rather
   than six: Logs, the one verb the row was opened for, and an overflow that is always
   drawn. Images sorted by size with dangling and in-use named. Volumes with what mounts
   them, because a volume is the one thing here that does not come back. **Every heading
   sorts and every list has a filter box**, over the rows already in hand and never a
-  second call to the daemon — and both survive the redraw the event stream causes, which
+  second call to the daemon, and both survive the redraw the event stream causes, which
   is the part that is easy to get wrong. Containers open running-first.
 - **No daemon of its own.** Quitting the tray leaves the engine exactly as it was.
 
 ## What it is not
 
-These are binding, not aspirational — see the non-goals in
+These are binding, not aspirational. See the non-goals in
 [docs/ROADMAP.md](docs/ROADMAP.md):
 
 - Feature parity with Docker Desktop
@@ -50,7 +50,7 @@ These are binding, not aspirational — see the non-goals in
 
 One `.exe`, and an installer around it. Both are per-user: FreeWilly installs into
 `%LOCALAPPDATA%\FreeWilly` and **asks for no administrator prompt**, which is what
-reaches a managed corporate laptop — the audience Docker Desktop's terms send here. The
+reaches a managed corporate laptop, the audience Docker Desktop's terms send here. The
 engine's WSL2 feature may still need elevation of its own, and the installer runs the
 preflight and says so rather than failing halfway through a download.
 
@@ -62,23 +62,25 @@ Uninstalling removes what was installed and **asks about what was created**. The
 never deleted without a question, and an unattended uninstall keeps it.
 
 **If your shell is your own WSL2 distribution**, the Linux `docker` in it reaches nothing:
-the daemon's socket lives inside the distribution this tool owns, and its only way out is
-a Windows named pipe a Linux client cannot dial. Run the Windows binary instead — WSL's
+the daemon's socket lives inside the distribution this tool owns, and its only way out is a
+Windows named pipe a Linux client cannot dial. Run the Windows binary instead: WSL's
 interop makes `/mnt/c/Users/you/AppData/Local/FreeWilly/bin/docker.exe ps` work from a
 Linux shell. It is a Windows process, so **every path you hand it is read as a Windows
 path**: `-v $(pwd):/data` typed in a Linux shell mounts an empty directory rather than your
-project. `freewilly do compose up` is the exception — it respells bind sources for you.
+project. `freewilly do compose up` is the exception, because it respells bind sources for
+you.
 
 There is deliberately no per-distribution integration. Docker Desktop's is a toggle that
 writes a CLI and a socket into each distribution you tick, which is both the largest
 version of touching your machine that this project refuses, and a way of handing the
 Engine API to every distribution when the pipe's ACL exists to hold it to one account.
 
-The same executable is every verb — there is no second tool to find:
+The same executable is every verb, and there is no second tool to
+find:
 
 ```
 FreeWilly.exe                 the tray icon and the window
-FreeWilly.exe --tray          the tray icon alone — what "start with Windows" uses
+FreeWilly.exe --tray          the tray icon alone, which is what "start with Windows" uses
 FreeWilly.exe --preflight     what this machine can host; --json for a script
 FreeWilly.exe --provision     download, verify and install the engine
 FreeWilly.exe --run           start the engine and serve the pipe until Ctrl+C
@@ -94,7 +96,7 @@ FreeWilly's other operator is a coding agent, and the split that matters to one 
 ```
 freewilly read context       the whole machine in one budgeted payload
 freewilly read doctor <name> why one container is not answering
-freewilly read ps            every container, one line each — mutates nothing
+freewilly read ps            every container, one line each; mutates nothing
 freewilly read logs <name>   --since --level --dedup --budget --out
 freewilly read ports [port]  what holds a host port, which Docker cannot say
 freewilly read verify <name> proof that it answers; --request --wait --timeout
@@ -113,19 +115,20 @@ port 135 is already held on this machine
   fix       Stop process 2416 (svchost.exe), or publish a different host port.
 ```
 
-That join is the argument for this surface existing — a JSON re-wrapping of what `docker`
+That join is the argument for this surface existing: a JSON re-wrapping of what `docker`
 already says adds nothing, since `--format json` exists. Every refusal carries the fact
-that explains it, a fix, and where it applies the nearest matching name. And
-`cannot connect to the Docker daemon` — one sentence for three unrelated causes — is now
-three: a **rival engine** on the pipe, a **context pointing elsewhere**, or an **engine
-that is simply stopped**, each with its own remedy and its own stable `type`.
+that explains it, a fix, and where it applies the nearest matching name. And `cannot
+connect to the Docker daemon`, one sentence for three unrelated causes, is now three: a
+**rival engine** on the pipe, a **context pointing elsewhere**, or an **engine that is
+simply stopped**, each with its own remedy and its own stable `type`.
 
 `read logs` is the one with a contract, because logs are the largest token sink here. A
 container that restarted eight times writes the same trace eight times: **634 estimated
 tokens deduped to 95**, and `× 8` is the same answer at an eighth of the price. It is
 bounded by default, truncates **with a cursor and never in silence**, and `--level error`
-keeps every line whose level it could not read — a stack trace's continuation lines say
-nothing about severity, and dropping them would leave you an error with no trace.
+keeps every line whose level it could not read, because a stack trace's continuation
+lines say nothing about severity, and dropping them would leave you an error with no
+trace.
 
 `--out <path>` is the argument that matters most and is the least obvious:
 
@@ -139,7 +142,7 @@ freewilly read logs shop-api-1 --out .freewilly/logs/api.log
 A ten-megabyte log becomes affordable rather than merely truncated. It writes, and it is
 still a `read`: the promise is that a read does not mutate **the engine**, and a file at a
 path you named in the same breath is not a mutation of anything you did not ask for. Two
-guards hold it — every daemon request is a `GET`, and a read verb touches no path other
+guards hold it: every daemon request is a `GET`, and a read verb touches no path other
 than the one it was given.
 
 `read doctor` closes a join that five commands used to leave to the caller, and returns
@@ -154,16 +157,16 @@ conclusions rather than fields:
   [FAIL]  mounts    /app ← C:\Users\dev\shop\api MISSING, /data ← volume:shop_data
 ```
 
-The rows are the preflight's own — a fact, a verdict and the one action that changes it —
-so nothing new has to be learned to read them. The ports row is the one Docker structurally
+The rows are the preflight's own (a fact, a verdict and the one action that changes it), so
+nothing new has to be learned to read them. The ports row is the one Docker structurally
 cannot answer: the daemon knows what was published and only Windows knows whether anything
 holds the socket. A mount this tool did not map is reported **unchecked** rather than broken,
 because a false "does not resolve" is worse than no answer.
 
 `read verify` closes the last gap an agent cannot close itself. `running` and *answering*
 are different facts, and until now the difference was settled by a person opening a
-browser and reporting back — the most expensive cycle in the system. So it connects to
-the published port **from Windows**, optionally asks for one path, and reads the health
+browser and reporting back, the most expensive cycle in the system. So it connects to the
+published port **from Windows**, optionally asks for one path, and reads the health
 check's state *beside what the check printed*:
 
 ```
@@ -174,17 +177,17 @@ check's state *beside what the check printed*:
 ```
 
 `read doctor` says a port is **listening**, read from the socket table; this says it
-**accepts**, and the difference is the whole point — a published port with a dead process
+**accepts**, and the difference is the whole point: a published port with a dead process
 behind it is listening and answers nothing. A connect is the one thing on this surface
 that reaches something other than the daemon, so it is deliberately narrow: it opens and
 closes, and a request that would appear in somebody's access log needs `--request` and is
 a GET. The mount row stops at the Windows side and says `unchecked` for the rest, because
-counting inside the container means an exec — a POST — and buying one row is not worth
-what it costs the guarantee that a read is a read.
+counting inside the container means an exec, which is a POST, and buying one row is not
+worth what it costs the guarantee that a read is a read.
 
 `--wait --timeout 30s` is the same command as the readiness primitive. It returns the
 moment the condition holds, and on a timeout it prints the same report saying which rows
-did not pass — a sleep loop written by the caller has neither property, and pays for
+did not pass. A sleep loop written by the caller has neither property, and pays for
 every poll.
 
 `read context` is the one that replaces a session's first five calls:
@@ -199,14 +202,14 @@ cursor  c:231884
 
 **102 estimated tokens** for a five-service stack, against 5718 measured for the three
 container-list reads a diagnosis makes today. The first row already answers *why is the api
-container not responding* — `OOM limit=512M` — with no second call. Order is deterministic so
+container not responding* (`OOM limit=512M`) with no second call. Order is deterministic so
 the payload caches and a diff means something, the ceiling is hard and a truncated payload
 **says how many rows went** rather than cutting silently, and the cursor fingerprints the
 machine rather than the text. `--json` is there for callers that parse.
 
 Everything above makes one session cheaper. `read changes --since` makes the **next** one
-cheaper, which over a week is the larger number — a follow-up syncs on what moved instead
-of re-deriving the machine:
+cheaper, which over a week is the larger number, because a follow-up syncs on what moved
+instead of re-deriving the machine:
 
 ```
 $ freewilly read changes --since t:2026-08-13T11:45:00Z
@@ -221,16 +224,16 @@ cursor  t:2026-08-13T12:00:00Z
 rather than per event: a container that crash-looped emits twelve lines saying one thing,
 and the count with the exit code beside it is what a caller was going to reduce them to.
 The history is the daemon's own, so this needs no resident process of its own and answers
-whether the tray is running or not — and it reports what **you** did from the tray too,
+whether the tray is running or not. And it reports what **you** did from the tray too,
 because the daemon does not know which of you asked.
 
-The daemon keeps its last 256 events. A cursor reaching past them is answered with
-`too old, re-read the context` and a non-zero exit, never with a silent partial: a delta
-that quietly skips is worse than no delta, because nothing downstream can detect it. The
-same rule bounds a busy machine — rows go from the end and how many went is stated.
+The daemon keeps its last 256 events. A cursor reaching past them is answered with `too
+old, re-read the context` and a non-zero exit, never with a silent partial: a delta that
+quietly skips is worse than no delta, because nothing downstream can detect it. The same
+rule bounds a busy machine: rows go from the end and how many went is stated.
 
 What an agent created is indistinguishable from what you created, so the only cleanup on
-offer is `prune` — scoped to the whole machine, unable to tell this afternoon's
+offer is `prune`, scoped to the whole machine, unable to tell this afternoon's
 scaffolding from the database you have been filling since March, and therefore the one
 command nobody delegates. Everything created through `do` is stamped
 `freewilly.session=<id>`, `read changes` answers from that label and never from a
@@ -250,17 +253,18 @@ confirm  freewilly do reclaim --session repro-17 --confirm k:6e80b8
 
 The session is `DOCKERDESK_SESSION`, because every call is a separate process and an id
 minted per invocation would put every object in a session of its own. Unset, the id is
-derived from the working directory and **says so** — `dir:f00bf3` — so a scope that is
+derived from the working directory and **says so**, as `dir:f00bf3`, so a scope that is
 really "this folder, forever" is not mistaken for a piece of work.
 
 **The token is computed over that list.** The second call matches only if the list is
 still the one printed, so a container that arrived in between makes the confirm refuse
 and name what would go now, rather than quietly taking something nobody approved.
-Volumes are the exception this is loudest about, and `--volumes` changes the token — a
-token issued for the containers cannot be replayed to take the data with them.
+Volumes are the exception this is loudest about, and `--volumes` changes the token,
+because a token issued for the containers cannot be replayed to take the data with
+them.
 
 `docker ps` and `docker rm -f -v` are the same string to an allowlist, so a rule either
-grants the whole verb namespace — which permits deleting a volume — or every call stops to
+grants the whole verb namespace (which permits deleting a volume) or every call stops to
 ask. Separating them makes the rule one line:
 
 ```jsonc
@@ -268,14 +272,14 @@ ask. Separating them makes the rule one line:
 "allow": ["Bash(freewilly read:*)"]
 ```
 
-A surface nobody discovers is one nobody uses, so the install ships how it is found — and
+A surface nobody discovers is one nobody uses, so the install ships how it is found, and
 **proposes it, never writes it**. Two files land in `%LOCALAPPDATA%\FreeWilly\agent\`: a
 skill naming the verbs and the one rule that matters, and the allowlist line above. The
 after-install page prints the two commands. Nothing here touches your `.claude` directory,
 which is where a tool editing your configuration unasked would be least forgivable, and a
 test asserts the installer script names no such path.
 
-The skill **names verbs and defers** — every sentence explaining what one does lives in
+The skill **names verbs and defers**: every sentence explaining what one does lives in
 `--help`, which is one copy and the one you already have. Two descriptions of a surface
 drift, and the one loaded every session drifts unnoticed, so a test holds the skill's verb
 list equal to the registry: a verb that ships without appearing there fails the build.
@@ -286,14 +290,14 @@ freewilly read context --as brief --out .freewilly/brief.md
 
 writes what a session should start knowing, generated from the live machine rather than
 hand-maintained and rotting. It writes where it was told and nowhere else, refuses to
-replace a file that is already there unless you pass `--force`, and carries no timestamp —
+replace a file that is already there unless you pass `--force`, and carries no timestamp,
 so re-running it on an unchanged machine produces no diff at all.
 
 **`read` is a promise, not a prefix.** A verb under it that writes is a defect, and two
 things keep that honest: a read verb is handed a handle with no start, remove or prune on
 it, and a test drives every registered read verb and requires every request it made to be
-a `GET`. Addresses are names — a container by its name, a compose service as
-`svc:<project>/<service>` — because an id changes when a container is recreated.
+a `GET`. Addresses are names, a container by its name and a compose service as
+`svc:<project>/<service>`, because an id changes when a container is recreated.
 
 Every response shape has a ceiling in [`agent-budget.json`](agent-budget.json), and a test
 fails a build that made one more expensive. See
@@ -304,14 +308,14 @@ than from whatever is running: five containers covering running and exited, a pu
 port and an exposed-only one, dangling images and an anonymous volume. Every name starts
 with `sample-`, so a screenshot of it is obviously a fixture and never somebody's real
 project; every write refuses, in the engine's own voice. The captures are deterministic,
-which is what makes a change to the window reviewable as a picture — and the three empty
+which is what makes a change to the window reviewable as a picture. And the three empty
 states, otherwise the hardest thing here to reach, are one flag away.
 
 `--capture-window` renders the window's own content and never photographs the screen, so it
-cannot catch anything that happens to be in front of it — and it needs no desktop at all,
+cannot catch anything that happens to be in front of it, and it needs no desktop at all,
 which a screen copy does. [`scripts/Capture-Window.ps1`](scripts/Capture-Window.ps1) is the
 screen-copy fallback for popups, and it refuses rather than writing when something overlaps
-the window — or when the window has a translucent system backdrop, which composites what is
+the window, or when the window has a translucent system backdrop, which composites what is
 behind it into the copy and is a leak no overlap check can see.
 
 A windowed program does not hold the prompt, so a typed verb prints *after* the prompt
@@ -323,7 +327,7 @@ is the form a script or an installer uses anyway.
 FreeWilly is [Apache-2.0](LICENSE). Copyright FreeWilly contributors.
 
 The engine it installs is upstream software under its own terms, and those files are not
-redistributed here — they are downloaded from their official locations at install time,
+redistributed here. They are downloaded from their official locations at install time,
 against the versions and digests this build pins. [NOTICE](NOTICE) lists every one of
 them, its licence and where it came from; the window's **About** says the same thing
 where the choice is actually made.
@@ -337,14 +341,13 @@ build\build.cmd              one self-contained FreeWilly.exe
 build\build-installer.cmd    that, wrapped in dist\FreeWilly-Setup.exe
 ```
 
-Requires the .NET 10 SDK and Windows; the installer also needs
-[Inno Setup 6](https://jrsoftware.org/isdl.php), found machine-wide, per-user or on the
-PATH. The version is stated once, in
-[Directory.Build.props](Directory.Build.props) — the installer reads it back off the
-built `.exe` rather than repeating it. The mark and the app icon are committed, and
-neither is part of the build: `build\trace-logo.mjs` traces
+Requires the .NET 10 SDK and Windows; the installer also needs [Inno Setup
+6](https://jrsoftware.org/isdl.php), found machine-wide, per-user or on the PATH. The version
+is stated once, in [Directory.Build.props](Directory.Build.props), and the installer reads it
+back off the built `.exe` rather than repeating it. The mark and the app icon are committed,
+and neither is part of the build: `build\trace-logo.mjs` traces
 [`build/logo-source.png`](build/logo-source.png) into `site/public/logo.svg` and the
-tray-sized `build/icon.svg`, and `build\icon.mjs` rasterises those two into the `.ico`
-— below 48 pixels from the simplified one. See [CONTRIBUTING.md](CONTRIBUTING.md) for how the
-roadmap, changelog and rationale under `docs/` are written — they are governed by a tool
-and a hand edit is refused.
+tray-sized `build/icon.svg`, and `build\icon.mjs` rasterises those two into the `.ico`, using
+the simplified one below 48 pixels. See [CONTRIBUTING.md](CONTRIBUTING.md) for how the
+roadmap, changelog and rationale under `docs/` are written: they are governed by a tool and a
+hand edit is refused.

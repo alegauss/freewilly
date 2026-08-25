@@ -52,7 +52,7 @@ function Sponsor() {
           {sponsor.name}
         </a>
         <p>
-          {sponsor.summary} Both Apache 2.0 and self-hostable — more at{" "}
+          {sponsor.summary} Both Apache 2.0 and self-hostable. More at{" "}
           <a href={sponsor.url} target="_blank" rel="noopener">
             {sponsor.siteLabel}
           </a>

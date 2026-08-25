@@ -48,7 +48,7 @@ export const pipeDiagram = `
   <text x="806" y="112" text-anchor="middle" fill="#e9f2f8" font-family="JetBrains Mono,monospace" font-size="13">dockerd</text>
   <text x="806" y="130" text-anchor="middle" fill="#9db3c1" font-family="JetBrains Mono,monospace" font-size="10.5">/var/run/docker.sock</text>
 
-  <text x="450" y="216" text-anchor="middle" fill="#7d95a5" font-family="Inter,sans-serif" font-size="11.5">No forwarded TCP port anywhere on this path — the Engine API is equivalent to root on the machine,</text>
+  <text x="450" y="216" text-anchor="middle" fill="#7d95a5" font-family="Inter,sans-serif" font-size="11.5">No forwarded TCP port anywhere on this path: the Engine API is equivalent to root on the machine,</text>
   <text x="450" y="232" text-anchor="middle" fill="#7d95a5" font-family="Inter,sans-serif" font-size="11.5">and a port every local process can reach cannot express “only me”.</text>
 </svg>`;
 
@@ -132,7 +132,7 @@ export const windowDiagram = `
   <text x="680" y="312" fill="#3c5666" font-family="Segoe UI Variable Text,Segoe UI,Inter,sans-serif" font-size="12.5">—</text>
 
   <line x1="24" y1="352" x2="876" y2="352" stroke="#1b2e3a"/>
-  <text x="36" y="382" fill="#7d95a5" font-family="Inter,sans-serif" font-size="11.5">A blue port is published and opens in your browser. Grey is exposed only — there is nowhere on this machine to send you,</text>
+  <text x="36" y="382" fill="#7d95a5" font-family="Inter,sans-serif" font-size="11.5">A blue port is published and opens in your browser. Grey is exposed only, and there is nowhere on this machine to send you,</text>
   <text x="36" y="398" fill="#7d95a5" font-family="Inter,sans-serif" font-size="11.5">so it is plain text and not a link that lands on nothing.</text>
 </svg>`;
 
