@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="DockerDesk — Docker on Windows, without Docker Desktop">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="FreeWilly — Docker on Windows, without Docker Desktop">
   <defs>
     <linearGradient id="dd-body" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#3AAEE8"/>
@@ -27,13 +27,15 @@
     <circle cx="118" cy="116" r="15" fill="#2EA043" stroke="#0E2029" stroke-width="6"/>
   </g>
 
-  <text x="238" y="180" font-family="DejaVu Sans, sans-serif" font-size="52" font-weight="bold" fill="#e9f2f8">DockerDesk</text>
+  <text x="238" y="180" font-family="DejaVu Sans, sans-serif" font-size="52" font-weight="bold" fill="#e9f2f8">FreeWilly</text>
   <text x="240" y="216" font-family="DejaVu Sans Mono, monospace" font-size="20" fill="#7d95a5">part of alegauss</text>
 
   <text x="90" y="360" font-family="DejaVu Sans, sans-serif" font-size="66" font-weight="bold" fill="#e9f2f8">Docker on Windows,</text>
   <text x="90" y="436" font-family="DejaVu Sans, sans-serif" font-size="66" font-weight="bold" fill="#67C3F2">without Docker Desktop.</text>
 
-  <text x="92" y="502" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#9db3c1">Upstream Moby in a WSL2 distro it owns · the docker_engine pipe · nothing resident.</text>
+  <!-- measured at 995px against the 1020px between the gutters; the previous
+       line ran 80px past x=1110 and out of the card -->
+  <text x="92" y="502" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#9db3c1">Upstream Moby in a WSL2 distro it owns, on the pipe your tools already use.</text>
 
   <!-- status badge -->
   <rect x="90" y="540" width="470" height="46" rx="23" fill="#11212c" stroke="#22404f"/>
