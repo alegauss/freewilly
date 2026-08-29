@@ -114,10 +114,12 @@ it.
   host's own journal (every time the engine was brought back, what `wsl.exe` said the last time
   it would not start, and the suspend it did not survive), what the machine under the engine is
   doing (WSL and kernel versions, the root device and whether it is still writable, what ext4
-  has recorded against it, the virtual disk against the space used inside it and left on the
-  Windows volume), and a check that reads the filesystem and offers to repair it only once it
-  has found something and shown you what. `freewilly read health` answers the same question in
-  one call, and `freewilly --fsck` runs the same check from a terminal. Every heading sorts and
+  has recorded against it, what the virtual disk says it is against what the Windows volume is
+  really charging for, and the space used inside it and left on the drive), a check that reads
+  the filesystem and offers to repair it only once it has found something and shown you what,
+  and a Compact button that drops the build cache, trims the filesystem and hands the freed
+  blocks back where Windows still allows that. `freewilly read health` answers the same question
+  in one call, and `freewilly --fsck` runs the same check from a terminal. Every heading sorts and
   every list has a filter box, over the rows already in hand rather than a second call to the
   daemon.
 - **Nothing resident**: no Windows service and no scheduled task. Autostart is a single

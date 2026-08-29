@@ -700,7 +700,7 @@ export const windowSection = {
       { b: "Engine is where an empty window explains itself." },
       " The host's own journal, followed while you watch it: every time the engine was brought back, what ",
       { code: "wsl.exe" },
-      " said the last time it would not start, and the suspend it did not survive. Beside it, what the machine under the engine is doing: the WSL and kernel versions, the root device and whether it is still writable, what ext4 has recorded against it, and the virtual disk's size against the space used inside it and left on the Windows volume. And a check that reads the filesystem, which offers to repair it only once it has found something and shown you what",
+      " said the last time it would not start, and the suspend it did not survive. Beside it, what the machine under the engine is doing: the WSL and kernel versions, the root device and whether it is still writable, what ext4 has recorded against it, and what the virtual disk says it is against what Windows is really charging for it, beside the space used inside and left on the drive: a disk that was handed back keeps its size on paper long after the volume stopped paying for it. And a check that reads the filesystem, which offers to repair it only once it has found something and shown you what, beside a Compact button that drops the build cache, trims the filesystem and hands the freed blocks back where Windows still allows it",
     ] as Rich,
   ],
 };
