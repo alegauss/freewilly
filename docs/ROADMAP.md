@@ -4,7 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD216** (deps: —) **every check fetches e2fsprogs over the network, so the first one is slow and an offline one refuses** — The rescue gets its tools without a network, so a check works on the machine that most needs it and the dialog can stop blaming the disk for the wait. → §DD216
 - 📋 **DD217** (deps: —) **the findings end with the version banner, because the two streams are concatenated rather than interleaved** — What a tool wrote to each stream is put back in the order it was written, so a repair's complaints sit beside the work they are about. → §DD217
 
 ## Block B — The daemon client (talk to the engine)

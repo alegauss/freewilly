@@ -30,6 +30,17 @@ public interface IFilesystemWork
     /// to refuse.
     /// </remarks>
     CompactionOutcome Compact(Action<RepairStep> report);
+
+    /// <summary>
+    /// Whether a check on this machine still owes a network call before it can start (DD216).
+    /// </summary>
+    /// <remarks>
+    /// Read by the confirmation, which used to say the wait depends on the size of the disk and was
+    /// precise about the wrong thing: warm, the whole sequence is 8.3 seconds and the disk really is
+    /// the cost; on a first run it is the fetch, and the person being given that number is the one
+    /// with no prior experience to correct it with.
+    /// </remarks>
+    bool ToolsAreReady { get; }
 }
 
 /// <summary>
@@ -88,11 +99,23 @@ public sealed record RepairPrompt(
     /// a sentence they have to translate first is one they agree to without having understood it.
     /// No duration is promised either. The one that was promised, minutes rather than seconds, was a
     /// guess, and the first measured run took seventeen.</para>
+    ///
+    /// <para><b>It stopped blaming the disk for a wait the fetch is causing (DD216).</b> Warm, the
+    /// whole sequence is 8.3 seconds and the disk really is the cost; on the first check of a machine
+    /// the rescue has to download its tools first, and that is the one run where the reader has no
+    /// prior experience to correct a wrong number with. So the sentence is chosen by whether this
+    /// machine has the tools, rather than being one claim that is true half the time.</para>
     /// </remarks>
-    public const string CheckConfirmation =
+    /// <param name="toolsAreReady">Whether a check here still owes a network call.</param>
+    /// <returns>The question, as the dialog asks it.</returns>
+    public static string CheckConfirmation(bool toolsAreReady) =>
         "Docker stops while this check runs.\n\n"
         + "Containers, builds and every docker command stop with it and stay unavailable until the "
-        + "check finishes. How long that takes depends on the size of the disk.\n\n"
+        + "check finishes. "
+        + (toolsAreReady
+            ? "How long that takes depends on the size of the disk.\n\n"
+            : "This is the first check on this machine, so it also downloads the tools it needs "
+              + "before it can start.\n\n")
         + "The check only looks at the disk. It changes nothing.\n\n"
         + "Docker starts again by itself at the end.\n\n"
         + "Stop Docker and check now?";
@@ -108,6 +131,23 @@ public sealed record RepairPrompt(
         "Docker is stopped, and starts again by itself when this finishes. How long it takes "
         + "depends on the size of the disk.",
         OfferRepair: false);
+
+    /// <summary>The same sentence, chosen for what this machine still owes (DD216).</summary>
+    /// <param name="toolsAreReady">Whether a check here still needs a network.</param>
+    /// <returns>The prompt.</returns>
+    /// <remarks>
+    /// The headline is deliberately the same either way. It is what the page is identified by while
+    /// it works — the driving verb waits on it, and a sentence that changed with the machine would
+    /// make that wait a guess.
+    /// </remarks>
+    public static RepairPrompt WorkingOn(bool toolsAreReady) => toolsAreReady
+        ? Working
+        : Working with
+        {
+            Detail = "Docker is stopped, and starts again by itself when this finishes. This is "
+                + "the first check on this machine, so the tools it needs are being downloaded "
+                + "before it can start.",
+        };
 
     /// <summary>
     /// The plan a compaction is asked in, before anything runs (DD211).

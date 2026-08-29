@@ -2,29 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD216 The rescue carries its tools rather than fetching them
-
-The rescue is imported fresh for every check and then fetches e2fsprogs with apk, so
-every check needs a working network, and a first check also downloads the Alpine rootfs
-before that.
-
-Warm, the whole sequence is 8.3 seconds, measured here on 29 August 2026 across four
-runs. Cold it is not, and the report that started DD210 described Docker being
-unavailable for around forty.
-
-So the dialog DD210 wrote is precise about the wrong thing. It says how long the check
-takes depends on the size of the disk. On a warm machine the disk is indeed the cost; on
-a first run, or on a slow link, the fetch is, and somebody told to expect a disk-sized
-wait is given the wrong number on the one run where they have no prior experience to
-correct it with.
-
-The worse case is offline. The moment e2fsck is wanted is the moment something is
-already wrong, and a machine whose network is part of what is wrong gets a check that
-refuses at the fetch step. DD199 named that cost and accepted it deliberately, in
-exchange for a rescue that leaves nothing behind. The trade is worth revisiting now that
-the rescue is imported and unregistered cleanly: a cached package, or an image kept
-beside the pinned rootfs, would make the check work when it is most needed.
-
 ### §DD217 Two streams are interleaved and not appended
 
 The findings somebody reads before approving a repair end with the tool's version

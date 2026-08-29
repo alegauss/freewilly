@@ -246,7 +246,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     private async void CheckTheFilesystem(object sender, RoutedEventArgs e)
     {
         var answer = System.Windows.MessageBox.Show(
-            RepairPrompt.CheckConfirmation,
+            RepairPrompt.CheckConfirmation(_work.ToolsAreReady),
             "Check the filesystem",
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Question,
@@ -383,7 +383,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     {
         Busy(true);
         _interlude.Expected();
-        Show(RepairPrompt.Working, steps: null);
+        Show(RepairPrompt.WorkingOn(_work.ToolsAreReady), steps: null);
 
         var steps = new System.Collections.Concurrent.ConcurrentQueue<RepairStep>();
         RepairOutcome outcome;

@@ -156,6 +156,7 @@ public sealed class FilesystemRepair
     private readonly IWsl _wsl;
     private readonly EnginePaths _paths;
     private readonly Func<string, IDisposable> _hold;
+    private readonly RescueImage _image;
 
     /// <summary>Construct a repair.</summary>
     /// <param name="wsl">The WSL command.</param>
@@ -173,7 +174,11 @@ public sealed class FilesystemRepair
         _wsl = wsl;
         _paths = paths;
         _hold = hold;
+        _image = new RescueImage(wsl, paths);
     }
+
+    /// <summary>Whether a check on this machine still owes a network call (DD216).</summary>
+    public bool ToolsAreReady => _image.IsPrepared;
 
     /// <summary>Where the rescue distribution is imported to.</summary>
     public string RescueRoot => Path.Combine(_paths.Root, "rescue");
@@ -229,10 +234,15 @@ public sealed class FilesystemRepair
 
         Record(steps, report, new RepairStep("note the disk", true, $"root filesystem is {uuid}"));
 
-        if (!Record(steps, report, ImportRescue(rootfsPath)))
+        var brought = _image.Import(RescueName, RescueRoot, rootfsPath);
+        if (!Record(steps, report, brought.Step))
         {
             return new RepairOutcome(steps);
         }
+
+        // Whether this run got as far as having the tools, which is the only state worth exporting
+        // at the other end (DD216).
+        var prepared = false;
 
         try
         {
@@ -241,10 +251,12 @@ public sealed class FilesystemRepair
             // has a running process in it.
             using var holding = _hold(RescueName);
 
-            if (!Record(steps, report, InstallTools()))
+            if (!Record(steps, report, _image.Tools(RescueName)))
             {
                 return new RepairOutcome(steps);
             }
+
+            prepared = true;
 
             if (!Record(steps, report, TakeTheEngineDown()))
             {
@@ -273,7 +285,11 @@ public sealed class FilesystemRepair
         {
             // Always, including after a failure. A rescue distribution left registered is this tool
             // having put something in somebody's `wsl --list` that it told them it would not.
-            Record(steps, report, RemoveRescue());
+            //
+            // It also keeps the prepared filesystem on the way past, where this run got as far as
+            // having one (DD216): the next check then needs no network, which is the state the
+            // machine that most needs a check is in.
+            Record(steps, report, _image.PutAway(RescueName, keep: prepared));
         }
     }
 
@@ -300,40 +316,6 @@ public sealed class FilesystemRepair
             "/bin/sh", "-c", $"d=$({Minirootfs.RootDevice}); {Minirootfs.BlockDevices} $d");
 
         return asked.Succeeded ? Minirootfs.UuidIn(asked.Output) : null;
-    }
-
-    private RepairStep ImportRescue(string rootfsPath)
-    {
-        Directory.CreateDirectory(RescueRoot);
-        var imported = _wsl.Run(
-            WslBudget.Work, "--import", RescueName, RescueRoot, rootfsPath, "--version", "2");
-
-        return imported.Succeeded
-            ? new RepairStep("bring up the rescue", true, $"{RescueName} imported into {RescueRoot}")
-            : new RepairStep(
-                "bring up the rescue", false, $"importing {RescueName} failed: {Said(imported)}");
-    }
-
-    /// <summary>Put <c>e2fsck</c> into the rescue distribution.</summary>
-    /// <returns>Whether it is there.</returns>
-    /// <remarks>
-    /// A network call at the moment things are already wrong, which is the cost of the rescue being
-    /// temporary rather than provisioned up front. The check is <c>command -v</c> and not apk's own
-    /// exit code, for the reason DD196 gives: a mirror can succeed and install nothing useful, and
-    /// this is the one binary the whole operation is for.
-    /// </remarks>
-    private RepairStep InstallTools()
-    {
-        var added = _wsl.Run(
-            WslBudget.Work, "-d", RescueName, "-u", "root", "--exec", "/bin/sh", "-c",
-            "apk add --no-cache --no-progress e2fsprogs e2fsprogs-extra && command -v e2fsck");
-
-        return added.Succeeded
-            ? new RepairStep("fetch e2fsck", true, $"e2fsprogs is in {RescueName}")
-            : new RepairStep(
-                "fetch e2fsck",
-                false,
-                $"{RescueName} could not fetch e2fsprogs, which needs a network: {Said(added)}");
     }
 
     private RepairStep TakeTheEngineDown()
@@ -386,35 +368,6 @@ public sealed class FilesystemRepair
             WslBudget.Work, "-d", RescueName, "-u", "root", "--exec",
             "/bin/sh", "-c", $"e2fsck -f{(write ? 'y' : 'n')} '{device}'"),
         write);
-
-    /// <summary>Terminate the rescue, then unregister it (DD209).</summary>
-    /// <returns>Whether it is gone.</returns>
-    /// <remarks>
-    /// <b>The terminate is not tidiness, and skipping it wedged a real machine.</b> The hold is
-    /// disposed before this runs, which is what the ordering was for, but disposing it kills the
-    /// Windows-side <c>wsl.exe</c> client and not the <c>sleep</c> in the distribution behind it, so
-    /// WSL still counts the rescue as running. Unregistering a running distribution is not refused:
-    /// it is accepted, the distribution goes to state 4 and the service blocks on something that has
-    /// not stopped. Everything WSL queues behind that, this machine's other distributions included,
-    /// and the engine's own start then exits 1 with nothing on either stream. Measured on 29 August
-    /// 2026, where the only way back was an elevated restart of the WSL service.
-    ///
-    /// <para>A terminate stops what is inside and returns, and unregistering a stopped distribution
-    /// is the case WSL handles. Its own result is not reported: it succeeds on a distribution that
-    /// is already stopped, and the question worth answering here is whether the rescue is gone.</para>
-    /// </remarks>
-    private RepairStep RemoveRescue()
-    {
-        _wsl.Run(WslBudget.Work, "--terminate", RescueName);
-        var gone = _wsl.Run(WslBudget.Work, "--unregister", RescueName);
-        return gone.Succeeded
-            ? new RepairStep("put the rescue away", true, $"{RescueName} unregistered")
-            : new RepairStep(
-                "put the rescue away",
-                false,
-                $"{RescueName} is still registered and can be removed with "
-                + $"`wsl --unregister {RescueName}`: {Said(gone)}");
-    }
 
     /// <summary>What a failed call said, on one line.</summary>
     /// <param name="result">The call.</param>

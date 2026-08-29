@@ -148,17 +148,52 @@ public sealed class RepairPromptTests
         // distribution's root would be unmounted: true, and a sentence somebody has to translate
         // before they can weigh it. What they are agreeing to is Docker going away, so the dialog
         // says that, says what stops with it, and says it comes back.
-        var asked = RepairPrompt.CheckConfirmation;
-
-        Assert.Contains("Docker stops", asked, StringComparison.Ordinal);
-        Assert.Contains("unavailable", asked, StringComparison.Ordinal);
-        Assert.Contains("starts again by itself", asked, StringComparison.Ordinal);
-
-        // And none of the machinery a reader has no reason to know about.
-        foreach (var jargon in new[] { "unmount", "root", "distribution", "e2fsck" })
+        foreach (var ready in new[] { true, false })
         {
-            Assert.DoesNotContain(jargon, asked, StringComparison.OrdinalIgnoreCase);
+            var asked = RepairPrompt.CheckConfirmation(ready);
+
+            Assert.Contains("Docker stops", asked, StringComparison.Ordinal);
+            Assert.Contains("unavailable", asked, StringComparison.Ordinal);
+            Assert.Contains("starts again by itself", asked, StringComparison.Ordinal);
+
+            // And none of the machinery a reader has no reason to know about.
+            foreach (var jargon in new[] { "unmount", "root", "distribution", "e2fsck" })
+            {
+                Assert.DoesNotContain(jargon, asked, StringComparison.OrdinalIgnoreCase);
+            }
         }
+    }
+
+    [Fact]
+    public void The_dialog_stops_blaming_the_disk_for_a_wait_the_fetch_is_causing()
+    {
+        // DD216. Warm, the whole sequence is 8.3 seconds and the disk really is the cost. On the
+        // first check of a machine the rescue downloads its tools first, and that is the one run
+        // where the reader has no prior experience to correct a wrong number with — so the sentence
+        // follows the machine rather than being one claim that is true half the time.
+        var warm = RepairPrompt.CheckConfirmation(toolsAreReady: true);
+        var cold = RepairPrompt.CheckConfirmation(toolsAreReady: false);
+
+        Assert.Contains("depends on the size of the disk", warm, StringComparison.Ordinal);
+        Assert.DoesNotContain("depends on the size of the disk", cold, StringComparison.Ordinal);
+        Assert.Contains("downloads the tools", cold, StringComparison.Ordinal);
+
+        // The panel says the same thing for the whole wait, which is the sentence somebody actually
+        // sits and reads. A dialog that was honest and a panel that was not would be worse than
+        // neither, because the panel is the one still on screen when the wait gets long.
+        Assert.Contains(
+            "depends on the size of the disk",
+            RepairPrompt.WorkingOn(toolsAreReady: true).Detail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "being downloaded",
+            RepairPrompt.WorkingOn(toolsAreReady: false).Detail,
+            StringComparison.Ordinal);
+
+        // And the headline does not move with it. The driving verb waits on that sentence (DD214),
+        // so one that changed with the machine would make the wait a guess.
+        Assert.Equal(
+            RepairPrompt.WorkingOn(true).Headline, RepairPrompt.WorkingOn(false).Headline);
     }
 
     [Fact]

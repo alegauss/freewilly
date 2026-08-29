@@ -109,6 +109,7 @@ public sealed class RepairDrill
 
     private readonly IWsl _wsl;
     private readonly EnginePaths _paths;
+    private readonly RescueImage _image;
 
     /// <summary>Construct a drill.</summary>
     /// <param name="wsl">The WSL command.</param>
@@ -119,6 +120,7 @@ public sealed class RepairDrill
         ArgumentNullException.ThrowIfNull(paths);
         _wsl = wsl;
         _paths = paths;
+        _image = new RescueImage(wsl, paths);
     }
 
     /// <summary>Where the drill's distribution is imported to.</summary>
@@ -133,15 +135,26 @@ public sealed class RepairDrill
         ArgumentException.ThrowIfNullOrWhiteSpace(rootfsPath);
 
         var steps = new List<RepairStep>();
-        if (!Record(steps, report, Import(rootfsPath)))
+
+        // The same image the check uses since DD216, so a drill on a prepared machine needs no
+        // network either — and a drill run first is what prepares one.
+        if (!Record(steps, report, _image.Import(DrillName, DrillRoot, rootfsPath, "drill").Step))
         {
             return new DrillOutcome(steps);
         }
 
+        var prepared = false;
+
         try
         {
-            if (!Record(steps, report, InstallTools())
-                || !Record(steps, report, MakeTheImage())
+            if (!Record(steps, report, _image.Tools(DrillName)))
+            {
+                return new DrillOutcome(steps);
+            }
+
+            prepared = true;
+
+            if (!Record(steps, report, MakeTheImage())
                 || !Record(steps, report, Dirty()))
             {
                 return new DrillOutcome(steps);
@@ -171,7 +184,10 @@ public sealed class RepairDrill
             // Always, including after a failure, and terminated before it is unregistered — DD209
             // is what skipping that cost: WSL accepts an unregister of a running distribution, puts
             // it in state 4, and blocks the service on something that never stops.
-            Record(steps, report, Remove());
+            //
+            // It keeps the prepared filesystem on the way past where this run built one (DD216), so
+            // a machine that has only ever run the drill still has a check that needs no network.
+            Record(steps, report, _image.PutAway(DrillName, keep: prepared, what: "drill"));
         }
     }
 
@@ -181,39 +197,6 @@ public sealed class RepairDrill
         steps.Add(step);
         report?.Invoke(step);
         return step.Ok;
-    }
-
-    private RepairStep Import(string rootfsPath)
-    {
-        Directory.CreateDirectory(DrillRoot);
-        var imported = _wsl.Run(
-            WslBudget.Work, "--import", DrillName, DrillRoot, rootfsPath, "--version", "2");
-
-        return imported.Succeeded
-            ? new RepairStep("bring up the drill", true, $"{DrillName} imported into {DrillRoot}")
-            : new RepairStep(
-                "bring up the drill", false, $"importing {DrillName} failed: {Said(imported)}");
-    }
-
-    /// <summary>Put the tools in, and check they are really there.</summary>
-    /// <remarks>
-    /// <c>command -v</c> and not apk's exit code, for the reason DD196 gives: a mirror can succeed
-    /// and install nothing useful. Both packages, because the drill needs <c>debugfs</c> and
-    /// <c>dumpe2fs</c> from the extra one as well as <c>mke2fs</c> and <c>e2fsck</c> from the first.
-    /// </remarks>
-    private RepairStep InstallTools()
-    {
-        var added = _wsl.Run(
-            WslBudget.Work, "-d", DrillName, "-u", "root", "--exec", "/bin/sh", "-c",
-            "apk add --no-cache --no-progress e2fsprogs e2fsprogs-extra "
-            + "&& command -v e2fsck && command -v debugfs");
-
-        return added.Succeeded
-            ? new RepairStep("fetch e2fsprogs", true, $"e2fsck and debugfs are in {DrillName}")
-            : new RepairStep(
-                "fetch e2fsprogs",
-                false,
-                $"{DrillName} could not fetch e2fsprogs, which needs a network: {Said(added)}");
     }
 
     private RepairStep MakeTheImage()
@@ -255,19 +238,6 @@ public sealed class RepairDrill
             WslBudget.Work, "-d", DrillName, "-u", "root", "--exec",
             "/bin/sh", "-c", $"e2fsck -f{(write ? 'y' : 'n')} {ImagePath}"),
         write);
-
-    private RepairStep Remove()
-    {
-        _wsl.Run(WslBudget.Work, "--terminate", DrillName);
-        var gone = _wsl.Run(WslBudget.Work, "--unregister", DrillName);
-        return gone.Succeeded
-            ? new RepairStep("put the drill away", true, $"{DrillName} unregistered")
-            : new RepairStep(
-                "put the drill away",
-                false,
-                $"{DrillName} is still registered and can be removed with "
-                + $"`wsl --unregister {DrillName}`: {Said(gone)}");
-    }
 
     private static string Said(WslResult result) =>
         result.Failure ?? result.Output.Trim().ReplaceLineEndings(" ");

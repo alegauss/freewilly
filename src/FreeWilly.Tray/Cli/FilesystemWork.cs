@@ -31,6 +31,13 @@ internal sealed class FilesystemWork : IFilesystemWork
     internal static IFilesystemWork OnThisMachine() => new FilesystemWork();
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A file test through <see cref="RescueImage"/>, so the dialog can be drawn without a
+    /// <c>wsl.exe</c> child on the way to a paragraph (DD216).
+    /// </remarks>
+    public bool ToolsAreReady => new RescueImage(new Wsl(), new EnginePaths()).IsPrepared;
+
+    /// <inheritdoc/>
     public RepairOutcome Check(Action<RepairStep> report) => Run(report, write: false);
 
     /// <inheritdoc/>

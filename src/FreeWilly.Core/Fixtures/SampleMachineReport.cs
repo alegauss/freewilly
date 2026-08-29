@@ -87,6 +87,13 @@ public sealed class SampleFilesystemWork : IFilesystemWork
     /// <inheritdoc/>
     public CompactionOutcome Compact(Action<RepairStep> report) => new(Refuse().Steps);
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// False, so a capture draws the sentence a machine that has never run a check gets. It is the
+    /// harder of the two to notice being wrong, and a picture is where somebody would notice it.
+    /// </remarks>
+    public bool ToolsAreReady => false;
+
     private static RepairOutcome Refuse() => new(
     [
         new RepairStep(
