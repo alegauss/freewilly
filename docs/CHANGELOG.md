@@ -54,6 +54,7 @@
 - ✅ **DD189** **the daemon is killed rather than asked to stop, so no container gets a SIGTERM at a quit or a shutdown** — Every teardown now sends dockerd a SIGTERM and waits, on a budget the caller chooses, so containers stop themselves before the kill.
 - ✅ **DD190** **a distribution whose root went read-only fails with getpwnam and a pointer to a log inside it** — getpwnam failing with 5 now reads back as an unreadable root, and the e2fsck commands are printed where a log inside it used to be named.
 - ✅ **DD191** **nothing asks whether the distribution filesystem is clean, so a dirty one is found by the start that fails** — The host now reads the distribution's mount for filesystem errors at start and writes to its root on a long interval, saying so without refusing.
+- ✅ **DD192** **stdout and stderr share one buffer, so a journal line decodes half of what wsl.exe said as noise** — The launcher's two streams are buffered and decoded apart, so the half naming the condition survives instead of being traded for the other.
 
 ## Block B — The daemon client (talk to the engine)
 

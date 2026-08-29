@@ -698,13 +698,17 @@ public sealed class EngineLifecycle : IAsyncDisposable
 public sealed class WslDaemonProcess : IDaemonProcess
 {
     /// <summary>
-    /// How much of what the launcher wrote is kept.
+    /// How much of what the launcher wrote is kept, per stream.
     /// </summary>
     /// <remarks>
     /// A few lines is the whole of what this ever carries — <c>wsl.exe</c>'s own refusals are one
     /// sentence — and the cap is here for the case that is not that: a launcher looping on an error
     /// against a process nobody is reading. Everything past it is read and dropped rather than left
     /// in the pipe, because a full pipe is a child blocked on a write.
+    ///
+    /// <para>Per stream since DD192, which is the same bound doubled. The two are kept apart because
+    /// they are not written in the same encoding, and a shared budget would also mean a noisy stderr
+    /// deciding how much of stdout survives.</para>
     /// </remarks>
     public const int KeptBytes = 4 * 1024;
 
@@ -718,7 +722,16 @@ public sealed class WslDaemonProcess : IDaemonProcess
     private static readonly TimeSpan LastWordsWait = TimeSpan.FromMilliseconds(500);
 
     private readonly string _distribution;
-    private readonly List<byte> _said = [];
+
+    // Two buffers and not one, and that is the whole of DD192. They held a single list, and
+    // Sentence handed the mixture to a decoder that picks one encoding for the whole of what it is
+    // given. The streams do not agree: on 29 August 2026 wsl.exe wrote its relay error to stderr as
+    // plain bytes and its own refusal to stdout as UTF-16LE, the zero-counting heuristic resolved
+    // the pair to UTF-8, and the journal kept "getpwnam(root) failed 5 U s u ? r i o". Everything
+    // after the 5 was the UTF-16 half read as UTF-8, and what it destroyed was the useful half:
+    // wsl.exe had named the condition as Wsl/WSL_E_USER_NOT_FOUND and that never reached the file.
+    private readonly List<byte> _out = [];
+    private readonly List<byte> _err = [];
     private readonly object _pen = new();
     private Process? _process;
     private Task[] _draining = [];
@@ -768,13 +781,15 @@ public sealed class WslDaemonProcess : IDaemonProcess
                 // A drain that faulted read less than all of it. Say what did arrive.
             }
 
-            byte[] said;
+            byte[] wroteOut;
+            byte[] wroteErr;
             lock (_pen)
             {
-                said = [.. _said];
+                wroteOut = [.. _out];
+                wroteErr = [.. _err];
             }
 
-            return Sentence(exited.ExitCode, said);
+            return Sentence(exited.ExitCode, wroteOut, wroteErr);
         }
     }
 
@@ -782,7 +797,8 @@ public sealed class WslDaemonProcess : IDaemonProcess
     /// What a launcher that exited is quoted as saying (DD162).
     /// </summary>
     /// <param name="exitCode">What it exited with.</param>
-    /// <param name="said">The raw bytes of everything it wrote, in the encoding it chose.</param>
+    /// <param name="wroteOut">The raw bytes of standard output, in the encoding it chose for it.</param>
+    /// <param name="wroteErr">The raw bytes of standard error, in the encoding it chose for that.</param>
     /// <returns>The one line a status detail carries.</returns>
     /// <remarks>
     /// Separate from the property, and internal, because the property cannot be reached without a
@@ -790,29 +806,44 @@ public sealed class WslDaemonProcess : IDaemonProcess
     /// flattening, and the sentence for a launcher that said nothing. The bytes the suite hands
     /// this were captured from a real failed launch.
     ///
+    /// <para><b>Two arguments since DD192, because the streams choose their encodings
+    /// independently.</b> Decoding a concatenation of the two is decoding a buffer that has no
+    /// single encoding, and the answer is not half right: the heuristic picks one, and the half it
+    /// picked against comes out as noise. Each is decoded on its own and the results are joined as
+    /// text, which is the same thing <c>ConsoleTool.Run</c> has always done.</para>
+    ///
     /// <para>The exit code is in the sentence even where there is no text, and that is not padding.
     /// It is the one thing that distinguishes a launcher that died from a daemon that did — which
     /// is the distinction the reader was previously left to guess at.</para>
     /// </remarks>
-    internal static string Sentence(int exitCode, byte[] said)
+    internal static string Sentence(int exitCode, byte[] wroteOut, byte[] wroteErr)
     {
-        // Decoded by what is in the bytes rather than by what wsl.exe documents. Measured: a
-        // missing distribution answers on stdout, in UTF-16LE with no BOM, and reading that as
-        // UTF-8 gives a NUL after every character — a message no reader can use.
-        var text = Preflight.Windows.ConsoleTool.Decode(said).Trim();
-
-        // Flattened, because the journal is read as a column of stamped lines and wsl.exe puts its
-        // error code on a second line. A detail carrying its own newline breaks the shape of every
-        // line after it.
-        var line = string.Join(
-            " ",
-            text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries
-                | StringSplitOptions.TrimEntries));
+        // Standard output first, because it is where wsl.exe puts its own refusal: on 29 August 2026
+        // stderr carried a relay error and stdout carried the sentence naming the condition, and a
+        // detail read at a glance should lead with the half that says what happened.
+        var line = string.Join(" ", Flatten(wroteOut).Concat(Flatten(wroteErr)));
 
         return line.Length == 0
             ? $"wsl.exe exited {exitCode} without a word"
             : $"wsl.exe exited {exitCode}: {line}";
     }
+
+    /// <summary>Decode one stream and reduce it to words a single journal line can hold.</summary>
+    /// <param name="bytes">That stream's raw bytes.</param>
+    /// <returns>Its non-empty lines, trimmed.</returns>
+    /// <remarks>
+    /// Decoded by what is in the bytes rather than by what <c>wsl.exe</c> documents. Measured: a
+    /// missing distribution answers on stdout, in UTF-16LE with no BOM, and reading that as UTF-8
+    /// gives a NUL after every character — a message no reader can use.
+    ///
+    /// <para>Flattened, because the journal is read as a column of stamped lines and <c>wsl.exe</c>
+    /// puts its error code on a second line. A detail carrying its own newline breaks the shape of
+    /// every line after it.</para>
+    /// </remarks>
+    private static IEnumerable<string> Flatten(byte[] bytes) =>
+        Preflight.Windows.ConsoleTool.Decode(bytes)
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries
+                | StringSplitOptions.TrimEntries);
 
     /// <inheritdoc/>
     public void Launch()
@@ -841,7 +872,8 @@ public sealed class WslDaemonProcess : IDaemonProcess
 
         lock (_pen)
         {
-            _said.Clear();
+            _out.Clear();
+            _err.Clear();
         }
 
         _asked = false;
@@ -853,13 +885,14 @@ public sealed class WslDaemonProcess : IDaemonProcess
         // a sentence or nothing.
         _draining =
         [
-            DrainAsync(_process.StandardOutput.BaseStream),
-            DrainAsync(_process.StandardError.BaseStream),
+            DrainAsync(_process.StandardOutput.BaseStream, _out),
+            DrainAsync(_process.StandardError.BaseStream, _err),
         ];
     }
 
     /// <summary>Read one of the launcher's streams to its end, keeping the first of it.</summary>
     /// <param name="from">The stream.</param>
+    /// <param name="into">That stream's own buffer, which is not the other one's (DD192).</param>
     /// <returns>The task that completes when the stream does.</returns>
     /// <remarks>
     /// Bytes and not lines, for the reason <see cref="Preflight.Windows.ConsoleTool"/> reads bytes:
@@ -871,7 +904,7 @@ public sealed class WslDaemonProcess : IDaemonProcess
     /// is draining, and the child blocks on the write that fills it — which for this child means an
     /// engine that will not come up because its log was too long.</para>
     /// </remarks>
-    private async Task DrainAsync(Stream from)
+    private async Task DrainAsync(Stream from, List<byte> into)
     {
         var buffer = new byte[1024];
         try
@@ -881,10 +914,10 @@ public sealed class WslDaemonProcess : IDaemonProcess
             {
                 lock (_pen)
                 {
-                    var room = KeptBytes - _said.Count;
+                    var room = KeptBytes - into.Count;
                     if (room > 0)
                     {
-                        _said.AddRange(buffer.AsSpan(0, Math.Min(read, room)));
+                        into.AddRange(buffer.AsSpan(0, Math.Min(read, room)));
                     }
                 }
             }

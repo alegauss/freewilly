@@ -2,25 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD192 DD192: two encodings, one buffer
-
-WslDaemonProcess drains stdout and stderr into one List of bytes, and Sentence hands the
-combined result to ConsoleTool.Decode, which picks a single encoding for the whole
-buffer. The two streams do not agree. On 29 August wsl.exe wrote its relay error to
-stderr as plain bytes and its own refusal to stdout as UTF-16LE, and the heuristic that
-counts zeroes in odd positions resolved the mixture to UTF-8.
-
-The journal kept "getpwnam(root) failed 5 U s u ? r i o", and everything after the 5 is
-the UTF-16 half read as UTF-8. What it destroyed was the useful half: wsl.exe had named
-the condition as Wsl/WSL_E_USER_NOT_FOUND, and that never reached the file. The line
-DD162 added to make a failed launch legible was the line that hid the answer.
-
-The fix is two buffers rather than one, decoded separately and joined afterwards. Decode
-is already written to be called per stream, and the suite already feeds it bytes
-captured from a real failed launch, so the change is in the draining and in what
-Sentence receives. Worth reading at the same time: ProcessOutput reads the same pair of
-streams and may carry the same defect.
-
 ### §DD196 The tool that has to arrive before the failure
 
 Provisioning installs the engine into the distribution and stops there. `command -v

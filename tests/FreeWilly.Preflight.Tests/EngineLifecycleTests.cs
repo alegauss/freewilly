@@ -679,13 +679,59 @@ public sealed class EngineLifecycleTests
             "Não há distribuição com o nome fornecido.\r\n"
             + "Código de erro: Wsl/Service/WSL_E_DISTRO_NOT_FOUND\r\n");
 
-        var said = WslDaemonProcess.Sentence(-1, wire);
+        var said = WslDaemonProcess.Sentence(-1, wire, []);
 
         Assert.Equal(
             "wsl.exe exited -1: Não há distribuição com o nome fornecido. "
             + "Código de erro: Wsl/Service/WSL_E_DISTRO_NOT_FOUND",
             said);
         Assert.DoesNotContain('\n', said);
+    }
+
+    /// <summary>
+    /// The two streams do not agree on an encoding, and one buffer cannot hold both (DD192).
+    /// </summary>
+    /// <remarks>
+    /// The 29 August 2026 launch, reconstructed from what the journal kept. <c>wsl.exe</c> wrote its
+    /// relay error to standard error as plain bytes and its own refusal to standard output as
+    /// UTF-16LE. Concatenated, the zero-counting heuristic in
+    /// <see cref="ConsoleTool.Decode"/> resolved the pair to UTF-8, and the file ended up holding
+    /// "getpwnam(root) failed 5 U s u ? r i o" — the UTF-16 half read as UTF-8. The half it
+    /// destroyed was the one naming the condition.
+    /// </remarks>
+    [Fact]
+    public void Each_stream_is_decoded_in_the_encoding_it_was_written_in()
+    {
+        var wroteErr = Encoding.UTF8.GetBytes("getpwnam(root) failed 5\n");
+        var wroteOut = Encoding.Unicode.GetBytes(
+            "Usuário não encontrado.\r\nCódigo de erro: Wsl/Service/WSL_E_USER_NOT_FOUND\r\n");
+
+        var said = WslDaemonProcess.Sentence(-1, wroteOut, wroteErr);
+
+        // The half that says what the condition was, which never reached the journal before.
+        Assert.Contains("WSL_E_USER_NOT_FOUND", said, StringComparison.Ordinal);
+        Assert.Contains("Usuário não encontrado.", said, StringComparison.Ordinal);
+
+        // And the half that was surviving, still intact rather than traded for the other one.
+        Assert.Contains("getpwnam(root) failed 5", said, StringComparison.Ordinal);
+
+        // The mojibake the single buffer produced: UTF-16LE ASCII read as UTF-8 puts a NUL after
+        // every character, which is what the journal was rendering as spaced-out letters.
+        Assert.DoesNotContain('\0', said);
+        Assert.DoesNotContain('\n', said);
+    }
+
+    [Fact]
+    public void A_noisy_stream_does_not_decide_how_much_of_the_other_one_survives()
+    {
+        // The cap is per stream since DD192. Shared, a launcher looping on stderr would push the
+        // sentence naming the failure out of the buffer before anybody read it.
+        var flood = Encoding.UTF8.GetBytes(new string('x', WslDaemonProcess.KeptBytes * 2));
+        var wroteOut = Encoding.Unicode.GetBytes("Código de erro: Wsl/Service/WSL_E_USER_NOT_FOUND");
+
+        var said = WslDaemonProcess.Sentence(-1, wroteOut, flood);
+
+        Assert.Contains("WSL_E_USER_NOT_FOUND", said, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -699,7 +745,7 @@ public sealed class EngineLifecycleTests
     [Fact]
     public void A_silent_launcher_is_still_reported_by_its_exit_code()
     {
-        var said = WslDaemonProcess.Sentence(1, []);
+        var said = WslDaemonProcess.Sentence(1, [], []);
 
         Assert.Equal("wsl.exe exited 1 without a word", said);
     }
