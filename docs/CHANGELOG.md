@@ -70,6 +70,7 @@
 - ✅ **DD213** **a check run from the terminal is announced as an outage, because only the window tells the tray** — A stop a verb asks for reaches the tray through a signal of its own, so no balloon calls it an outage, and the verb leaves the engine where the caller asked and names the command that starts it.
 - ✅ **DD215** **the repair has never run against a dirty filesystem, so the one path that writes is unexercised** — A --fsck-drill verb makes a scratch ext4 image, breaks it on purpose and walks the write path: the check found errors, the panel offered Repair, e2fsck mended it and the disk came back clean.
 - ✅ **DD216** **every check fetches e2fsprogs over the network, so the first one is slow and an offline one refuses** — The rescue keeps a prepared image beside the install, so only the first check fetches e2fsprogs and every later one works offline; the dialog names that fetch instead of blaming the disk.
+- ✅ **DD217** **the findings end with the version banner, because the two streams are concatenated rather than interleaved** — Both streams are read as arrival-ordered pieces and decoded through one stateful decoder each, so e2fsck's banner sits where it was written instead of under the summary line.
 
 ## Block B — The daemon client (talk to the engine)
 
