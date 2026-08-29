@@ -25,30 +25,6 @@ image and volume the user has. The user sees what the check found before being a
 approve anything. And the engine is down for the duration, so the control belongs where
 that state is already on screen.
 
-### §DD201 The sequence nobody has run
-
-DD199's mechanism was measured on a real machine and its code was written afterwards.
-Those are two different things, and only the first had met a real `wsl.exe`. Measuring
-DD200 against the live distribution ran the second, and it fails in two places.
-
-`findmnt` is not there. `FilesystemRepair.RootUuid` asks it for the root's UUID, and
-BusyBox is not util-linux, so the command exits 127 on every machine. The verb refuses
-before it imports anything, which is the one mercy: the engine is not taken down for it.
-
-`blkid -U` is accepted and answers nothing. BusyBox takes the flag, exits zero and
-prints no device, so `DeviceFor` reads an empty string and reports the disk as having
-gone away with the terminate. That is the failure the whole mechanism exists to notice,
-arriving from a flag rather than from a disk.
-
-Both have DD200's shape. `/proc/mounts` names the root device with no package at all,
-and `blkid <device>` prints the UUID where `blkid -U` will not. What is left open is the
-rescue side, where the same `blkid` has to go from a UUID to whichever device the
-terminate left attached.
-
-And the run itself is still owed. An import, an `apk add`, a terminate, a resolve, an
-`e2fsck` and an unregister have never happened in sequence. That cannot be an ordinary
-test, so it wants a scripted check run deliberately, the way `--capture-window` is.
-
 ### §DD202 The suite that cannot pass where the product is installed
 
 `SingleTrayTests` and `SingleEngineTests` claim the session-local mutexes that hold the
@@ -69,6 +45,32 @@ asserted nothing is worse than a red one that said so.
 
 CI is unaffected either way, since no FreeWilly runs there, which is also why this has
 survived: the only person it costs is whoever is working on the product.
+
+### §DD203 The run that needs a machine
+
+DD199 was measured and DD201 was measured, and neither was run. The mechanism holds and
+each command now answers on a real distribution, but an import, an `apk add`, a
+terminate, a resolve, an `e2fsck` and an unregister have never happened one after
+another from this code.
+
+The two defects DD201 found are the argument. Both were invisible to thirteen tests and
+to a careful reading, and both took one command against a live distribution to expose.
+What is left untried is everything the fake cannot answer for: whether the rescue
+imports from the pinned rootfs without a name collision, whether `apk` reaches a mirror
+from a distribution that has never resolved a name, whether the hold survives the
+terminate in practice as it did in the measurement, and whether the unregister leaves
+the directory behind.
+
+Two of those leave state on somebody's machine if they half-happen, which is why this is
+not something to find out during an incident. The import and the unregister are the
+pair: a rescue left registered is this tool having put something in a `wsl --list` after
+saying it would not.
+
+It cannot be an ordinary test, because a build machine has no distribution and the
+sequence is minutes long. What it can be is a script run deliberately, the way
+`--capture-window` is, that takes the engine down, runs `--fsck`, restores it, and
+prints what each step did — with the output kept beside DD199's measurement so the next
+reader inherits both.
 
 ## Block B — The daemon client (talk to the engine)
 

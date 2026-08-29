@@ -198,14 +198,19 @@ public sealed class FilesystemRepair
 
     /// <summary>Ask the engine's distribution which filesystem it is running on.</summary>
     /// <returns>The UUID, or <see langword="null"/> where it could not say.</returns>
+    /// <remarks>
+    /// Through <c>/proc/mounts</c> and <c>blkid</c> since DD201. It asked <c>findmnt</c>, which is
+    /// util-linux and is not in a minirootfs, so this exited 127 on every machine and the verb
+    /// refused before it imported anything — measured, and the reason nothing else in DD199 had ever
+    /// been reached.
+    /// </remarks>
     private string? RootUuid()
     {
         var asked = _wsl.Run(
             "-d", _paths.DistributionName, "-u", "root", "--exec",
-            "/bin/sh", "-c", "findmnt -n -o UUID /");
+            "/bin/sh", "-c", $"d=$({Minirootfs.RootDevice}); {Minirootfs.BlockDevices} $d");
 
-        var uuid = asked.Output.Trim();
-        return asked.Succeeded && uuid.Length > 0 ? uuid : null;
+        return asked.Succeeded ? Minirootfs.UuidIn(asked.Output) : null;
     }
 
     private RepairStep ImportRescue(string rootfsPath)
@@ -259,15 +264,19 @@ public sealed class FilesystemRepair
     /// <summary>Which attached disk carries that filesystem, asked of the rescue.</summary>
     /// <param name="uuid">The filesystem's UUID.</param>
     /// <returns>The device path, or <see langword="null"/> where nothing carries it.</returns>
+    /// <remarks>
+    /// A listing read here since DD201, rather than the lookup <c>blkid -U</c> looks like. BusyBox
+    /// accepts that flag, exits zero and prints nothing, so this read an empty string and reported
+    /// the disk as having gone away with the terminate — the failure the whole mechanism exists to
+    /// notice, arriving from a flag rather than from a disk.
+    /// </remarks>
     private string? DeviceFor(string uuid)
     {
         var found = _wsl.Run(
-            "-d", RescueName, "-u", "root", "--exec", "/bin/sh", "-c", $"blkid -U '{uuid}'");
+            "-d", RescueName, "-u", "root", "--exec",
+            "/bin/sh", "-c", Minirootfs.BlockDevices);
 
-        var device = found.Output.Trim();
-        return found.Succeeded && device.StartsWith("/dev/", StringComparison.Ordinal)
-            ? device
-            : null;
+        return found.Succeeded ? Minirootfs.DeviceIn(found.Output, uuid) : null;
     }
 
     /// <summary>Run the check itself.</summary>

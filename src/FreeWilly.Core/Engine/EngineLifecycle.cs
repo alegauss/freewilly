@@ -524,7 +524,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// this filesystem and to no other. That is the half DD191 got wrong.</para>
     /// </remarks>
     internal const string StateScript =
-        "d=$(awk '$2==\"/\"{print $1;exit}' /proc/mounts); b=${d##*/}; s=/sys/fs/ext4/$b; "
+        "d=$(" + Minirootfs.RootDevice + "); b=${d##*/}; s=/sys/fs/ext4/$b; "
         + "echo device=$d; "
         + "echo options=$(awk '$2==\"/\"{print $4;exit}' /proc/mounts); "
         + "echo errors=$(cat $s/errors_count 2>/dev/null || echo unknown); "

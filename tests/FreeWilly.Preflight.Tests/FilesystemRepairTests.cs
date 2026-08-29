@@ -56,14 +56,29 @@ public sealed class FilesystemRepairTests
     /// <param name="fsckExit">What e2fsck exits with.</param>
     /// <param name="fsckSaid">What it prints.</param>
     /// <returns>The machine.</returns>
+    /// <summary>
+    /// What <c>blkid</c> printed inside the live distribution on 29 August 2026, verbatim.
+    /// </summary>
+    /// <remarks>
+    /// Five devices, two of them with no UUID at all and one of them a swap partition, because that
+    /// is what a WSL2 virtual machine holds and a listing tidied to one line would prove nothing
+    /// about picking the right row out of it.
+    /// </remarks>
+    private const string Listing =
+        "/dev/sde: UUID=\"f20b734b-5cee-45dd-93cc-accea19eb41f\" TYPE=\"ext4\"\n"
+        + "/dev/sdd: UUID=\"" + Uuid + "\" TYPE=\"ext4\"\n"
+        + "/dev/sdc: UUID=\"f0720437-ca47-455e-beea-3b2cc0ee2ec0\" TYPE=\"swap\"\n"
+        + "/dev/sda: TYPE=\"ext4\"\n"
+        + "/dev/sdb: TYPE=\"ext4\"\n";
+
     private static FakeWsl Machine(int fsckExit, string fsckSaid = "")
     {
         var wsl = new FakeWsl();
-        wsl.Answer(0, $"{Uuid}\n")     // findmnt: the engine's root filesystem
+        wsl.Answer(0, $"/dev/sdd: UUID=\"{Uuid}\" TYPE=\"ext4\"\n") // the engine's root filesystem
             .Answer(0)                 // --import the rescue
             .Answer(0, "/sbin/e2fsck") // apk add && command -v
             .Answer(0)                 // --terminate the engine's distribution
-            .Answer(0, "/dev/sdd\n")   // blkid -U: the disk is still attached
+            .Answer(0, Listing)        // blkid: the disk is still attached
             .Answer(fsckExit, fsckSaid)
             .Answer(0);                // --unregister the rescue
         return wsl;
@@ -102,9 +117,70 @@ public sealed class FilesystemRepairTests
 
         repair.Check(@"C:\downloads\rootfs.tar.gz");
 
+        // The listing is read and the row picked here. `blkid -U` is what this looked like it should
+        // ask, and BusyBox accepts that flag, exits zero and prints nothing (DD201).
+        Assert.DoesNotContain(
+            wsl.Invocations,
+            argv => argv.Any(word => word.Contains("blkid -U", StringComparison.Ordinal)));
         Assert.Contains(
             wsl.Invocations,
-            argv => argv.Any(word => word.Contains($"blkid -U '{Uuid}'", StringComparison.Ordinal)));
+            argv => argv.Any(word => word.EndsWith("blkid", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Nothing_asks_a_minirootfs_for_a_command_it_does_not_have()
+    {
+        // DD201. Every one of these is util-linux, the root filesystem is an Alpine minirootfs, and
+        // the two that shipped made the verb refuse on every machine. Asserted over the whole
+        // sequence rather than at one call, because the next one added is the one nobody checks.
+        var wsl = Machine(0);
+        new FilesystemRepair(wsl, Paths(), FakeHold.Over(wsl, out _))
+            .Check(@"C:\downloads\rootfs.tar.gz");
+
+        foreach (var absent in new[] { "findmnt", "lsblk", "dumpe2fs" })
+        {
+            Assert.DoesNotContain(
+                wsl.Invocations,
+                argv => argv.Any(word => word.Contains(absent, StringComparison.Ordinal)));
+        }
+    }
+
+    [Fact]
+    public void The_root_filesystem_is_read_out_of_proc_mounts_and_not_asked_for()
+    {
+        // /proc/mounts is the kernel's, so it answers with no package installed — which every
+        // distribution provisioned before DD196 is, including the one this was measured against.
+        var wsl = Machine(0);
+        new FilesystemRepair(wsl, Paths(), FakeHold.Over(wsl, out _))
+            .Check(@"C:\downloads\rootfs.tar.gz");
+
+        Assert.Contains(
+            wsl.Invocations,
+            argv => argv.Any(word => word.Contains("/proc/mounts", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void The_right_row_is_picked_out_of_a_listing_of_five_devices()
+    {
+        // The direction blkid -U would have answered. Two rows carry no UUID and one is a swap
+        // partition, which is what the virtual machine actually holds.
+        Assert.Equal("/dev/sdd", Minirootfs.DeviceIn(Listing, Uuid));
+
+        // Case is not a difference between filesystems: the two ends of this comparison are printed
+        // by two different distributions.
+        Assert.Equal("/dev/sdd", Minirootfs.DeviceIn(Listing, Uuid.ToUpperInvariant()));
+
+        // And a filesystem nothing carries is null rather than the first row that parsed.
+        Assert.Null(Minirootfs.DeviceIn(Listing, "00000000-0000-0000-0000-000000000000"));
+    }
+
+    [Fact]
+    public void A_device_with_no_filesystem_on_it_is_an_answer_rather_than_a_parse_failure()
+    {
+        // /dev/sda prints a line with no UUID at all. It is an unformatted disk, which is not the
+        // one being asked about.
+        Assert.Null(Minirootfs.UuidIn("/dev/sda: TYPE=\"ext4\""));
+        Assert.Equal(Uuid, Minirootfs.UuidIn($"/dev/sdd: UUID=\"{Uuid}\" TYPE=\"ext4\""));
     }
 
     [Fact]
@@ -184,7 +260,7 @@ public sealed class FilesystemRepairTests
         // A rescue left registered is this tool having put something in somebody's `wsl --list`
         // after telling them it would not.
         var wsl = new FakeWsl();
-        wsl.Answer(0, $"{Uuid}\n")     // findmnt
+        wsl.Answer(0, $"/dev/sdd: UUID=\"{Uuid}\" TYPE=\"ext4\"\n") // the engine's root
             .Answer(0)                 // --import
             .Answer(0, "/sbin/e2fsck") // apk add
             .Answer(1, "there is no distribution named freewilly"); // --terminate fails
@@ -228,11 +304,13 @@ public sealed class FilesystemRepairTests
         // The measured behaviour not holding is the one outcome this whole mechanism rests on, so it
         // has to be reported as itself rather than as e2fsck failing on some other device.
         var wsl = new FakeWsl();
-        wsl.Answer(0, $"{Uuid}\n")
+        wsl.Answer(0, $"/dev/sdd: UUID=\"{Uuid}\" TYPE=\"ext4\"\n")
             .Answer(0)
             .Answer(0, "/sbin/e2fsck")
             .Answer(0)
-            .Answer(2, ""); // blkid -U finds nothing
+            // The listing came back without the engine's disk in it, which is the measured
+            // behaviour not holding: the terminate took the disk off the virtual machine.
+            .Answer(0, "/dev/sde: UUID=\"f20b734b-5cee-45dd-93cc-accea19eb41f\" TYPE=\"ext4\"\n");
 
         var repair = new FilesystemRepair(wsl, Paths(), FakeHold.Over(wsl, out _));
 
