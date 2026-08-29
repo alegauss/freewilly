@@ -100,6 +100,14 @@ public sealed class SampleFilesystemWork : IFilesystemWork
     /// </remarks>
     public bool ToolsAreReady => false;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// False, so a capture draws the plan a machine that has never been refused gets. The other one
+    /// describes a state that is real and is this desk's rather than the product's, and a picture
+    /// carrying it would document one Windows build as though it were the tool.
+    /// </remarks>
+    public bool HandBackWasRefused => false;
+
     private static RepairOutcome Refuse() => new(
     [
         new RepairStep(

@@ -41,6 +41,17 @@ public interface IFilesystemWork
     /// with no prior experience to correct it with.
     /// </remarks>
     bool ToolsAreReady { get; }
+
+    /// <summary>
+    /// Whether Windows has already refused to hand this machine's blocks back (DD226).
+    /// </summary>
+    /// <remarks>
+    /// Read by the compaction's plan, so a machine that has met the refusal says so before it costs
+    /// a second interruption rather than after one. Beside <see cref="ToolsAreReady"/> because it is
+    /// the same kind of question one button further along: what this machine can actually do, asked
+    /// before anything is pressed.
+    /// </remarks>
+    bool HandBackWasRefused { get; }
 }
 
 /// <summary>
@@ -161,15 +172,31 @@ public sealed record RepairPrompt(
     /// <para>Build cache is named as build cache rather than as reclaimable space. The daemon calls
     /// it reclaimable and that word belongs to the daemon; what the reader has to decide is whether
     /// they mind rebuilding a layer, which is a thing they can answer.</para>
+    ///
+    /// <para><b>A machine that has already refused says so here (DD226).</b> DD224 fixed the ending
+    /// and left the asking: the plan went on describing a result this Windows cannot produce, and
+    /// the price of finding out was every container going down. It is still offered rather than
+    /// withdrawn, because the flag is disabled and not removed, and a button that stops trying is
+    /// one nobody will ever discover has started working again. So the question becomes "try
+    /// anyway", which is what it honestly is.</para>
     /// </remarks>
-    public const string CompactConfirmation =
+    /// <param name="refusedBefore">Whether Windows has already refused a hand-back here (DD226).</param>
+    /// <returns>The question, as the dialog asks it.</returns>
+    public static string CompactConfirmation(bool refusedBefore) =>
         "Docker stops while the disk is compacted.\n\n"
         + "The build cache goes first, then the filesystem discards what it has already freed, then "
         + "the virtual disk hands those blocks back to Windows.\n\n"
         + "Images, containers and volumes are left alone. The only thing deleted is build cache, "
         + "which Docker rebuilds the next time it needs it.\n\n"
-        + "Docker starts again by itself at the end.\n\n"
-        + "Stop Docker and compact now?";
+        + (refusedBefore
+            ? "Windows refused the last step on this machine: it has sparse disks turned off, and "
+              + "the only way round that is a setting this tool will not use on a disk holding "
+              + "your images. The earlier steps still run, and the last one is likely to be "
+              + "refused again.\n\n"
+              + "Docker starts again by itself at the end.\n\n"
+              + "Stop Docker and try anyway?"
+            : "Docker starts again by itself at the end.\n\n"
+              + "Stop Docker and compact now?");
 
     /// <summary>What the panel says while a compaction is running.</summary>
     public static readonly RepairPrompt Compacting = new(

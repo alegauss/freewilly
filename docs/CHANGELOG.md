@@ -75,6 +75,7 @@
 - ✅ **DD221** **the compaction has never run against a real virtual disk, so the one path that hands blocks back is unexercised** — A --compact-drill verb grows a scratch disk, empties it and drives the shipped compaction at it; the first run showed WSL refuses --set-sparse outright, so the button cannot work.
 - ✅ **DD224** **the Compact button cannot succeed: WSL refuses --set-sparse outright and names the flag DD211 will not pass** — A hand-back Windows refuses is recognised by the flag it points at, not its translated prose, and the page says Windows has turned this off rather than inviting a second interruption.
 - ✅ **DD225** **the compaction measures the disk's length, which a sparse file keeps, so a hand-back that worked reports no bytes** — The compaction and the panel read what the volume is charging for through GetCompressedFileSize, so a hand-back that worked reports the space a sparse file's length cannot show.
+- ✅ **DD226** **the Compact plan asks somebody to stop Docker for a hand-back this machine has already refused once** — A hand-back Windows refuses is written down beside the install, so the plan says so and asks whether to try anyway; a hand-back that works forgets it, because the flag is disabled and not removed.
 
 ## Block B — The daemon client (talk to the engine)
 

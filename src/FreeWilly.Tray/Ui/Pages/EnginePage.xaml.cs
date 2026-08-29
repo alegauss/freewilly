@@ -306,7 +306,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     {
         var answer = System.Windows.MessageBox.Show(
             Window.GetWindow(this),
-            RepairPrompt.CompactConfirmation,
+            RepairPrompt.CompactConfirmation(_work.HandBackWasRefused),
             "Compact the disk",
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Question,

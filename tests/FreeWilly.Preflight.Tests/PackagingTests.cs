@@ -1650,6 +1650,14 @@ public sealed class PackagingTests
         // The wildcard and not one exact name: the file carries the pinned rootfs digest, so an
         // install that has seen two Alpine versions has two of them.
         Assert.Contains("rescue-*.tar", uninstall, StringComparison.Ordinal);
+
+        // And the note this install wrote about the machine's sparse disks goes the same way
+        // (DD226): a fact this product recorded about somebody's Windows, not a setting they chose.
+        var note = uninstall.IndexOf(
+            @"DeleteFile(ExpandConstant('{app}\sparse-refused.txt')", StringComparison.Ordinal);
+
+        Assert.True(note > 0, "the sparse-disk note survives an uninstall and keeps the root alive");
+        Assert.True(note < question, "the note is only removed where the images are");
     }
 
     [Fact]

@@ -38,6 +38,13 @@ internal sealed class FilesystemWork : IFilesystemWork
     public bool ToolsAreReady => new RescueImage(new Wsl(), new EnginePaths()).IsPrepared;
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A file test, like the one above and for the same reason: this is read on the way to drawing a
+    /// paragraph, and a <c>wsl.exe</c> child there would be a dialog that takes a second to open.
+    /// </remarks>
+    public bool HandBackWasRefused => DiskCompaction.WasRefusedHere(new EnginePaths());
+
+    /// <inheritdoc/>
     public RepairOutcome Check(Action<RepairStep> report) => Run(report, write: false);
 
     /// <inheritdoc/>

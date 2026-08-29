@@ -1763,6 +1763,11 @@ begin
     // an earlier one, since the file carries the rootfs digest and a bump makes a new name.
     DelTree(ExpandConstant('{app}\rescue-*.tar'), False, True, False);
 
+    // What this install learned about the machine's sparse disks (DD226). A note this product wrote
+    // about somebody's Windows, not a setting they chose, and a file left in {app} keeps the root on
+    // disk after an uninstall that took everything else.
+    DeleteFile(ExpandConstant('{app}\sparse-refused.txt'));
+
     DelTree(ExpandConstant('{app}\bin'), True, True, True);
     DelTree(ExpandConstant('{app}\cli'), True, True, True);
     DelTree(ExpandConstant('{app}\cli-plugins'), True, True, True);

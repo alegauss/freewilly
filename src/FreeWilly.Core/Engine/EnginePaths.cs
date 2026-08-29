@@ -211,6 +211,21 @@ public sealed class EnginePaths
     /// </remarks>
     public string HostLog => Path.Combine(Root, "engine.log");
 
+    /// <summary>
+    /// That Windows refused to make this distribution's disk sparse (DD226).
+    /// </summary>
+    /// <remarks>
+    /// <para>A fact about the machine and not a setting, which is why it is here rather than in
+    /// <see cref="Settings"/>: nobody chose it, and a user who copied their settings to a new
+    /// machine would be carrying somebody else's answer.</para>
+    ///
+    /// <para>Its absence is the ordinary state and means only that no compaction has been refused
+    /// here yet, so it is not created by <see cref="Create"/>. A hand-back that succeeds removes it,
+    /// because Windows disabled sparse disks rather than removing them and may enable them again.
+    /// </para>
+    /// </remarks>
+    public string SparseRefusal => Path.Combine(Root, "sparse-refused.txt");
+
     /// <summary>Create every directory this layout names. Idempotent.</summary>
     public void Create()
     {

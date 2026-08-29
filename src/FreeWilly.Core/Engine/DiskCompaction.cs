@@ -143,6 +143,22 @@ public sealed class DiskCompaction
     public static bool WindowsWithdrewIt(string? detail) =>
         detail?.Contains(UnsafeFlag, StringComparison.Ordinal) is true;
 
+    /// <summary>
+    /// Whether this machine has already refused a hand-back (DD226).
+    /// </summary>
+    /// <param name="paths">Where the install keeps its own files.</param>
+    /// <returns><see langword="true"/> where a refusal was written down here.</returns>
+    /// <remarks>
+    /// Read by the plan, so a second press is a sentence rather than another interruption. DD224
+    /// fixed the ending and left the asking: the dialog still described a result the machine cannot
+    /// produce, somebody agreed, every container went down, and only then were they told.
+    /// </remarks>
+    public static bool WasRefusedHere(EnginePaths paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        return File.Exists(paths.SparseRefusal);
+    }
+
     /// <summary>The step that hands the blocks back to Windows.</summary>
     /// <remarks>
     /// Named here because <see cref="CompactionOutcome.Succeeded"/> reads it back, and a literal at
@@ -331,6 +347,10 @@ public sealed class DiskCompaction
 
         if (sparse.Succeeded)
         {
+            // Forgotten, because Windows disabled sparse disks rather than removing them (DD226). A
+            // machine that starts allowing them again must not go on being told it does not.
+            Remember(refused: false);
+
             return new RepairStep(
                 HandBackStep,
                 true,
@@ -346,14 +366,52 @@ public sealed class DiskCompaction
         // somebody looking for a fault on a machine that has none. WSL's own text still follows,
         // because that is what goes into a bug report.
         var said = Said(sparse);
+        var withdrawn = WindowsWithdrewIt(said);
+
+        // Written down only for that one refusal (DD226). Every other failure here is something a
+        // user might retry and get a different answer to, and a machine remembering one of those
+        // would be a button that talked itself out of working.
+        Remember(withdrawn);
+
         return new RepairStep(
             HandBackStep,
             false,
-            WindowsWithdrewIt(said)
+            withdrawn
                 ? "Windows has turned off the only way of handing these blocks back that needs no "
                   + $"administrator rights, and offers {UnsafeFlag} instead. This will not use that "
                   + "on a disk holding every image and volume on the machine. WSL said: " + said
                 : $"`wsl --manage {_paths.DistributionName} --set-sparse true` was refused: {said}");
+    }
+
+    /// <summary>Write down that Windows refuses this here, or that it no longer does (DD226).</summary>
+    /// <param name="refused">What was just observed.</param>
+    /// <remarks>
+    /// A file rather than a setting, because nobody chose it. Never allowed to fail a run: the worst
+    /// a lost note costs is one more interruption, which is the state this whole task improves on
+    /// rather than the state it must guarantee.
+    /// </remarks>
+    private void Remember(bool refused)
+    {
+        try
+        {
+            if (refused)
+            {
+                Directory.CreateDirectory(_paths.Root);
+                File.WriteAllText(
+                    _paths.SparseRefusal,
+                    "Windows refused `wsl --manage --set-sparse true` on this machine. Delete this "
+                    + "file to make the Compact button ask as though it had never been told.\n");
+            }
+            else
+            {
+                File.Delete(_paths.SparseRefusal);
+            }
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+            // The note is an improvement on asking again, not a promise.
+        }
     }
 
     /// <summary>One reading, in the words the panel uses for the same three numbers.</summary>

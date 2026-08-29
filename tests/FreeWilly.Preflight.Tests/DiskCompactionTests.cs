@@ -219,6 +219,74 @@ public sealed class DiskCompactionTests
         Assert.Equal(20L * Gigabyte, unreadable.HandedBack);
     }
 
+    [Fact]
+    public void A_refusal_Windows_will_give_again_is_written_down_and_a_retryable_one_is_not()
+    {
+        // DD226. Sparse disks being off is a fact about the machine that a second press will meet
+        // unchanged, and the price of meeting it is every container going down. Everything else that
+        // can fail here is worth another try, and a machine remembering one of those would be a
+        // button talking itself out of working.
+        var paths = Paths();
+        var withdrawn = new FakeWsl()
+            .Answer(0, Reading(16_000_000))
+            .Answer(0, "/: trimmed")
+            .Answer(0)
+            .Answer(1, "sparse VHD support is disabled. Use --set-sparse --allow-unsafe")
+            .Answer(0, Reading(16_000_000));
+
+        new DiskCompaction(
+            withdrawn, paths, Prune, Stop).Run();
+
+        Assert.True(
+            DiskCompaction.WasRefusedHere(paths),
+            "the machine met the one refusal a second press cannot get past and forgot it");
+
+        var busy = Paths();
+        var inUse = new FakeWsl()
+            .Answer(0, Reading(16_000_000))
+            .Answer(0, "/: trimmed")
+            .Answer(0)
+            .Answer(1, "the disk is still in use")
+            .Answer(0, Reading(16_000_000));
+
+        new DiskCompaction(inUse, busy, Prune, Stop).Run();
+
+        Assert.False(
+            DiskCompaction.WasRefusedHere(busy),
+            "a refusal somebody could get a different answer to was written down as final");
+    }
+
+    [Fact]
+    public void A_hand_back_that_worked_forgets_that_it_was_ever_refused()
+    {
+        // Windows disabled sparse disks rather than removing them, so a machine that starts
+        // allowing them again must not go on being told it does not. A note that only ever
+        // accumulates is a button that stops working permanently the first time it fails.
+        var paths = Paths();
+        Directory.CreateDirectory(paths.Root);
+        File.WriteAllText(paths.SparseRefusal, "refused, once");
+
+        var wsl = new FakeWsl()
+            .Answer(0, Reading(16_000_000))
+            .Answer(0, "/: trimmed")
+            .Answer(0)
+            .Answer(0)
+            .Answer(0, Reading(16_000_000));
+
+        var outcome = new DiskCompaction(wsl, paths, Prune, Stop).Run();
+
+        Assert.True(outcome.Succeeded, outcome.Failure?.Detail);
+        Assert.False(
+            DiskCompaction.WasRefusedHere(paths),
+            "a hand-back that worked left the machine still marked as refusing them");
+    }
+
+    private static RepairStep Prune() =>
+        new(DiskCompaction.PruneStep, true, "nothing to drop");
+
+    private static RepairStep Stop() =>
+        new(FilesystemRepair.StopStep, true, "the host was told");
+
     private const long Gigabyte = 1024L * 1024 * 1024;
 
     [Fact]

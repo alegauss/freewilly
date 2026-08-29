@@ -448,12 +448,37 @@ public sealed class RepairPromptTests
         // DD211. The fear a button called Compact has to answer is not how long it takes: it is
         // whether somebody's images are about to be deleted. So the removal and the list of what is
         // left alone are both above the question.
-        var asked = RepairPrompt.CompactConfirmation;
+        foreach (var refused in new[] { true, false })
+        {
+            var plan = RepairPrompt.CompactConfirmation(refused);
 
-        Assert.Contains("build cache", asked, StringComparison.Ordinal);
-        Assert.Contains("Images, containers and volumes are left alone", asked, StringComparison.Ordinal);
-        Assert.Contains("Docker stops", asked, StringComparison.Ordinal);
-        Assert.Contains("starts again by itself", asked, StringComparison.Ordinal);
+            Assert.Contains("build cache", plan, StringComparison.Ordinal);
+            Assert.Contains(
+                "Images, containers and volumes are left alone", plan, StringComparison.Ordinal);
+            Assert.Contains("Docker stops", plan, StringComparison.Ordinal);
+            Assert.Contains("starts again by itself", plan, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void A_machine_that_has_already_refused_says_so_before_it_costs_a_second_interruption()
+    {
+        // DD226. DD224 fixed the ending and left the asking: the plan went on describing a result
+        // this Windows cannot produce, somebody agreed, every container went down, and only then
+        // were they told. The refusal is a fact about the machine, so the machine's plan carries it.
+        var first = RepairPrompt.CompactConfirmation(refusedBefore: false);
+        var again = RepairPrompt.CompactConfirmation(refusedBefore: true);
+
+        Assert.Contains("Stop Docker and compact now?", first, StringComparison.Ordinal);
+        Assert.DoesNotContain("refused", first, StringComparison.Ordinal);
+
+        Assert.Contains("Windows refused the last step", again, StringComparison.Ordinal);
+        Assert.Contains("likely to be refused again", again, StringComparison.Ordinal);
+
+        // Offered rather than withdrawn: the flag is disabled and not removed, and a button that
+        // stopped trying is one nobody would ever discover had started working again. So the
+        // question becomes what it honestly is.
+        Assert.Contains("try anyway?", again, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
