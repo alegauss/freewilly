@@ -1615,6 +1615,7 @@ public sealed class PackagingTests
                      @"DelTree(ExpandConstant('{app}\cli-plugins')",
                      @"DelTree(ExpandConstant('{app}\distro')",
                      @"DelTree(ExpandConstant('{app}\downloads')",
+                     @"DelTree(ExpandConstant('{app}\rescue-*.tar')",
                  })
         {
             var at = uninstall.IndexOf(delete, StringComparison.Ordinal);
@@ -1623,6 +1624,32 @@ public sealed class PackagingTests
                 $"{delete} runs after Inno has already decided whether the root was empty, so an "
                 + "uninstall that removed everything still leaves the folder behind");
         }
+    }
+
+    [Fact]
+    public void The_prepared_rescue_goes_with_the_uninstall_and_not_with_the_question()
+    {
+        // DD223. It is a cache this product wrote from the rootfs it pins, not anybody's data, so
+        // it belongs with preflight.txt and engine.log rather than behind the question about images
+        // and volumes — a machine that answered "keep my data" still did not ask to keep eleven
+        // megabytes of Alpine it cannot account for.
+        var uninstall = UninstallSection();
+
+        var rescue = uninstall.IndexOf(
+            @"DelTree(ExpandConstant('{app}\rescue-*.tar')", StringComparison.Ordinal);
+        var question = uninstall.IndexOf(
+            "if RemoveTheDistribution then", StringComparison.Ordinal);
+
+        Assert.True(rescue > 0, "the prepared rescue survives an uninstall");
+        Assert.True(question > 0, "the question about the distribution is no longer asked here");
+        Assert.True(
+            rescue < question,
+            "the prepared rescue is only removed where the user agreed to lose their images, so "
+            + "keeping those keeps a cache nobody asked for");
+
+        // The wildcard and not one exact name: the file carries the pinned rootfs digest, so an
+        // install that has seen two Alpine versions has two of them.
+        Assert.Contains("rescue-*.tar", uninstall, StringComparison.Ordinal);
     }
 
     [Fact]

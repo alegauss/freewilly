@@ -18,6 +18,34 @@ namespace FreeWilly.Preflight.Tests;
 /// the fetch is skipped, when an image is kept, and that a bad one costs a network call rather than
 /// the run.</para>
 /// </remarks>
+/// <summary>
+/// A machine whose <c>--export</c> writes a file, which is what the keeping depends on.
+/// </summary>
+/// <remarks>
+/// <see cref="FakeWsl"/> answers an export with success and no file, so the move that follows finds
+/// nothing and the image is never kept. That is fine for asserting the order of calls and useless
+/// for asserting what happens to the files afterwards, which is what DD223 is about.
+/// </remarks>
+internal sealed class ExportingWsl : IWsl
+{
+    private readonly FakeWsl _inner = new();
+
+    /// <summary>Every argument list this was called with, in order.</summary>
+    internal List<string[]> Invocations => _inner.Invocations;
+
+    /// <inheritdoc/>
+    public WslResult Run(TimeSpan budget, params string[] arguments)
+    {
+        var result = _inner.Run(budget, arguments);
+        if (arguments is ["--export", _, var into, ..])
+        {
+            File.WriteAllText(into, "a tarball, as far as anything here is concerned");
+        }
+
+        return result;
+    }
+}
+
 public sealed class RescueImageTests
 {
     private const string Name = "freewilly-rescue";
@@ -178,6 +206,79 @@ public sealed class RescueImageTests
         var exported = wsl.Invocations.First(argv => argv.Length > 0 && argv[0] == "--export");
         Assert.EndsWith(".part", exported[^1], StringComparison.Ordinal);
         Assert.StartsWith(image.PreparedPath, exported[^1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Keeping_a_new_image_drops_the_ones_this_build_no_longer_names()
+    {
+        // DD223. The name carries the pinned rootfs digest, so a manifest that bumps Alpine stops
+        // matching the old file rather than replacing it — correct, and left alone it keeps eleven
+        // megabytes on disk forever with nothing that will ever open it again.
+        var paths = Paths();
+        Directory.CreateDirectory(paths.Root);
+        var stale = Path.Combine(paths.Root, "rescue-000000000000.tar");
+        var older = Path.Combine(paths.Root, "rescue-ffffffffffff.tar");
+        File.WriteAllText(stale, "last year's Alpine");
+        File.WriteAllText(older, "the one before that");
+
+        var wsl = new ExportingWsl();
+        var image = new RescueImage(wsl, paths);
+
+        var step = image.PutAway(Name, keep: true);
+
+        Assert.True(step.Ok, step.Detail);
+        Assert.True(File.Exists(image.PreparedPath), "the new image was not kept");
+        Assert.False(File.Exists(stale), "an image this build no longer names was left on disk");
+        Assert.False(File.Exists(older), "only one of the older images went");
+        Assert.Contains("2 older one(s) went", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_half_written_image_belonging_to_a_run_still_going_is_left_alone()
+    {
+        // Windows file globbing carries its 8.3 inheritance, where a three-character extension also
+        // matches longer ones — so `rescue-*.tar` finds a `.tar.part` too. That file belongs to an
+        // export still running, and taking it would be the sweep breaking the thing it tidies up
+        // after.
+        var paths = Paths();
+        Directory.CreateDirectory(paths.Root);
+        var inFlight = Path.Combine(paths.Root, "rescue-abcabcabcabc.tar.part");
+        File.WriteAllText(inFlight, "half of an export somebody else is still writing");
+
+        var wsl = new ExportingWsl();
+        var image = new RescueImage(wsl, paths);
+
+        image.PutAway(Name, keep: true);
+
+        Assert.True(File.Exists(inFlight), "the sweep took a file another run was still writing");
+    }
+
+    [Fact]
+    public void A_run_that_kept_nothing_sweeps_nothing()
+    {
+        // The sweep runs where a replacement has just landed and nowhere else. Dropping the images
+        // on a run that failed to make a new one would leave a machine with none at all, which is
+        // the network call this whole mechanism exists to avoid.
+        var paths = Paths();
+        Directory.CreateDirectory(paths.Root);
+        var stale = Path.Combine(paths.Root, "rescue-000000000000.tar");
+        File.WriteAllText(stale, "last year's Alpine");
+
+        new RescueImage(new ExportingWsl(), paths).PutAway(Name, keep: false);
+
+        Assert.True(File.Exists(stale), "an image was dropped by a run that kept no replacement");
+    }
+
+    [Fact]
+    public void The_sweep_and_the_write_agree_about_the_name()
+    {
+        // Two spellings of one name is a sweep that quietly stops finding anything, and an install
+        // directory that grows by eleven megabytes per Alpine bump with nothing reporting it.
+        var image = new RescueImage(new FakeWsl(), Paths());
+
+        Assert.Matches(
+            "^" + RescueImage.Pattern.Replace("*", "[0-9a-f]+") + "$",
+            Path.GetFileName(image.PreparedPath));
     }
 
     [Fact]

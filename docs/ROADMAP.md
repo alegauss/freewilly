@@ -18,8 +18,6 @@
 
 ## Block F — Installer and distribution (free, Apache 2.0)
 
-- 📋 **DD223** (deps: —) **prepared rescue images are never swept, so a manifest bump orphans one and an uninstall leaves it behind** — The install drops rescue images it no longer names and the uninstaller takes the current one, so eleven megabytes this tool wrote are not a file the user finds later. → §DD223
-
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
 ## Block H — The public surface (the site a reader and an agent both read)

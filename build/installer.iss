@@ -1755,6 +1755,14 @@ begin
     // engine, under this product's own root. Left behind it is one more file keeping {app} on disk
     // after an uninstall that took everything else, which is the failure DD121 exists to remove.
     DeleteFile(ExpandConstant('{app}\engine.log'));
+
+    // DD216's prepared rescue, on the same footing (DD223). It is a cache this product wrote from
+    // the rootfs it pins, not anybody's data, so it goes with the uninstall rather than with the
+    // question about images and volumes: a machine that removed the product must not keep eleven
+    // megabytes it cannot account for. The wildcard takes the one this build names and any left by
+    // an earlier one, since the file carries the rootfs digest and a bump makes a new name.
+    DelTree(ExpandConstant('{app}\rescue-*.tar'), False, True, False);
+
     DelTree(ExpandConstant('{app}\bin'), True, True, True);
     DelTree(ExpandConstant('{app}\cli'), True, True, True);
     DelTree(ExpandConstant('{app}\cli-plugins'), True, True, True);

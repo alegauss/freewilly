@@ -61,28 +61,6 @@ driver, which can only report that it waited.
 
 ## Block F — Installer and distribution (free, Apache 2.0)
 
-### §DD223 A tool that writes a cache owes the sweep as well
-
-DD216 writes a prepared rescue into the install directory and nothing ever takes it
-away. Measured here on 29 August 2026: `rescue-41f73e3cf5fa.tar`, 10.8 MB, written by
-the first drill and reused by every run after it.
-
-Two ways that becomes litter. The file is named after the pinned rootfs digest, so a
-manifest that bumps Alpine stops matching it rather than replacing it — correct, and it
-leaves the old one on disk forever with nothing that will ever open it again. And the
-uninstaller knows about the distribution and the downloads and not about this, so a
-machine that removed the product keeps a tarball it cannot account for.
-
-Neither is urgent and both are the same rule this project already holds elsewhere. DD199
-refused to leave a rescue in somebody's `wsl --list`, and the argument does not stop at
-the distribution list: a tool that writes eleven megabytes into a user's profile owes
-them the sweep as well as the write.
-
-The sweep is cheap and belongs where the image is written. Anything matching the image's
-own naming that is not the one this build wants is a file this tool made and no longer
-uses, so the moment a new one is kept is the moment to drop the others. The uninstaller
-half is a line in the script beside the ones already removing the downloads.
-
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
 ## Block H — The public surface (the site a reader and an agent both read)

@@ -58,6 +58,16 @@ public sealed class RescueImage
         _paths = paths;
     }
 
+    /// <summary>
+    /// How every prepared image is named, so the ones this build no longer wants can be found.
+    /// </summary>
+    /// <remarks>
+    /// One pattern, matching what <see cref="PreparedPath"/> writes. The sweep and the write have to
+    /// agree about the shape of the name or the sweep quietly stops finding anything, and an install
+    /// directory that accumulates eleven megabytes per Alpine bump is exactly what DD223 is about.
+    /// </remarks>
+    public const string Pattern = "rescue-*.tar";
+
     /// <summary>Where the prepared image is kept.</summary>
     public string PreparedPath => Path.Combine(
         _paths.Root, $"rescue-{EngineManifest.Current.Rootfs.Sha256[..12]}.tar");
@@ -218,7 +228,14 @@ public sealed class RescueImage
             }
 
             File.Move(half, PreparedPath, overwrite: true);
-            return $"kept as {Path.GetFileName(PreparedPath)}, so the next check needs no network";
+
+            // The moment a new one is kept is the moment to drop the others (DD223). Before this,
+            // an Alpine bump left the old image on disk forever: the name carries the rootfs digest,
+            // so a new manifest stops matching the old file rather than replacing it.
+            var dropped = SweepOlderImages();
+
+            return $"kept as {Path.GetFileName(PreparedPath)}, so the next check needs no network"
+                + (dropped == 0 ? "" : $", and {dropped} older one(s) went with it");
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -226,6 +243,49 @@ public sealed class RescueImage
             // never allowed to be the thing that fails a repair.
             return null;
         }
+    }
+
+    /// <summary>
+    /// Drop prepared images this build no longer names (DD223).
+    /// </summary>
+    /// <returns>How many went.</returns>
+    /// <remarks>
+    /// <para>Only files matching the shape this class writes, and never the one it just wrote. A
+    /// tool that puts eleven megabytes into somebody's profile owes them the sweep as well as the
+    /// write, and DD199 already settled the same argument one directory over: it refused to leave a
+    /// rescue in a user's <c>wsl --list</c>.</para>
+    ///
+    /// <para><b>The <c>.tar</c> is checked again rather than trusted to the pattern.</b> Windows
+    /// file globbing still carries its 8.3 inheritance, where a three-character extension also
+    /// matches longer ones, so <c>rescue-*.tar</c> finds a half-written <c>.tar.part</c> as well.
+    /// That file belongs to an export still running, and taking it would be this sweep breaking the
+    /// very thing it is tidying up after.</para>
+    /// </remarks>
+    private int SweepOlderImages()
+    {
+        var dropped = 0;
+        try
+        {
+            foreach (var stale in Directory.EnumerateFiles(_paths.Root, Pattern))
+            {
+                if (!stale.EndsWith(".tar", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(stale, PreparedPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                File.Delete(stale);
+                dropped++;
+            }
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+            // A sweep that could not finish is disk this tool is still holding, and nothing worse.
+            // It is never allowed to be the thing that fails a check.
+        }
+
+        return dropped;
     }
 
     /// <summary>Throw away an image that would not import, so the next run rebuilds it.</summary>
