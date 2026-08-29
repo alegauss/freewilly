@@ -280,6 +280,55 @@ public sealed class FilesystemRepairTests
     }
 
     [Fact]
+    public void The_rescue_is_terminated_before_it_is_unregistered()
+    {
+        // DD209, and the worst thing this class has done to a machine. The hold's dispose kills the
+        // Windows-side wsl.exe client and not the sleep inside the rescue, so WSL still counts it as
+        // running — and it does not refuse an unregister of a running distribution. It accepts it,
+        // moves it to state 4 and blocks the service on something that never stops. Every other
+        // distribution queues behind that, so the engine's own start began exiting 1 without a word
+        // and only an elevated service restart recovered it.
+        var wsl = Machine(0);
+
+        new FilesystemRepair(wsl, Paths(), FakeHold.Over(wsl, out _))
+            .Check(@"C:\downloads\rootfs.tar.gz");
+
+        var terminated = wsl.Invocations.FindIndex(
+            argv => argv.Length > 1 && argv[0] == "--terminate" && argv[1] == FilesystemRepair.RescueName);
+        var unregistered = wsl.Invocations.FindIndex(
+            argv => argv.Length > 1 && argv[0] == "--unregister" && argv[1] == FilesystemRepair.RescueName);
+
+        Assert.True(terminated >= 0, "the rescue is unregistered without being terminated first, "
+            + "which is the call that wedges the WSL service");
+        Assert.True(unregistered >= 0, "the rescue was never unregistered");
+        Assert.True(
+            terminated < unregistered,
+            "the rescue is terminated after the unregister, which is too late to be the thing that "
+            + "stops the process the unregister blocks on");
+    }
+
+    [Fact]
+    public void The_rescue_is_terminated_even_where_the_run_failed()
+    {
+        // The failing path is the one that leaves a machine wedged overnight: a check that stopped
+        // early still has a rescue up with a hold in it, and the teardown that runs anyway must be
+        // the safe teardown rather than the short one.
+        var wsl = new FakeWsl();
+        wsl.Answer(0, $"/dev/sdd: UUID=\"{Uuid}\" TYPE=\"ext4\"\n") // the engine's root
+            .Answer(0)                 // --import
+            .Answer(0, "/sbin/e2fsck") // apk add
+            .Answer(1, "there is no distribution named freewilly"); // --terminate the engine fails
+
+        new FilesystemRepair(wsl, Paths(), FakeHold.Over(wsl, out _))
+            .Check(@"C:\downloads\rootfs.tar.gz");
+
+        Assert.Contains(
+            wsl.Invocations,
+            argv => argv.Length > 1 && argv[0] == "--terminate"
+                && argv[1] == FilesystemRepair.RescueName);
+    }
+
+    [Fact]
     public void A_distribution_that_cannot_say_what_its_root_is_stops_before_anything_is_imported()
     {
         // After the terminate nothing is left that knows which attached disk was the engine's, so a

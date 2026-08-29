@@ -328,8 +328,25 @@ public sealed class FilesystemRepair
             false);
     }
 
+    /// <summary>Terminate the rescue, then unregister it (DD209).</summary>
+    /// <returns>Whether it is gone.</returns>
+    /// <remarks>
+    /// <b>The terminate is not tidiness, and skipping it wedged a real machine.</b> The hold is
+    /// disposed before this runs, which is what the ordering was for, but disposing it kills the
+    /// Windows-side <c>wsl.exe</c> client and not the <c>sleep</c> in the distribution behind it, so
+    /// WSL still counts the rescue as running. Unregistering a running distribution is not refused:
+    /// it is accepted, the distribution goes to state 4 and the service blocks on something that has
+    /// not stopped. Everything WSL queues behind that, this machine's other distributions included,
+    /// and the engine's own start then exits 1 with nothing on either stream. Measured on 29 August
+    /// 2026, where the only way back was an elevated restart of the WSL service.
+    ///
+    /// <para>A terminate stops what is inside and returns, and unregistering a stopped distribution
+    /// is the case WSL handles. Its own result is not reported: it succeeds on a distribution that
+    /// is already stopped, and the question worth answering here is whether the rescue is gone.</para>
+    /// </remarks>
     private RepairStep RemoveRescue()
     {
+        _wsl.Run(WslBudget.Work, "--terminate", RescueName);
         var gone = _wsl.Run(WslBudget.Work, "--unregister", RescueName);
         return gone.Succeeded
             ? new RepairStep("put the rescue away", true, $"{RescueName} unregistered")
