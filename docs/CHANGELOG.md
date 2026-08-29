@@ -57,6 +57,7 @@
 - ✅ **DD192** **stdout and stderr share one buffer, so a journal line decodes half of what wsl.exe said as noise** — The launcher's two streams are buffered and decoded apart, so the half naming the condition survives instead of being traded for the other.
 - ✅ **DD196** **the distribution ships without e2fsprogs, so nothing on it can check or repair its own filesystem** — Provisioning installs e2fsprogs and e2fsprogs-extra and proves e2fsck is on PATH, so the repair has something to run when apk cannot.
 - ✅ **DD199 (the mechanism and the CLI)** **nothing repairs a corrupt distribution filesystem, and the check cannot run against a mounted root** — A rescue distribution holds the VM open so the terminated engine's disk stays attached, and freewilly --fsck checks it or, with --repair, mends it.
+- ✅ **DD200** **the start check reads a kernel log every distribution shares, so another disk's fault reads as this one's** — The start check reads this filesystem's own error count and mount options out of the kernel, and the shared log it used to match on is gone rather than filtered.
 
 ## Block B — The daemon client (talk to the engine)
 

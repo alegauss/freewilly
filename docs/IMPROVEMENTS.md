@@ -25,51 +25,29 @@ image and volume the user has. The user sees what the check found before being a
 approve anything. And the engine is down for the duration, so the control belongs where
 that state is already on screen.
 
-### §DD200 The buffer that belongs to the machine, not the distribution
-
-DD191 reads the distribution's `dmesg` after a start and reports the four phrases an
-ext4 fault produces. Two things about that buffer make the reading wrong, and both were
-seen on 29 August 2026 while measuring DD199.
-
-It belongs to the virtual machine and not to a distribution. WSL2 runs one kernel for
-all of them, so the same buffer carried lines for sda, sdb, sdd and sde at once. Every
-line names its device, which is what the match has to use and does not: a complaint
-about the user's Ubuntu is currently reported as the engine's filesystem needing a
-check.
-
-And it is a history rather than a state. The buffer held the original incident in full,
-naming the bad block bitmap checksum in group 348, on a filesystem that `dumpe2fs -h`
-called clean with no recorded errors and that a full `e2fsck -fn` agreed was clean. A
-check that reads it announces a fault that was repaired.
-
-The superblock answers what dmesg cannot. `dumpe2fs -h` reports Filesystem state and FS
-Error count, both of which are this filesystem's own and both of which a repair clears,
-and DD196 already put that binary in the distribution. dmesg is still worth reading for
-what the superblock does not carry, which is the mount that has just happened, and the
-device name in each line is what makes that half sound.
-
 ### §DD201 The sequence nobody has run
 
 DD199's mechanism was measured on a real machine and its code was written afterwards.
-Those are two different things, and only the first has met a real `wsl.exe`.
+Those are two different things, and only the first had met a real `wsl.exe`. Measuring
+DD200 against the live distribution ran the second, and it fails in two places.
 
-The nine tests drive `FilesystemRepair` through a fake, so what they prove is the
-ordering and the decisions: that the hold opens before the terminate, that the disk is
-found by UUID rather than by device name, that a read answers no and a write answers
-yes, that exit 4 is a finding, and that the rescue is unregistered even after a failure.
-None of that is the verb working.
+`findmnt` is not there. `FilesystemRepair.RootUuid` asks it for the root's UUID, and
+BusyBox is not util-linux, so the command exits 127 on every machine. The verb refuses
+before it imports anything, which is the one mercy: the engine is not taken down for it.
 
-What has never happened is one run of `--fsck` against this machine: an import of the
-rescue from the pinned rootfs, an `apk add` into it, a terminate, a `blkid -U` that
-resolves, an `e2fsck` that returns, and an unregister that leaves nothing behind. Each
-of those is a place the real thing can differ from the fake, and the import and the
-unregister are the two that leave state on somebody's machine if they half-happen.
+`blkid -U` is accepted and answers nothing. BusyBox takes the flag, exits zero and
+prints no device, so `DeviceFor` reads an empty string and reports the disk as having
+gone away with the terminate. That is the failure the whole mechanism exists to notice,
+arriving from a flag rather than from a disk.
 
-It cannot become an ordinary test. Importing and unregistering a distribution is not
-something a suite can do on a build machine, and the failure this guards against is
-minutes long. What it can be is a scripted check run deliberately, the way
-`--capture-window` is, with its output recorded next to the measurement DD199 already
-has.
+Both have DD200's shape. `/proc/mounts` names the root device with no package at all,
+and `blkid <device>` prints the UUID where `blkid -U` will not. What is left open is the
+rescue side, where the same `blkid` has to go from a UUID to whichever device the
+terminate left attached.
+
+And the run itself is still owed. An import, an `apk add`, a terminate, a resolve, an
+`e2fsck` and an unregister have never happened in sequence. That cannot be an ordinary
+test, so it wants a scripted check run deliberately, the way `--capture-window` is.
 
 ### §DD202 The suite that cannot pass where the product is installed
 

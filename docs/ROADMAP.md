@@ -5,8 +5,7 @@
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
 - ⏳ **DD199** (deps: DD196 ✅, DD190 ✅) **nothing repairs a corrupt distribution filesystem, and the check cannot run against a mounted root** — the check and the repair are only reachable from a terminal, and the engine state they need is on the window's Engine page. → §DD199
-- 📋 **DD200** (deps: —) **the start check reads a kernel log every distribution shares, so another disk's fault reads as this one's** — WSL2 runs one kernel, so dmesg names four disks and DD191 matches on phrases alone; the buffer still carries the repaired 29 August incident. → §DD200
-- 📋 **DD201** (deps: —) **the filesystem check and repair are proved only against a fake, so the real sequence has never run once** — DD199 measured the mechanism by hand and then wrote code for it, and no test can import a distribution, so nothing has exercised the verb end to end. → §DD201
+- 📋 **DD201** (deps: —) **the filesystem check refuses on every machine, because two commands it runs are not in a minirootfs** — Measured against the live distribution: findmnt is absent so the root UUID never resolves, and busybox blkid takes -U silently and prints nothing. → §DD201
 - 📋 **DD202** (deps: —) **fourteen tests fail whenever a real FreeWilly is running, so the suite cannot go green on a machine that has one** — SingleTrayTests and SingleEngineTests claim the very mutex a live tray and host hold, and they report that as a failure rather than as the state it is. → §DD202
 
 ## Block B — The daemon client (talk to the engine)

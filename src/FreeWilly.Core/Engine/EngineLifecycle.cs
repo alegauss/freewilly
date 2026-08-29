@@ -502,27 +502,86 @@ public sealed class EngineLifecycle : IAsyncDisposable
             return null;
         }
 
-        var kernel = _wsl.Run(
-            "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", "dmesg");
-        if (!kernel.Succeeded)
+        var read = _wsl.Run(
+            "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", StateScript);
+
+        return read.Succeeded && WhatItSaysAboutItself(read.Output) is { } complaint
+            ? WslFailure.OfDirtyFilesystem(complaint, Distribution, _basePath)
+            : null;
+    }
+
+    /// <summary>
+    /// The one call that asks the root filesystem about itself, in what a minirootfs has (DD200).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Nothing here is a package.</b> <c>/proc/mounts</c> and <c>/sys/fs/ext4</c> are the
+    /// kernel's, so this answers on a distribution provisioned before DD196 put <c>e2fsprogs</c>
+    /// in one — which is every distribution installed to date. Measured on the live one: <c>awk</c>
+    /// and <c>blkid</c> are there and <c>findmnt</c>, <c>dumpe2fs</c> and <c>e2fsck</c> are not,
+    /// because BusyBox is not util-linux.</para>
+    ///
+    /// <para><c>/sys/fs/ext4</c> has a directory per device, so the counter read here belongs to
+    /// this filesystem and to no other. That is the half DD191 got wrong.</para>
+    /// </remarks>
+    internal const string StateScript =
+        "d=$(awk '$2==\"/\"{print $1;exit}' /proc/mounts); b=${d##*/}; s=/sys/fs/ext4/$b; "
+        + "echo device=$d; "
+        + "echo options=$(awk '$2==\"/\"{print $4;exit}' /proc/mounts); "
+        + "echo errors=$(cat $s/errors_count 2>/dev/null || echo unknown); "
+        + "echo where=$(cat $s/last_error_func 2>/dev/null || echo unknown)";
+
+    /// <summary>
+    /// What the root filesystem reports about itself, or <see langword="null"/> where it is well.
+    /// </summary>
+    /// <param name="said">What <see cref="StateScript"/> printed.</param>
+    /// <returns>The complaint, in one clause.</returns>
+    /// <remarks>
+    /// <para><b>The kernel log is not read here any more, and DD200 is why.</b> DD191 matched four
+    /// ext4 phrases in <c>dmesg</c>, and that buffer is wrong for this question twice over. WSL2
+    /// runs one kernel for every distribution, so it carried lines for four disks at once and a
+    /// complaint about the user's Ubuntu was reported as the engine's. And it is a history: on
+    /// 29 August 2026 it still held the original incident in full, naming the bad block bitmap
+    /// checksum in group 348, on a filesystem whose own error count was zero and which a full
+    /// <c>e2fsck</c> called clean.</para>
+    ///
+    /// <para>Filtering it by device would have fixed the first half only, so it is gone rather than
+    /// narrowed. Everything it was contributing is here and is per-filesystem: that an error was
+    /// recorded, and where. Both are cleared by the repair that fixes them, which is what makes
+    /// this a state rather than an account of one.</para>
+    /// </remarks>
+    private string? WhatItSaysAboutItself(string said)
+    {
+        var fields = said
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => line.Split('=', 2))
+            .Where(pair => pair.Length == 2)
+            .ToDictionary(pair => pair[0], pair => pair[1], StringComparer.Ordinal);
+
+        // Split rather than searched, because the options string carries `errors=remount-ro` on
+        // every healthy mount: a filesystem that has never had a fault says the word this is looking
+        // for, and the difference is that `ro` stands alone.
+        if (fields.TryGetValue("options", out var options)
+            && options.Split(',').Contains("ro", StringComparer.Ordinal))
         {
-            return null;
+            return $"{Distribution}'s root is mounted read-only, which is what the kernel does to a "
+                + "filesystem it has hit an error on, and the engine is running on it meanwhile";
         }
 
-        var complaints = kernel.Output
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(Complains)
-            .Distinct(StringComparer.Ordinal)
-            .Take(KeptComplaints)
-            .ToList();
+        if (fields.TryGetValue("errors", out var errors)
+            && int.TryParse(
+                errors, System.Globalization.CultureInfo.InvariantCulture, out var count)
+            && count > 0)
+        {
+            // Present but empty is the ordinary reading of last_error_func, so the fallback has to
+            // catch that as well as a missing file: `cat` on it succeeds and prints nothing.
+            var where = fields.GetValueOrDefault("where", "") is { Length: > 0 } named
+                ? named
+                : "an unnamed function";
+            return $"{Distribution}'s filesystem has {count} error(s) recorded against it, the last "
+                + $"in {where}, and the engine is running on it meanwhile";
+        }
 
-        return complaints.Count == 0
-            ? null
-            : WslFailure.OfDirtyFilesystem(
-                $"{Distribution} mounted with a filesystem the kernel complained about, and the "
-                + $"engine is running on it meanwhile: {string.Join("; ", complaints)}",
-                Distribution,
-                _basePath);
+        return null;
     }
 
     /// <summary>
@@ -559,27 +618,6 @@ public sealed class EngineLifecycle : IAsyncDisposable
                 _basePath);
     }
 
-    /// <summary>How many distinct kernel complaints are quoted.</summary>
-    /// <remarks>
-    /// A dirty filesystem repeats itself, and the journal is a column of stamped lines rather than a
-    /// place to paste a ring buffer into. Three is enough to see which failure it is.
-    /// </remarks>
-    private const int KeptComplaints = 3;
-
-    /// <summary>Whether one kernel line is the filesystem complaining about itself.</summary>
-    /// <param name="line">The line.</param>
-    /// <returns><see langword="true"/> where it is.</returns>
-    /// <remarks>
-    /// The four spellings the 29 August incident produced, in the order they arrived: the warning on
-    /// the mount, its recommendation, the error itself, and the remount that followed. Matched on
-    /// the phrases rather than on a whole line, because the kernel wraps them in a timestamp and a
-    /// device name that differ on every machine.
-    /// </remarks>
-    private static bool Complains(string line) =>
-        line.Contains("Filesystem error recorded from previous mount", StringComparison.OrdinalIgnoreCase)
-        || line.Contains("running e2fsck is recommended", StringComparison.OrdinalIgnoreCase)
-        || line.Contains("EXT4-fs error", StringComparison.OrdinalIgnoreCase)
-        || line.Contains("Remounting filesystem read-only", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// What is actually there, asked of the machine rather than inferred from a handle (DD175).

@@ -551,34 +551,40 @@ public sealed class EngineLifecycleTests
 
     // ---- the warning that arrives a boot early (DD191) -----------------------------------------
 
-    /// <summary>What WSL wrote while mounting the distribution on 29 August 2026.</summary>
+    /// <summary>
+    /// What the live distribution answered on 29 August 2026, field for field.
+    /// </summary>
     /// <remarks>
-    /// Kept verbatim, timestamps and device name included, because the match has to survive the
-    /// wrapping the kernel puts around its own phrases and a fixture that had been tidied would
-    /// prove the matcher works against tidy input.
+    /// The healthy case, and it is the one the previous check got wrong: this filesystem's own error
+    /// count was zero while the kernel log still held the incident that had been repaired.
+    /// <c>errors=remount-ro</c> is in the options of every healthy ext4 mount and is the trap a
+    /// substring match for "ro" falls into.
     /// </remarks>
-    private const string DirtyMount =
-        "[    0.412000] EXT4-fs (sdc): Filesystem error recorded from previous mount: IO failure\n"
-        + "[    0.412001] EXT4-fs (sdc): warning: mounting fs with errors, running e2fsck is recommended\n"
-        + "[    0.500000] EXT4-fs (sdc): mounted filesystem with ordered data mode.\n";
+    private const string Well =
+        "device=/dev/sdd\n"
+        + "options=rw,relatime,discard,errors=remount-ro,data=ordered\n"
+        + "errors=0\n"
+        + "where=unknown\n";
 
     [Fact]
-    public void A_mount_the_kernel_complained_about_is_read_and_carries_its_repair()
+    public void A_filesystem_that_recorded_an_error_is_named_and_carries_its_repair()
     {
-        // The failure was announced a boot early and nothing was listening: the mount succeeded, so
-        // the start was reported healthy, and ext4 aborted its journal seconds later.
+        // Its own count, out of /sys/fs/ext4/<device>, which is per-filesystem and which a repair
+        // clears. That is the whole difference from the kernel log this replaced.
         var wsl = new FakeWsl();
-        wsl.Answer(0, "freewilly\r\n").Answer(0, DirtyMount);
+        wsl.Answer(0, "freewilly\r\n").Answer(
+            0,
+            "device=/dev/sdd\noptions=rw,relatime,errors=remount-ro\nerrors=3\n"
+            + "where=ext4_validate_block_bitmap\n");
+
         var engine = new EngineLifecycle(
             wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
 
         var found = engine.CheckFilesystem();
 
         Assert.NotNull(found);
-
-        // The kernel's own words, because a reading nobody can check is worth less than the message
-        // it replaced.
-        Assert.Contains("running e2fsck is recommended", found.Meaning, StringComparison.Ordinal);
+        Assert.Contains("3 error(s)", found.Meaning, StringComparison.Ordinal);
+        Assert.Contains("ext4_validate_block_bitmap", found.Meaning, StringComparison.Ordinal);
 
         // Not a refusal. The engine on it is still worth having and the sentence has to say so.
         Assert.Contains("running on it meanwhile", found.Meaning, StringComparison.Ordinal);
@@ -586,17 +592,72 @@ public sealed class EngineLifecycleTests
     }
 
     [Fact]
-    public void A_clean_mount_says_nothing_at_all()
+    public void A_well_filesystem_says_nothing_at_all()
     {
         // The common case, and it has to cost one line in no file. A start that reported a healthy
         // filesystem every time would be the poll this journal refuses to be.
         var wsl = new FakeWsl();
-        wsl.Answer(0, "freewilly\r\n")
-            .Answer(0, "[    0.500000] EXT4-fs (sdc): mounted filesystem with ordered data mode.\n");
+        wsl.Answer(0, "freewilly\r\n").Answer(0, Well);
         var engine = new EngineLifecycle(
             wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
 
         Assert.Null(engine.CheckFilesystem());
+    }
+
+    [Fact]
+    public void The_remount_ro_in_every_healthy_mounts_options_is_not_read_as_a_fault()
+    {
+        // `errors=remount-ro` says what the kernel would do if there were an error, not that there
+        // was one. A substring match calls every healthy machine broken, which is a check nobody
+        // would keep for long.
+        var wsl = new FakeWsl();
+        wsl.Answer(0, "freewilly\r\n").Answer(0, Well);
+        var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        Assert.Null(engine.CheckFilesystem());
+        Assert.Contains("errors=remount-ro", Well, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_root_the_kernel_has_already_remounted_read_only_is_named_at_the_start()
+    {
+        // The state DD190's failure arrives in. `ro` stands alone in the options where it is real.
+        var wsl = new FakeWsl();
+        wsl.Answer(0, "freewilly\r\n").Answer(
+            0, "device=/dev/sdd\noptions=ro,relatime,errors=remount-ro\nerrors=0\nwhere=unknown\n");
+
+        var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        var found = engine.CheckFilesystem();
+
+        Assert.NotNull(found);
+        Assert.Contains("mounted read-only", found.Meaning, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_check_needs_nothing_a_minirootfs_does_not_have()
+    {
+        // Measured against the live distribution: awk and blkid are there; findmnt, dumpe2fs and
+        // e2fsck are not, because BusyBox is not util-linux. Every distribution provisioned before
+        // DD196 is in that state, so a check that needed a package would answer on none of them.
+        Assert.Contains("/proc/mounts", EngineLifecycle.StateScript, StringComparison.Ordinal);
+        Assert.Contains("/sys/fs/ext4", EngineLifecycle.StateScript, StringComparison.Ordinal);
+
+        foreach (var absent in new[] { "findmnt", "dumpe2fs", "e2fsck", "lsblk" })
+        {
+            Assert.DoesNotContain(absent, EngineLifecycle.StateScript, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void The_shared_kernel_log_is_not_consulted_at_all()
+    {
+        // DD200. WSL2 runs one kernel, so dmesg carries every distribution's disks and every mount
+        // they have had. Filtering it by device would fix the first half and leave the second, so it
+        // is gone rather than narrowed.
+        Assert.DoesNotContain("dmesg", EngineLifecycle.StateScript, StringComparison.Ordinal);
     }
 
     [Fact]
