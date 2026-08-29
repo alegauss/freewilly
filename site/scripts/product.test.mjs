@@ -318,6 +318,23 @@ test("the generated help text is CommandLine's, with its verb constants resolved
       );
     }
   }
+
+  // And back the other way, which is the direction that actually goes stale (DD230). The check
+  // above catches a verb removed from the command and left on the page; nothing caught a verb
+  // added to the command and never regenerated, and three of them reached the site that way,
+  // shipped in DD214, DD215 and DD221 and missing here until somebody happened to run a build.
+  //
+  // Read out of the help text itself rather than out of the router, because that is the string
+  // the generator copies: a verb the command does not print is not one this artefact is missing.
+  const printed = [...commandLine.matchAll(/^ {2,}(--[a-z-]+)/gm)].map(([, verb]) => verb);
+  assert.ok(printed.length > 5, "the help text in CommandLine.cs no longer lists verbs");
+
+  for (const verb of new Set(printed)) {
+    assert.ok(
+      product.help.some((line) => line.trimStart().startsWith(verb)),
+      `CommandLine.cs prints ${verb} and the generated help does not: run npm run generate`,
+    );
+  }
 });
 
 test("the copy reads its counts through the generated module", () => {
