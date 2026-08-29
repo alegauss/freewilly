@@ -62,6 +62,7 @@
 - ✅ **DD202** **fourteen tests fail whenever a real FreeWilly is running, so the suite cannot go green on a machine that has one** — The fourteen single-instance tests skip with the reason where a live product holds their slot, so the suite goes green on the machine developing it.
 - ✅ **DD204** **the filesystem check is assembled twice, once for the verb and once for the window, so the two can drift apart** — The verb and the window reach one assembly of the check, and the routing gap that had left --fsck unreachable since it shipped is closed.
 - ✅ **DD205** **a check leaves the engine stopped, and the page that stopped it offers no way to start it again** — The outcome that stopped the engine now carries the action that starts it, on every ending but the one where the check could not finish.
+- ✅ **DD203** **no run of the check has ever imported a rescue, terminated the engine and read a disk in sequence, from either surface** — The check ran end to end against this machine, all eight steps, and found the live host reviving the engine into the middle of it.
 
 ## Block B — The daemon client (talk to the engine)
 
