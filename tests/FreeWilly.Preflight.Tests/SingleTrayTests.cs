@@ -116,10 +116,13 @@ public sealed class SingleTrayTests
         release.Set();
         holder.Join();
 
+        // The wording is the assertion, so it is held to the sentence that ships: DD202 rewrote the
+        // message for the race it now guards and left these three checking the sentence before it,
+        // which no machine with a tray on it ever ran.
         Assert.NotNull(failure);
-        Assert.Contains("FreeWilly is running", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("FreeWilly's tray took", failure.Message, StringComparison.Ordinal);
         Assert.Contains(SingleTray.Name, failure.Message, StringComparison.Ordinal);
-        Assert.Contains("Quit it from the tray", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("Quit it and re-run", failure.Message, StringComparison.Ordinal);
     }
 
     [FactUnlessTheTrayIsRunning]

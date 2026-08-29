@@ -1008,6 +1008,8 @@ internal static class Program
                 return Cli.AgentSurface.Run(route.Arguments);
             case Cli.Surface.CaptureWindow:
                 return Cli.WindowCapture.Run(route.Arguments);
+            case Cli.Surface.DriveWindow:
+                return Cli.WindowDriver.Run(route.Arguments);
             case Cli.Surface.ShowMenu:
                 return Cli.MenuPreview.Run(route.Arguments);
             case Cli.Surface.Quit:

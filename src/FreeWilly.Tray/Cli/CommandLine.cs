@@ -24,6 +24,9 @@ public enum Surface
     /// <summary>A PNG of the window, rendered rather than photographed.</summary>
     CaptureWindow,
 
+    /// <summary>The real window, driven through UI Automation rather than read (DD214).</summary>
+    DriveWindow,
+
     /// <summary>The tray's context menu, held open so a screen copy can reach it (DD67).</summary>
     ShowMenu,
 
@@ -111,6 +114,16 @@ public static class CommandLine
 
     /// <summary>The verb that renders the window to a PNG without showing it (DD22).</summary>
     public const string CaptureWindowVerb = "--capture-window";
+
+    /// <summary>
+    /// The verb that drives the real window through UI Automation (DD214).
+    /// </summary>
+    /// <remarks>
+    /// A verb and not a test, and the asymmetry with <see cref="CaptureWindowVerb"/> is the same one
+    /// stated the other way round: that one renders a window nobody is looking at, and this one works
+    /// the window a user has. The path it drives stops Docker, so it is invoked deliberately.
+    /// </remarks>
+    public const string DriveWindowVerb = "--drive-window";
 
     /// <summary>
     /// The verb a <c>docker-desktop://</c> build link arrives on (DD126).
@@ -212,6 +225,13 @@ public static class CommandLine
             return new Route(Surface.CaptureWindow, OpenWindow: false, arguments[1..]);
         }
 
+        if (string.Equals(first, DriveWindowVerb, StringComparison.Ordinal))
+        {
+            // The verb is dropped: what follows is --check or nothing. OpenWindow stays false —
+            // this reaches a window through the desktop and does not become one.
+            return new Route(Surface.DriveWindow, OpenWindow: false, arguments[1..]);
+        }
+
         // Exactly one argument, the link. A handler is invoked by the shell with the URL as the only
         // thing after the verb, and anything else arriving here is not the shell.
         if (string.Equals(first, OpenBuildVerb, StringComparison.Ordinal))
@@ -273,6 +293,9 @@ public static class CommandLine
           {QuitVerb}           ask the running tray to exit, and wait until it has
           {CaptureWindowVerb} <out.png> [tab]
                            render the window to a PNG off-screen, photographing nothing else
+          {DriveWindowVerb} [--check]
+                           work the real window through UI Automation and print what it says;
+                           with --check it drives the filesystem check, which stops Docker
           {ShowMenuVerb} [state] [--seconds n]
                            hold the tray's context menu open, for scripts\Capture-Window.ps1
           {OpenBuildVerb} <link>

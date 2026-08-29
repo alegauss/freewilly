@@ -64,25 +64,6 @@ what happened to a filesystem somebody just agreed to have written to.
 
 ## Block C — The window (claude-tray's elements)
 
-### §DD214 Something drives the window, rather than reading it
-
-Every assertion this project makes about the window reads the window's own source. DD207
-checks that one file mentions the stop signal before the teardown; DD210 checks that
-another mentions the interlude before the work. Both were the right call at the time,
-and both are string matching over code. Neither can fail when a handler is left unwired,
-when an `x:Name` moves in markup but not in code, or when a button renders disabled.
-
-Driving it is not hard, and this session did it. UI Automation found the window,
-selected the Engine destination, invoked Check filesystem, located the confirmation by
-its window class, pressed the Portuguese Sim by the Win32 control id rather than its
-caption, and read the outcome and the machine readings back off the panel. That is the
-whole DD210 path end to end against a real machine, and it is what found DD212, which no
-source assertion could have.
-
-What it must not be is part of the ordinary suite. The run it drives stops Docker and
-terminates a distribution, so it belongs behind a flag or in a project of its own,
-invoked deliberately, the way `--capture-window` is a verb and not a test.
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks

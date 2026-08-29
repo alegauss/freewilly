@@ -12,8 +12,6 @@
 
 ## Block C — The window (claude-tray's elements)
 
-- 📋 **DD214** (deps: —) **every test of the window reads the window's own source, so nothing catches a control that is wired wrong** — One driver exercises the real window through UI Automation, deliberately and outside the ordinary suite, because the run it drives stops Docker. → §DD214
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks
