@@ -4,15 +4,22 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD220** (deps: —) **the panel can call a filesystem clean while showing e2fsck's complaints about it directly underneath** — The headline and the transcript beneath it answer to one reading, so a check that exits zero having printed findings says so rather than contradicting itself. → §DD220
+- 📋 **DD221** (deps: —) **the compaction has never run against a real virtual disk, so the one path that hands blocks back is unexercised** — The drill grows a compaction rehearsal, so what wsl --manage prints and whether the disk really got smaller are both seen once before a user meets them. → §DD221
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
+
+- 📋 **DD222** (deps: —) **the driving verb's check half has never been run, because the tray holding the slot was an older build** — One recorded run of the driver against a current window, so the half that presses through a modal and waits out a real check is known to work rather than assumed. → §DD222
 
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks
 
 ## Block F — Installer and distribution (free, Apache 2.0)
+
+- 📋 **DD223** (deps: —) **prepared rescue images are never swept, so a manifest bump orphans one and an uninstall leaves it behind** — The install drops rescue images it no longer names and the uninstaller takes the current one, so eleven megabytes this tool wrote are not a file the user finds later. → §DD223
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
