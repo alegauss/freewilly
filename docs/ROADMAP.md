@@ -4,6 +4,8 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD228** (deps: —) **a temporary distribution left by an interrupted run makes the next one refuse instead of taking it back** — A run that meets its own leftover removes it and says so, because the name is this tool's and the disk under it is scratch nobody created. → §DD228
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
