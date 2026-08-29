@@ -13,7 +13,6 @@
 
 ## Block C — The window (claude-tray's elements)
 
-- 📋 **DD194** (deps: DD193 ✅) **A fixture capture of the builds page draws its times in the operator's zone, so two machines make two pictures** — DD38 buys a capture that is the same picture everywhere, and a start rendered in the local zone is one field the README's screenshots draw differently per machine. → §DD194
 - 📋 **DD197** (deps: DD191 ✅) **no single surface says what state WSL, the distribution and the engine are in** — Diagnosing the 29 August failure took wsl.exe, dmesg, blkid, the registry and a disk query, and every reading it needed is one the product could have shown on the Engine page. → §DD197
 
 ## Block D — Container operations (what a user came to do)

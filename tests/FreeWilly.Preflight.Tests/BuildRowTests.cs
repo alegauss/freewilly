@@ -148,6 +148,36 @@ public class BuildRowTests
     }
 
     [Fact]
+    public void A_capture_of_the_fixture_draws_the_same_digits_in_every_zone()
+    {
+        // DD194, and the literals are the assertion. A committed capture shows these digits, and the
+        // property DD38 buys is that they do not move because somebody else drew the picture. The
+        // anchor carries the drawing machine's own offset for its own wall clock, so converting it
+        // back lands where it started whichever zone that machine is in.
+        var shown = BuildRow.From(new SampleBuilds().Recent())
+            .Select(row => row.When)
+            .ToList();
+
+        // 09:30 less the 1, 6, 22 and 74 minutes the fixture states.
+        Assert.Equal(
+            ["2026-03-14 09:29", "2026-03-14 09:24", "2026-03-14 09:08", "2026-03-14 08:16"],
+            shown);
+    }
+
+    [Fact]
+    public void The_detail_pane_dates_a_fixture_build_the_same_way_the_row_does()
+    {
+        // The field the column defers to for the exact moment, and it is in the same capture. A pane
+        // that converted differently would be one more thing in the picture moving per machine.
+        var history = new SampleBuilds();
+        var newest = history.Inspect(history.Recent()[0].Reference)!;
+
+        var started = BuildsPage.Fields(newest).Single(field => field.Name == "Started");
+
+        Assert.Equal("2026-03-14 09:29:00", started.Value);
+    }
+
+    [Fact]
     public void The_detail_lists_a_field_only_where_the_record_carries_one()
     {
         // Absent, not blank. A caption over nothing reads as a value that failed to load rather than

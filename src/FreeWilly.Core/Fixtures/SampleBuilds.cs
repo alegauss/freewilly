@@ -16,13 +16,51 @@ namespace FreeWilly.Core.Fixtures;
 /// real repository in documentation.</para>
 ///
 /// <para><b>The times are fixed, not relative to now.</b> A capture is compared byte for byte, and a
-/// duration computed against the clock would make every picture differ from the last one.</para>
+/// duration computed against the clock would make every picture differ from the last one. Fixed as a
+/// wall clock rather than as an instant since DD194, so that stays true once the window renders a
+/// time in the machine's own zone.</para>
 /// </remarks>
 public sealed class SampleBuilds : IBuildHistory
 {
+    /// <summary>
+    /// The wall clock this history is anchored to, which is what a capture of it shows (DD194).
+    /// </summary>
+    /// <remarks>
+    /// A wall clock and not an instant, and that is the whole of DD194. The anchor was an instant at
+    /// offset zero, which drew the same digits everywhere only for as long as the window rendered a
+    /// timestamp in its own offset. DD193 made the window follow the machine's clock, for the good
+    /// reason that a time is read against the one in the corner of the same screen, and this fixture
+    /// then moved with the operator's zone: four rows and the <c>Started</c> field beside them, so
+    /// two people documenting the same history produced two different pictures.
+    /// </remarks>
+    private static readonly DateTime AnchorWall = new(2026, 3, 14, 9, 30, 0, DateTimeKind.Unspecified);
+
     /// <summary>The moment this history is anchored to, so a capture is the same picture every run.</summary>
-    public static readonly DateTimeOffset Anchor =
-        new(2026, 3, 14, 9, 30, 0, TimeSpan.Zero);
+    /// <remarks>
+    /// <para><b>Stamped with the drawing machine's own offset, which is the choice DD194 left
+    /// open.</b> The alternative was pinning a zone for the capture process, and this is better on
+    /// both counts the brief weighed. It keeps the byte-identical picture rather than trading it
+    /// away: a wall clock carrying its machine's offset converts back to the same digits in every
+    /// zone, so a committed capture still shows 09:30 whoever drew it. And it needs no second code
+    /// path and no process-wide mutable zone — the render is untouched, which is what the seam was
+    /// introduced to protect.</para>
+    ///
+    /// <para>It is also the honest reading. The fixture states a wall clock and the window shows
+    /// that wall clock, which is exactly what it does with a real build.</para>
+    /// </remarks>
+    public static readonly DateTimeOffset Anchor = At(AnchorWall);
+
+    /// <summary>Stamp a wall-clock moment with this machine's offset for it.</summary>
+    /// <param name="wall">The moment, as a clock on a wall reads it.</param>
+    /// <returns>The instant that reads as <paramref name="wall"/> here.</returns>
+    /// <remarks>
+    /// Each row is stamped from its own wall time rather than shifted off the anchor's offset. The
+    /// difference only shows across a daylight-saving boundary, where a fixed offset carried
+    /// backwards would render an hour off — a picture that differs on some machines in some months
+    /// is the defect this task is about, arrived at by a subtler route.
+    /// </remarks>
+    private static DateTimeOffset At(DateTime wall) =>
+        new(wall, TimeZoneInfo.Local.GetUtcOffset(wall));
 
     private static BuildSummary Summary(
         string name,
@@ -33,7 +71,7 @@ public sealed class SampleBuilds : IBuildHistory
         int total,
         int cached)
     {
-        var started = Anchor.AddMinutes(-minutesAgo);
+        var started = At(AnchorWall.AddMinutes(-minutesAgo));
         return new BuildSummary
         {
             Name = SampleMachine.Prefix + name,

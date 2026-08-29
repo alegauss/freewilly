@@ -96,29 +96,6 @@ survived: the only person it costs is whoever is working on the product.
 
 ## Block C — The window (claude-tray's elements)
 
-### §DD194 A fixture capture stops being the same picture once a time is local
-
-`SampleBuilds.Anchor` is fixed at offset zero and every row is derived from it, so today
-the WHEN column draws the same digits whichever machine ran `--fixture`. Once the render
-follows the machine's clock, four rows in that capture and the `Started` field beside
-them move with the operator's zone, and two people documenting the same build history
-produce two different pictures. That is the property DD38 exists to hold: a picture is
-comparable between runs only where nothing outside the fixture reaches it.
-
-The fixture is where this is answered, not the render. A render that treats fixture data
-differently is a second code path nobody looks at, which is the thing the seam was
-introduced to avoid.
-
-Two ways out, and they trade against each other. The capture can pin a zone for the
-process it draws in, so the conversion always lands on the offset the fixture states and
-the digits in a committed picture never move again. Or the anchor can be built from the
-local zone, so the digits are the anchor's whatever machine drew them, which keeps the
-fixture honest about what a real machine shows and gives the byte comparison up.
-
-Nothing compares those captures byte for byte today, and the README carries them as
-illustrations rather than as evidence, so the choice is open. Whoever takes this line
-decides it and says so here, because the reason will not be recoverable from the diff.
-
 ### §DD197 Six readings a user should not have to take by hand
 
 Diagnosing the 29 August 2026 failure meant reading six sources by hand: `wsl --list
