@@ -2,29 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD220 The verdict and the findings must describe one reading
-
-Measured on 29 August 2026, by the drill DD215 built. An ext4 image with its superblock
-free counters broken was read with `e2fsck -fn`, which printed `Free blocks count wrong
-(3, counted=25798). Fix? no` in full and then exited zero. Those counts are recomputed
-rather than trusted, so the tool considers there to be nothing to correct.
-
-The page reads the exit code, which DD199 chose deliberately and for good reason: the
-text is a tool's prose and the code is its verdict. What nobody looked at is that the
-findings are shown whatever the verdict was. So the panel drew "The filesystem is clean"
-and "Nothing needed mending" above a transcript complaining about the disk, and the
-reader is left holding two answers to one question on the page whose whole job is being
-handed to somebody else.
-
-Neither half is wrong on its own and the fix is not to start parsing e2fsck. What the
-headline and the transcript owe each other is that they describe the same reading: a
-check that found nothing to correct and printed something anyway is a third case, and
-saying so costs a sentence.
-
-It is also the one shape a user cannot resolve themselves. A dirty disk with a headline
-saying so is legible, and a clean disk with an empty transcript is legible; this is the
-combination that reads as the tool having lost track of what it just did.
-
 ### §DD221 The path that hands blocks back is rehearsed too
 
 DD215 made the argument and DD211 is the other half of it. The compaction prunes the

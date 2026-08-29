@@ -738,6 +738,16 @@ internal static class EngineCommand
             return Failed;
         }
 
+        // The same third case the window states, on the surface that has the transcript directly
+        // above rather than in a panel (DD220): a check can exit zero having printed complaints, and
+        // "Nothing to mend" on the next line reads as the tool contradicting itself.
+        if (outcome is { Clean: true, Findings: { Length: > 0 } })
+        {
+            Console.WriteLine(
+                "  e2fsck found nothing it would change. What it printed above can still have "
+                + "something to say about a disk it decided not to change.");
+        }
+
         // Naming the command rather than the intention (DD205). "Start the engine when you are
         // ready" was true and was not an instruction, and this is a console: the next thing wanted
         // is the line to type.

@@ -32,6 +32,48 @@ public sealed class RepairPromptTests
     }
 
     [Fact]
+    public void A_clean_verdict_over_a_transcript_full_of_complaints_says_so()
+    {
+        // DD220, and it was measured rather than imagined. An ext4 image with its superblock free
+        // counters broken printed `Free blocks count wrong (3, counted=25798). Fix? no` in full and
+        // exited zero, because those counts are recomputed rather than trusted. The panel drew
+        // "Nothing needed mending" directly above that, which reads as the tool having lost track of
+        // what it just did.
+        var noisy = Outcome(
+            ok: true,
+            clean: true,
+            findings: "Free blocks count wrong (3, counted=25798).\nFix? no\n");
+
+        var prompt = RepairPrompt.Of(noisy, wrote: false);
+
+        // The reassurance stays first, because it is still the answer the exit code gave.
+        Assert.StartsWith("Nothing needed mending.", prompt.Detail, StringComparison.Ordinal);
+        Assert.Contains("decided not to change", prompt.Detail, StringComparison.Ordinal);
+
+        // And a run that printed nothing keeps the short sentence: there is no transcript to
+        // prepare anybody for, and the longer one would be answering a question nobody asked.
+        Assert.Equal(
+            "Nothing needed mending.",
+            RepairPrompt.Of(Outcome(ok: true, clean: true), wrote: false).Detail);
+    }
+
+    [Fact]
+    public void The_verdict_is_still_the_exit_code_and_never_the_prose()
+    {
+        // What DD220 must not have changed. Reading e2fsck's text for a verdict would be a second
+        // opinion on the same run the CLI reads an exit code for, and the two would drift — which
+        // for this pair means one surface offering to write to the filesystem holding every image
+        // on the machine while the other says there is nothing to mend.
+        var noisy = Outcome(ok: true, clean: true, findings: "Free blocks count wrong. Fix? no");
+
+        var prompt = RepairPrompt.Of(noisy, wrote: false);
+
+        Assert.Contains("clean", prompt.Headline, StringComparison.Ordinal);
+        Assert.False(prompt.OfferRepair);
+        Assert.True(prompt.StartsAgain);
+    }
+
+    [Fact]
     public void A_dirty_filesystem_offers_one_and_says_to_read_the_findings_first()
     {
         // The design's rule: the user sees what the check found before being asked to approve
@@ -308,6 +350,22 @@ public sealed class RepairPromptTests
             Assert.DoesNotContain(
                 "SingleEngine.TellTheLiveOneToStop()", source, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void The_verb_states_the_same_third_case_the_window_does()
+    {
+        // DD220 on the other surface. The words differ because the positions do — the console has
+        // the transcript above and the panel has it below — but the case is one case, and a verb
+        // that only printed "Nothing to mend" under a page of complaints would be the same defect
+        // wearing a different font. Source-asserted for the reason DD204's neighbour is: what is
+        // guarded against is one surface being fixed and the other left.
+        var verb = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/EngineCommand.cs"));
+
+        Assert.Contains(
+            "Clean: true, Findings: { Length: > 0 }", verb, StringComparison.Ordinal);
+        Assert.Contains("decided not to change", verb, StringComparison.Ordinal);
     }
 
     [Fact]

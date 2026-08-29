@@ -4,7 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD220** (deps: —) **the panel can call a filesystem clean while showing e2fsck's complaints about it directly underneath** — The headline and the transcript beneath it answer to one reading, so a check that exits zero having printed findings says so rather than contradicting itself. → §DD220
 - 📋 **DD221** (deps: —) **the compaction has never run against a real virtual disk, so the one path that hands blocks back is unexercised** — The drill grows a compaction rehearsal, so what wsl --manage prints and whether the disk really got smaller are both seen once before a user meets them. → §DD221
 
 ## Block B — The daemon client (talk to the engine)

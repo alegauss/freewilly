@@ -227,7 +227,7 @@ public sealed record RepairPrompt(
         {
             return new RepairPrompt(
                 "The filesystem is clean",
-                "Nothing needed mending.",
+                CleanDetail(outcome.Findings),
                 OfferRepair: false,
                 StartsAgain: true);
         }
@@ -293,6 +293,31 @@ public sealed record RepairPrompt(
                 OfferRepair: false,
                 StartsAgain: true);
     }
+
+    /// <summary>What a clean reading says, given what the tool printed with it (DD220).</summary>
+    /// <param name="findings">Everything <c>e2fsck</c> wrote, or nothing.</param>
+    /// <returns>The detail.</returns>
+    /// <remarks>
+    /// <para><b>Measured, and the reason this is two sentences rather than one.</b> An ext4 image
+    /// with its superblock free counters broken was read with <c>e2fsck -fn</c> on 29 August 2026:
+    /// it printed <c>Free blocks count wrong (3, counted=25798). Fix? no</c> in full and then exited
+    /// zero, because those counts are recomputed rather than trusted. The page reads the exit code,
+    /// which is right and which DD199 settled, and it shows the findings whatever the code said. So
+    /// it drew "Nothing needed mending" directly above a transcript complaining about the disk.</para>
+    ///
+    /// <para><b>Neither half was wrong and the fix is not to start parsing <c>e2fsck</c>.</b> A
+    /// verdict taken from a tool's prose is a second opinion that drifts from the one the CLI reads.
+    /// What the headline and the transcript owe each other is only that they describe the same
+    /// reading, and the reading is: the tool declined to change anything, and said something anyway.
+    /// That is a third case, and saying so costs a sentence.</para>
+    ///
+    /// <para>The reassurance stays first, because it is still the answer. What is added is the part
+    /// that stops a reader concluding the tool lost track of what it just did.</para>
+    /// </remarks>
+    private static string CleanDetail(string? findings) => findings is { Length: > 0 }
+        ? "Nothing needed mending. What e2fsck printed is below, and it can have something to say "
+          + "about a disk it decided not to change."
+        : "Nothing needed mending.";
 
     /// <summary>The two virtual disk readings, as a clause the detail can end on.</summary>
     /// <param name="outcome">What the compaction did.</param>
