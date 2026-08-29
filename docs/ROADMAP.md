@@ -4,6 +4,8 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD226** (deps: —) **the Compact plan asks somebody to stop Docker for a hand-back this machine has already refused once** — The page remembers a refusal Windows will give again, so the button explains itself before it costs an interruption rather than after one. → §DD226
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
