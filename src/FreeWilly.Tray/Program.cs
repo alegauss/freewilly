@@ -742,18 +742,18 @@ internal sealed class TrayApplication : ApplicationContext
         ExitThread();
     }
 
-    /// <summary>Windows is ending the session, so leave nothing behind (DD129).</summary>
+    /// <summary>Windows is ending the session, so leave nothing behind (DD129, DD188).</summary>
     /// <param name="sender">Unused.</param>
     /// <param name="ending">Unused; a logoff and a shutdown are answered the same way.</param>
     /// <remarks>
-    /// A spawn and never a wait. This runs inside a window Windows may close at any moment, and
-    /// <see cref="EngineHolder.Stop"/> is a <see cref="System.Diagnostics.Process"/> start that
-    /// returns long before the
-    /// distribution is down — which is exactly what makes it safe to do here. Blocking on the
-    /// virtual machine shutting down would risk being killed halfway and is no more effective.
+    /// A wait, and it is DD188 that made it one. What was here spawned this executable with
+    /// <c>--stop</c> through <c>ShellExecuteEx</c> and returned at once: the shell it routes through
+    /// is being torn down at the same moment, and nothing on the machine was left waiting, so no
+    /// session ending since DD129 ever produced the Stopped line a Quit produces.
     ///
-    /// <para>The icon and the message loop are left alone. Windows is already taking them, and
-    /// touching UI from this callback would be doing it from the wrong thread on the way out.</para>
+    /// <para>The icon and the message loop are still left alone. Windows is already taking them,
+    /// and touching UI from this callback would be doing it from the wrong thread on the way
+    /// out.</para>
     /// </remarks>
     private void OnSessionEnding(object sender, Microsoft.Win32.SessionEndingEventArgs ending)
     {
@@ -762,7 +762,15 @@ internal sealed class TrayApplication : ApplicationContext
         // it left a journal identical to a crash. The reason Windows gave is in the line because a
         // logoff and a shutdown are different things to be reading about the next morning.
         _journal.Say($"{"session",-8}  Windows is ending the session ({ending?.Reason})");
-        StopTheEngine();
+
+        // The balloon that announces an engine going away on its own must not fire on the way out
+        // (DD164), and the Quit that may follow this must not spawn a second stop (DD129).
+        _stopAsked = true;
+        _engineToldToStop = true;
+
+        _journal.Say(
+            $"{"session",-8}  {SessionTeardown.Run(
+                new LiveEngineTeardown(_api), () => DateTimeOffset.UtcNow, Thread.Sleep)}");
     }
 
     /// <summary>Ask the engine to stop, at most once over this tray's life (DD129).</summary>

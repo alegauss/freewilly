@@ -4,11 +4,11 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD188** (deps: DD187 ✅) **the tray answers a session ending by spawning a stop process Windows kills before it reaches the distribution** — DD129 starts the stop through ShellExecuteEx and waits for nothing, so no session ending since it shipped has produced the Stopped line a Quit produces. → §DD188
 - 📋 **DD189** (deps: —) **the daemon is killed rather than asked to stop, so no container gets a SIGTERM at a quit or a shutdown** — WslDaemonProcess.Stop kills the launcher tree and WSL2 reaps dockerd behind it, so a database container is killed rather than shut down on every teardown. → §DD189
 - 📋 **DD190** (deps: —) **a distribution whose root went read-only fails with getpwnam and a pointer to a log inside it** — The 29 August start died on getpwnam(root) failed 5, which is an EIO and not a missing user, and the tray answered it by naming a log the unreadable filesystem was holding. → §DD190
 - 📋 **DD191** (deps: DD190) **nothing asks whether the distribution filesystem is clean, so a dirty one is found by the start that fails** — WSL said the filesystem needed e2fsck on the mount before the fatal one, and FreeWilly read neither that nor the read-only remount that followed. → §DD191
 - 📋 **DD192** (deps: —) **stdout and stderr share one buffer, so a journal line decodes half of what wsl.exe said as noise** — DD162 drains both streams into one list and Decode picks a single encoding, so a UTF-16 stdout beside a UTF-8 stderr wrote WSL_E_USER_NOT_FOUND into the journal as mojibake. → §DD192
+- 📋 **DD195** (deps: —) **the distribution ships without e2fsprogs, so nothing on it can check or repair its own filesystem** — Provisioning installs the engine and nothing else, and apk cannot run on a root that already went read-only, so the tool has to be there before it is wanted. → §DD195
 
 ## Block B — The daemon client (talk to the engine)
 

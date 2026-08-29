@@ -6,6 +6,47 @@ using Xunit;
 
 namespace FreeWilly.Preflight.Tests;
 
+/// <summary>
+/// The machine a session-ending teardown reaches, on a clock that costs nothing (DD188).
+/// </summary>
+/// <remarks>
+/// The budget is four seconds of real time and this walks it in a few microseconds, which is the
+/// only way the deadline itself is worth asserting: a test that actually waited would be measuring
+/// the build machine.
+/// </remarks>
+internal sealed class FakeTeardown(bool heard, int answersFor) : IEngineTeardown
+{
+    private DateTimeOffset _clock = new(2026, 8, 29, 3, 0, 0, TimeSpan.Zero);
+    private int _asked;
+
+    /// <summary>How many times the distribution was taken down.</summary>
+    internal int Terminates { get; private set; }
+
+    /// <summary>How much of the budget the wait spent.</summary>
+    internal TimeSpan Elapsed => _clock - new DateTimeOffset(2026, 8, 29, 3, 0, 0, TimeSpan.Zero);
+
+    /// <summary>The clock, which only moves when the teardown waits.</summary>
+    /// <returns>Now.</returns>
+    internal DateTimeOffset Now() => _clock;
+
+    /// <summary>Spend <paramref name="span"/> without spending it.</summary>
+    /// <param name="span">How long the teardown thinks it waited.</param>
+    internal void Pause(TimeSpan span) => _clock += span;
+
+    /// <inheritdoc/>
+    public bool TellTheLiveHost() => heard;
+
+    /// <inheritdoc/>
+    public bool EngineAnswers() => _asked++ < answersFor;
+
+    /// <inheritdoc/>
+    public string Terminate()
+    {
+        Terminates++;
+        return "terminated freewilly";
+    }
+}
+
 /// <summary>Records what it was asked to launch instead of launching it.</summary>
 internal sealed class FakeLauncher(string? failure = null) : IProcessLauncher
 {
@@ -581,6 +622,69 @@ public sealed class TrayTests
             EngineCommand.SessionEndingBudget,
             TimeSpan.FromSeconds(1),
             TimeSpan.FromSeconds(4.5));
+    }
+
+    [Fact]
+    public void A_session_ending_no_longer_answers_by_spawning_a_process()
+    {
+        // DD188. The spawn is the defect and not an implementation detail of it: `ShellExecuteEx`
+        // routes through a shell being torn down at the same moment, so the one thing this must not
+        // go back to is launching the executable and returning. Asserted on the handler's own body,
+        // because Quit still spawns and is right to — it is not running during a shutdown.
+        var source = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Program.cs"));
+        var handler = source.IndexOf(
+            "private void OnSessionEnding(", StringComparison.Ordinal);
+        var body = source[handler..source.IndexOf("private void StopTheEngine()", StringComparison.Ordinal)];
+
+        Assert.True(handler >= 0, "the tray no longer hears the session ending");
+        Assert.DoesNotContain("StopTheEngine()", body, StringComparison.Ordinal);
+        Assert.Contains("SessionTeardown.Run(", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_session_ending_with_no_host_to_hear_it_takes_the_distribution_down_itself()
+    {
+        // The case DD187 cannot cover, because the process it gave the SessionEnding subscription
+        // to is not running. Something still has to unmount the distribution's ext4.
+        var machine = new FakeTeardown(heard: false, answersFor: 0);
+
+        var said = SessionTeardown.Run(machine, machine.Now, machine.Pause);
+
+        Assert.Equal(1, machine.Terminates);
+        Assert.Contains("no engine host to tell", said, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_host_that_takes_the_engine_down_is_not_raced_to_the_terminate()
+    {
+        // Two processes running `wsl --terminate` on the same distribution is how a teardown turns
+        // back into the unclean unmount it exists to prevent, so the host doing its job is the one
+        // outcome where this does nothing at all.
+        var machine = new FakeTeardown(heard: true, answersFor: 2);
+
+        var said = SessionTeardown.Run(machine, machine.Now, machine.Pause);
+
+        Assert.Equal(0, machine.Terminates);
+        Assert.Contains("the engine host took it down", said, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_host_that_runs_out_of_budget_is_finished_off_rather_than_left_to_Windows()
+    {
+        // Windows is not waiting longer either way. The choice at the deadline is one more
+        // terminate or a virtual machine reaped with its root never unmounted, and the second is
+        // the ext4 that had to be repaired by hand.
+        var machine = new FakeTeardown(heard: true, answersFor: int.MaxValue);
+
+        var said = SessionTeardown.Run(machine, machine.Now, machine.Pause);
+
+        Assert.Equal(1, machine.Terminates);
+        Assert.Contains("ran out of time", said, StringComparison.Ordinal);
+
+        // Bounded by the budget rather than by the fake running out of answers, which is the whole
+        // reason the loop is on a clock.
+        Assert.InRange(machine.Elapsed, EngineCommand.SessionEndingBudget, TimeSpan.FromSeconds(6));
     }
 
     [Fact]

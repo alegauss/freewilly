@@ -2,29 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD188 DD188: the stop nobody waits for
-
-DD129 answers SessionEnding by calling EngineHolder.Stop, which is a Process.Start of
-this executable with --stop under UseShellExecute. Two things about that shape fail
-during a shutdown. ShellExecuteEx routes through the shell, which is being torn down at
-the same moment, and the handler returns at once, so nothing on the machine is waiting
-when Windows begins killing the session.
-
-The evidence is the same seven endings. A Quit produces the Stopped line and the
-host-is-done line in the same second, because --stop signals the live host through
-SingleEngine and the host writes both. After a session ending neither line was ever
-written, so the spawned process did not reach even the named event.
-
-What replaces it belongs in this process. The tray has a message loop, so it can hold
-the shutdown open with ShutdownBlockReasonCreate, signal the live host, wait a bounded
-time for the pipe to go quiet, and destroy the block. Where no host is running it runs
-the terminate itself. Two details decide the design: the block reason needs a real
-top-level window and the one NotifyIcon keeps may not qualify, and the string it carries
-is shown to the user on the shutdown screen, so it has to say what is being waited for.
-
-Out of scope: wsl --shutdown, for the reason DD128 gave. It would take every other
-distribution on the machine with it.
-
 ### §DD189 DD189: the containers are killed, never stopped
 
 WslDaemonProcess.Stop calls Kill(entireProcessTree: true) on the launcher, and the class
@@ -105,6 +82,27 @@ is already written to be called per stream, and the suite already feeds it bytes
 captured from a real failed launch, so the change is in the draining and in what
 Sentence receives. Worth reading at the same time: ProcessOutput reads the same pair of
 streams and may carry the same defect.
+
+### §DD195 DD193: the tool that has to arrive before the failure
+
+Provisioning installs the engine into the distribution and stops there. `command -v
+e2fsck` inside freewilly answers nothing, and so does `dumpe2fs`, so on 29 August 2026
+the machine held a corrupt ext4 and no program able to say so or to mend it. The check
+had to come from an unrelated Ubuntu that happened to be registered on the same machine.
+
+The timing is the argument. apk needs a writable root and a network, and the moment the
+tool is wanted is exactly the moment the root has gone read-only. A package added during
+provisioning costs a few megabytes once, while the same package fetched on demand is a
+download onto a filesystem that cannot accept writes.
+
+What to install is short and worth pinning rather than resolving: e2fsprogs carries
+dumpe2fs and e2fsprogs-extra carries e2fsck and resize2fs. `engine-manifest.json`
+already pins four artefacts by digest and the Alpine rootfs is one of them, so a fifth
+entry is a shape this project already has.
+
+Detection does not wait on this. /sys/fs/ext4/<device>/errors_count and the mount
+options in /proc/mounts both answer with no package installed at all, which is what
+DD191 reads. This task is about the remedy DD190 names having something to run.
 
 ## Block B — The daemon client (talk to the engine)
 
