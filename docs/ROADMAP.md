@@ -4,6 +4,8 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD231** (deps: —) **the preflight calls this tool's own running engine an unidentified rival and tells the user to uninstall it first** — The pipe signal knows this install's own engine, so the row that must never be wrongly red stops blocking a machine FreeWilly is already running on. → §DD231
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
