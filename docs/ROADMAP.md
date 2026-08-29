@@ -20,8 +20,6 @@
 
 ## Block H — The public surface (the site a reader and an agent both read)
 
-- 📋 **DD206** (deps: —) **the site and llms.txt describe the Engine page as the journal alone, which it stopped being three commits ago** — DD197 put the machine readings on that page and DD199 the filesystem check, and neither touched the two published files that say what the page is. → §DD206
-
 ## Non-goals
 
 - **Feature parity with Docker Desktop** Kubernetes, the extensions marketplace and Dev

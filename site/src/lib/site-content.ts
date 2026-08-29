@@ -693,11 +693,14 @@ export const windowSection = {
     // DD165. No ordinal in this one, deliberately: "the fifth" is a count typed into prose, and
     // this whole file exists because those go stale in silence. What the page is does not need a
     // number — it is the destination the others send you to when they are all empty.
+    // DD165, and widened by DD206 once the page stopped being only the journal. Still no ordinal
+    // and still no count of what it shows: both would be numbers typed into prose, which is what
+    // DD159 removed from this file. What the page is does not need either.
     [
       { b: "Engine is where an empty window explains itself." },
       " The host's own journal, followed while you watch it: every time the engine was brought back, what ",
       { code: "wsl.exe" },
-      " said the last time it would not start, and the suspend it did not survive: a file that outlives the run it describes, on the same footing as a container's log",
+      " said the last time it would not start, and the suspend it did not survive. Beside it, what the machine under the engine is doing: the WSL and kernel versions, the root device and whether it is still writable, what ext4 has recorded against it, and the virtual disk's size against the space used inside it and left on the Windows volume. And a check that reads the filesystem, which offers to repair it only once it has found something and shown you what",
     ] as Rich,
   ],
 };

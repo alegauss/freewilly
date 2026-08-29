@@ -110,10 +110,15 @@ it.
   offers a Start button, "no containers" does not. Five destinations beside About: containers,
   images, volumes, **builds** and **engine**. Builds is where the `docker-desktop://` link
   buildx prints at the end of a build lands, since the record it names is one the daemon kept
-  and only the address was dead; engine is the host's own journal, which is how an empty
-  window explains itself: every time the engine was brought back, what `wsl.exe` said the last
-  time it would not start, and the suspend it did not survive. Every heading sorts and every
-  list has a filter box, over the rows already in hand rather than a second call to the
+  and only the address was dead; engine is how an empty window explains itself. It carries the
+  host's own journal (every time the engine was brought back, what `wsl.exe` said the last time
+  it would not start, and the suspend it did not survive), what the machine under the engine is
+  doing (WSL and kernel versions, the root device and whether it is still writable, what ext4
+  has recorded against it, the virtual disk against the space used inside it and left on the
+  Windows volume), and a check that reads the filesystem and offers to repair it only once it
+  has found something and shown you what. `freewilly read health` answers the same question in
+  one call, and `freewilly --fsck` runs the same check from a terminal. Every heading sorts and
+  every list has a filter box, over the rows already in hand rather than a second call to the
   daemon.
 - **Nothing resident**: no Windows service and no scheduled task. Autostart is a single
   per-user registry value under the `Run` key, off unless the user turns it on, and turning it
