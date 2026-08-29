@@ -4,8 +4,7 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD196** (deps: —) **the distribution ships without e2fsprogs, so nothing on it can check or repair its own filesystem** — Provisioning installs the engine and nothing else, and apk cannot run on a root that already went read-only, so the tool has to be there before it is wanted. → §DD196
-- 📋 **DD199** (deps: DD196, DD190 ✅) **nothing repairs a corrupt distribution filesystem, and the check cannot run against a mounted root** — The 29 August repair took a terminate, a second distribution to run e2fsck from and a read of the disk it left attached, a sequence no user should have to reconstruct. → §DD199
+- 📋 **DD199** (deps: DD196 ✅, DD190 ✅) **nothing repairs a corrupt distribution filesystem, and the check cannot run against a mounted root** — The 29 August repair took a terminate, a second distribution to run e2fsck from and a read of the disk it left attached, a sequence nobody should have to rebuild. → §DD199
 
 ## Block B — The daemon client (talk to the engine)
 

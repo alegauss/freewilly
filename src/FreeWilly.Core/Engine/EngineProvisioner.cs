@@ -271,7 +271,19 @@ public sealed class EngineProvisioner
             // Windows named pipe, and every IP route to it is reachable by any local process, so the
             // hop is over wsl.exe's stdio and needs a tool that speaks unix sockets. BusyBox's nc
             // does not — measured: its usage line offers HOST PORT and no -U.
-            "apk add --no-cache --no-progress iptables ip6tables ca-certificates socat",
+            //
+            // e2fsprogs is here for a failure rather than for a feature (DD196), and the timing is
+            // the whole argument. apk needs a writable root and a network, and the moment e2fsck is
+            // wanted is precisely the moment the root has gone read-only — so a package fetched on
+            // demand is a download onto a filesystem that cannot accept it. On 29 August 2026 this
+            // distribution held a corrupt ext4 and no program able to say so, and the check had to
+            // come from an unrelated Ubuntu that happened to be registered on the same machine.
+            //
+            // Both packages, because the split is not where it reads: e2fsck is in e2fsprogs, while
+            // dumpe2fs and resize2fs are in e2fsprogs-extra (checked against Alpine's own contents
+            // index). A few megabytes once, and the remedy DD190 prints has something to run.
+            "apk add --no-cache --no-progress iptables ip6tables ca-certificates socat "
+            + "e2fsprogs e2fsprogs-extra",
             "mkdir -p /usr/local/bin",
             // --no-same-owner, because tar as root otherwise restores the uid the archive was built
             // with: measured on a real install, every binary landed owned by 1001:1001, a user this
@@ -283,6 +295,10 @@ public sealed class EngineProvisioner
             "chmod 0755 /usr/local/bin/*",
             "printf '[boot]\\nsystemd=false\\n[network]\\ngenerateResolvConf=true\\n' > /etc/wsl.conf",
             "/usr/local/bin/dockerd --version",
+            // Asked with the command that reported it missing (DD196). `apk add` succeeding is not
+            // the same claim: a mirror can serve a package that installs nothing useful, and this is
+            // a tool whose absence is only discovered on the day nothing else works.
+            "command -v e2fsck",
         ]);
     }
 

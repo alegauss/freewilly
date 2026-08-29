@@ -2,27 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD196 The tool that has to arrive before the failure
-
-Provisioning installs the engine into the distribution and stops there. `command -v
-e2fsck` inside freewilly answers nothing, and so does `dumpe2fs`, so on 29 August 2026
-the machine held a corrupt ext4 and no program able to say so or to mend it. The check
-had to come from an unrelated Ubuntu that happened to be registered on the same machine.
-
-The timing is the argument. apk needs a writable root and a network, and the moment the
-tool is wanted is exactly the moment the root has gone read-only. A package added during
-provisioning costs a few megabytes once, while the same package fetched on demand is a
-download onto a filesystem that cannot accept writes.
-
-What to install is short and worth pinning rather than resolving: e2fsprogs carries
-dumpe2fs and e2fsprogs-extra carries e2fsck and resize2fs. `engine-manifest.json`
-already pins four artefacts by digest and the Alpine rootfs is one of them, so a fifth
-entry is a shape this project already has.
-
-Detection does not wait on this. /sys/fs/ext4/<device>/errors_count and the mount
-options in /proc/mounts both answer with no package installed at all, which is what
-DD191 reads. This task is about the remedy DD190 names having something to run.
-
 ### §DD199 The repair behind one button, and what it is allowed to write
 
 Repairing the filesystem on 29 August 2026 took four steps nobody should have to

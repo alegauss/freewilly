@@ -55,6 +55,7 @@
 - ✅ **DD190** **a distribution whose root went read-only fails with getpwnam and a pointer to a log inside it** — getpwnam failing with 5 now reads back as an unreadable root, and the e2fsck commands are printed where a log inside it used to be named.
 - ✅ **DD191** **nothing asks whether the distribution filesystem is clean, so a dirty one is found by the start that fails** — The host now reads the distribution's mount for filesystem errors at start and writes to its root on a long interval, saying so without refusing.
 - ✅ **DD192** **stdout and stderr share one buffer, so a journal line decodes half of what wsl.exe said as noise** — The launcher's two streams are buffered and decoded apart, so the half naming the condition survives instead of being traded for the other.
+- ✅ **DD196** **the distribution ships without e2fsprogs, so nothing on it can check or repair its own filesystem** — Provisioning installs e2fsprogs and e2fsprogs-extra and proves e2fsck is on PATH, so the repair has something to run when apk cannot.
 
 ## Block B — The daemon client (talk to the engine)
 

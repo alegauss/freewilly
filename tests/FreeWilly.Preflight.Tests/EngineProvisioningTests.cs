@@ -274,6 +274,39 @@ public sealed class EngineProvisioningTests : IDisposable
     }
 
     [Fact]
+    public void The_filesystem_tools_are_installed_before_anything_needs_them()
+    {
+        // DD196. The timing is the whole argument: apk needs a writable root and a network, and the
+        // moment e2fsck is wanted is precisely the moment the root has gone read-only. On
+        // 29 August 2026 this distribution held a corrupt ext4 and no program able to say so, and
+        // the check had to come from an unrelated Ubuntu registered on the same machine.
+        var script = EngineProvisioner.InstallScript(@"C:\downloads\docker.tgz");
+
+        // Both packages, because the split is not where it reads: e2fsck is in e2fsprogs, while
+        // dumpe2fs and resize2fs are in e2fsprogs-extra.
+        Assert.Contains("e2fsprogs", script, StringComparison.Ordinal);
+        Assert.Contains("e2fsprogs-extra", script, StringComparison.Ordinal);
+
+        // Asked with the command that reported it missing. `apk add` returning zero is a weaker
+        // claim than the tool being on PATH, and this is a tool whose absence is only discovered on
+        // the day nothing else works.
+        Assert.Contains("command -v e2fsck", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_filesystem_tools_are_proved_present_after_they_are_installed()
+    {
+        // An ordering rather than a presence: `set -e` makes the script stop where it broke, so a
+        // check placed above the install would pass on a distribution that never got the package.
+        var script = EngineProvisioner.InstallScript(@"C:\downloads\docker.tgz");
+
+        Assert.True(
+            script.IndexOf("command -v e2fsck", StringComparison.Ordinal)
+                > script.IndexOf("e2fsprogs-extra", StringComparison.Ordinal),
+            "the proof that e2fsck is there runs before the install that puts it there");
+    }
+
+    [Fact]
     public async Task Provisioning_imports_then_installs_then_places_the_cli()
     {
         var wsl = new FakeWsl();
