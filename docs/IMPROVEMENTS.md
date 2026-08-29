@@ -28,6 +28,49 @@ sequence is minutes long. What it can be is a script run deliberately, the way
 prints what each step did — with the output kept beside DD199's measurement so the next
 reader inherits both.
 
+### §DD204 One sequence, written down twice
+
+`EngineCommand.Fsck` and `FilesystemWork.Run` do the same five things in the same order:
+refuse where the distribution is not registered, acquire the pinned rootfs through the
+verified store, take the engine down on the patient grace, construct a
+`FilesystemRepair` over `VmHold.On`, and call `Check` or `Fix`. Neither reads the other.
+
+It arrived the way this kind of thing does. The verb shipped first and the window came
+six commits later needing the same preparation, and assembling it again was less work
+than finding the shape both wanted. Nothing is wrong with either copy today, which is
+exactly the state a duplicate is in until one of them is edited.
+
+The drift has a direction, too. The verb prints its steps to a console and the window
+renders them, so the halves that differ are the reporting, while the halves that must
+not differ are the guard, the budget and the order the engine is stopped in. A change to
+any of those three is a change somebody will make once.
+
+What they share is `IFilesystemWork`'s two methods and everything above them, which
+suggests the verb should be a caller of the same thing the window calls rather than a
+parallel assembly of its parts. That also puts the one untested sequence behind a single
+door, which is what DD203 has to reach.
+
+### §DD205 The engine this left down
+
+Checking the filesystem needs the root unmounted, so both surfaces stop the engine and
+neither starts it. The CLI closes with "Start the engine when you are ready" and the
+Engine page with "can be started again", and both are true and neither is a control.
+
+The window is where this reads worst. A user pressed a button on the Engine page,
+watched it stop the engine, read that it can be started again, and has to find the
+Containers empty state or the tray menu to do it — on a page that is about the engine
+and now shows it stopped. The nav strip is two clicks and the tray icon is off-window
+entirely.
+
+It is also the moment a start is most wanted and least risky. The filesystem has just
+been read or mended, the distribution is terminated, and bringing it back is the check
+that the repair worked at all.
+
+What it wants is the action beside the outcome, on the prompt that says the engine is
+stopped, doing what the tray's Start engine does. The one thing to be careful of is that
+it must not appear where the run failed: an engine started on a filesystem the check
+could not finish reading is the state DD190 was filed about.
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
