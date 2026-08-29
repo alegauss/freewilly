@@ -65,6 +65,7 @@
 - ✅ **DD203** **no run of the check has ever imported a rescue, terminated the engine and read a disk in sequence, from either surface** — The check ran end to end against this machine, all eight steps, and found the live host reviving the engine into the middle of it.
 - ✅ **DD207** **the filesystem check stops the engine without announcing it, so the live host revives it while e2fsck reads the disk** — The check announces its stop the way --stop does, so the host ends deliberately instead of putting the engine back under e2fsck.
 - ✅ **DD210** **the filesystem check stops Docker with no warning, reports its own stop as an outage, and leaves the engine down** — The check asks before it interrupts anything, tells the tray the stop was asked for so no failure is announced, and starts the engine again when it finishes.
+- ✅ **DD212** **the readings panel still says the distribution is not running after the check has started the engine again** — The readings follow the engine state change the window is already told about, so the panel stops disagreeing with the strip above it.
 
 ## Block B — The daemon client (talk to the engine)
 

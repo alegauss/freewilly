@@ -71,9 +71,10 @@ public sealed class RepairPromptTests
     [Fact]
     public void The_cost_of_checking_is_stated_before_anything_is_pressed()
     {
-        // Checking needs the root unmounted, so the engine and every container stop for it. That is
-        // not something to discover from a button that looked like it only read something.
-        Assert.Contains("the engine stops", RepairPrompt.Idle.Detail, StringComparison.Ordinal);
+        // Docker goes away for it, and that is not something to discover from a button that looked
+        // like it only read something. Said in those words since DD210: what the machine does is
+        // unmount a root, and what it costs the reader is Docker.
+        Assert.Contains("Docker stops", RepairPrompt.Idle.Detail, StringComparison.Ordinal);
         Assert.False(RepairPrompt.Idle.OfferRepair);
     }
 
@@ -141,15 +142,23 @@ public sealed class RepairPromptTests
     {
         // DD210, and it is not the confirmation DD199 refused. That asymmetry was about the
         // filesystem: reading cannot make one worse. What is consented to here is the interruption,
-        // which a check costs whatever it finds, so the dialog names the containers and the ending
-        // rather than asking whether somebody is sure.
-        Assert.Contains("every container", RepairPrompt.CheckConfirmation, StringComparison.Ordinal);
-        Assert.Contains(
-            "started again", RepairPrompt.CheckConfirmation, StringComparison.Ordinal);
+        // which a check costs whatever it finds.
+        //
+        // In the reader's words, which is the correction the first version needed. It said the
+        // distribution's root would be unmounted: true, and a sentence somebody has to translate
+        // before they can weigh it. What they are agreeing to is Docker going away, so the dialog
+        // says that, says what stops with it, and says it comes back.
+        var asked = RepairPrompt.CheckConfirmation;
 
-        // The panel says the same before anything is pressed, because a dialog is not where somebody
-        // should first learn what the button costs.
-        Assert.Contains("come back", RepairPrompt.Idle.Detail, StringComparison.Ordinal);
+        Assert.Contains("Docker stops", asked, StringComparison.Ordinal);
+        Assert.Contains("unavailable", asked, StringComparison.Ordinal);
+        Assert.Contains("starts again by itself", asked, StringComparison.Ordinal);
+
+        // And none of the machinery a reader has no reason to know about.
+        foreach (var jargon in new[] { "unmount", "root", "distribution", "e2fsck" })
+        {
+            Assert.DoesNotContain(jargon, asked, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
@@ -175,7 +184,7 @@ public sealed class RepairPromptTests
             RepairPrompt.Of(early, wrote: false).Detail,
             StringComparison.Ordinal);
         Assert.Contains(
-            "left down on purpose",
+            "left stopped on purpose",
             RepairPrompt.Of(late, wrote: false).Detail,
             StringComparison.Ordinal);
     }
@@ -265,6 +274,30 @@ public sealed class RepairPromptTests
 
         Assert.DoesNotContain("x:Name=\"StartEngine\"", markup, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"Check\"", markup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_readings_follow_the_engine_rather_than_only_the_page_being_opened()
+    {
+        // DD212, and the picture that filed it: the strip said Engine running while the panel under
+        // it said the distribution is not running, seconds after a check had started the engine
+        // back. The readings were taken once, when the page opened, which held only while nothing
+        // but the reader could change them. DD210 ended that.
+        var shell = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Ui/MainWindow.xaml.cs"));
+
+        var refresh = shell.IndexOf("internal Task RefreshAsync(", StringComparison.Ordinal);
+        Assert.True(refresh >= 0, "the shell no longer has the refresh the tray calls on a crossing");
+
+        var reread = shell.IndexOf("RereadTheMachine()", refresh, StringComparison.Ordinal);
+        Assert.True(
+            reread >= 0,
+            "the engine state changes without the readings being re-read, so the panel goes on "
+            + "describing a machine that has moved");
+
+        // And not for a page nobody is looking at: the readings are several wsl.exe children.
+        Assert.Contains(
+            "Visibility.Visible", shell[refresh..(reread + 20)], StringComparison.Ordinal);
     }
 
     /// <summary>Where the repository is, from a test binary under bin/.</summary>

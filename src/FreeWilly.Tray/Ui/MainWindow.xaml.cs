@@ -51,9 +51,8 @@ internal partial class MainWindow : Window
     /// <param name="api">The Engine API client.</param>
     /// <param name="engineState">What the engine is doing, asked at render time.</param>
     /// <param name="startEngine">
-    /// What the Containers empty state's button does. The Engine destination has its own way in
-    /// since DD210, through <paramref name="engine"/>, because a start it makes is one half of an
-    /// interruption it also has to announce the beginning of.
+    /// What the Containers empty state's button does. The Engine page starts through
+    /// <paramref name="engine"/> instead, because its start is half of an interruption (DD210).
     /// </param>
     /// <param name="builds">
     /// Where build records are read from (DD126). The pinned Buildx by default; <c>--fixture</c>
@@ -223,9 +222,16 @@ internal partial class MainWindow : Window
     /// The container an event just arrived for, whose pending state that event confirms.
     /// </param>
     /// <returns>A task that completes when the window has been redrawn.</returns>
+    /// <remarks>The Engine readings come too, while that page is on screen; why the crossing rather
+    /// than a timer is on <see cref="EnginePage.RereadTheMachine"/> (DD212).</remarks>
     internal Task RefreshAsync(string? settled = null)
     {
         ShowEngine(_engineState());
+        if (_engine is { Visibility: Visibility.Visible })
+        {
+            _ = _engine.RereadTheMachine();
+        }
+
         return Containers.RefreshAsync(settled);
     }
 

@@ -112,9 +112,23 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// </summary>
     /// <returns>The work.</returns>
     /// <remarks>
-    /// Internal so the capture and a test can await one read rather than racing the page's own. The
-    /// fixture completes without yielding, so a capture is drawn from the readings rather than from
-    /// the placeholder.
+    /// <para>Internal so the capture and a test can await one read rather than racing the page's
+    /// own. The fixture completes without yielding, so a capture is drawn from the readings rather
+    /// than from the placeholder.</para>
+    ///
+    /// <para><b>Also called when the engine crosses, since DD212.</b> These were taken when the page
+    /// opened and never again, which held only while nothing but the reader could change them.
+    /// DD210 ended that: the page now stops the engine and starts it back with nobody pressing
+    /// anything, and what it left on screen was this panel saying the distribution is not running
+    /// directly beneath a strip saying Engine running. Both drawn at the same moment, one of them a
+    /// minute stale, and no way for a reader to tell which. A page whose whole job is being handed
+    /// to somebody else must not print two answers to one question.</para>
+    ///
+    /// <para>The shell calls this from its own refresh, which the tray already runs on an engine
+    /// state change, so the readings follow the same fact the dot and the word do. Not the poll
+    /// DD137 refuses: that is about asking the engine questions on a timer, and this asks once,
+    /// when something has actually happened. Not for a hidden page either, because a read is
+    /// several <c>wsl.exe</c> children.</para>
     /// </remarks>
     internal async Task RereadTheMachine()
     {

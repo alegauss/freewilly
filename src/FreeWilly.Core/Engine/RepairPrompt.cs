@@ -53,9 +53,8 @@ public sealed record RepairPrompt(
     /// </remarks>
     public static readonly RepairPrompt Idle = new(
         "The filesystem can be checked from here",
-        "Checking needs the distribution's root unmounted, so the engine stops and every container "
-        + "with it, and both come back when it is done. Nothing is written unless the check finds "
-        + "something and you approve a repair.",
+        "Docker stops while the check runs, and starts again by itself at the end. The check only "
+        + "looks at the disk: nothing is changed unless it finds a problem and you approve a repair.",
         OfferRepair: false);
 
     /// <summary>
@@ -69,15 +68,23 @@ public sealed record RepairPrompt(
     /// deserves to hear that before it goes down and not from the sentence beside the button.
     ///
     /// <para>It says the ending too. A dialog that named only the cost would be one people learn to
-    /// dismiss without reading, and the engine coming back on its own is the part that makes this
-    /// worth agreeing to.</para>
+    /// dismiss without reading, and Docker coming back on its own is the part that makes this worth
+    /// agreeing to.</para>
+    ///
+    /// <para><b>In the reader's words and not this project's.</b> The first version of this said the
+    /// distribution's root would be unmounted, which is what happens and not what it costs: somebody
+    /// deciding whether to press a button needs to know Docker goes away and when it comes back, and
+    /// a sentence they have to translate first is one they agree to without having understood it.
+    /// No duration is promised either. The one that was promised, minutes rather than seconds, was a
+    /// guess, and the first measured run took seventeen.</para>
     /// </remarks>
     public const string CheckConfirmation =
-        "Checking needs the distribution's root unmounted, so the engine stops and every container "
-        + "on it stops with it. Running containers are asked to stop first rather than killed.\n\n"
-        + "The check only reads, and writes nothing. When it finishes the engine is started again "
-        + "without you having to ask.\n\n"
-        + "Check the filesystem now?";
+        "Docker stops while this check runs.\n\n"
+        + "Containers, builds and every docker command stop with it and stay unavailable until the "
+        + "check finishes. How long that takes depends on the size of the disk.\n\n"
+        + "The check only looks at the disk. It changes nothing.\n\n"
+        + "Docker starts again by itself at the end.\n\n"
+        + "Stop Docker and check now?";
 
     /// <summary>What the panel says while the work is running.</summary>
     /// <remarks>
@@ -87,8 +94,8 @@ public sealed record RepairPrompt(
     /// </remarks>
     public static readonly RepairPrompt Working = new(
         "Checking the filesystem",
-        "The engine is down while this runs, and is started again when it finishes. A full check of "
-        + "a disk this size is minutes rather than seconds.",
+        "Docker is stopped, and starts again by itself when this finishes. How long it takes "
+        + "depends on the size of the disk.",
         OfferRepair: false);
 
     /// <summary>
@@ -126,9 +133,9 @@ public sealed record RepairPrompt(
             // never touched it; one that stopped at e2fsck left it down, deliberately, and somebody
             // who is not told that goes looking for a second fault.
             var engine = outcome.EngineWentDown
-                ? " The engine was left down on purpose: a filesystem this could not finish reading "
-                + "is not one to start an engine on. Start engine in the tray menu overrides that."
-                : " Nothing was stopped, so the engine is as it was.";
+                ? " Docker was left stopped on purpose: a disk this could not finish reading is not "
+                + "one to start Docker on. Start engine in the tray menu starts it anyway."
+                : " Nothing was stopped, so Docker is as it was.";
 
             return new RepairPrompt(
                 wrote ? "The repair did not finish" : "The check did not finish",
@@ -148,7 +155,7 @@ public sealed record RepairPrompt(
         return wrote
             ? new RepairPrompt(
                 "The filesystem was repaired",
-                "What e2fsck did is below, and the engine starting again is also the check that it "
+                "What was mended is below, and Docker starting again is also the check that it "
                 + "worked.",
                 OfferRepair: false,
                 StartsAgain: true)
@@ -176,7 +183,7 @@ public sealed record RepairPrompt(
     /// </remarks>
     public RepairPrompt AndStarting(TimeSpan budget) => this with
     {
-        Detail = $"{Detail} The engine is starting again, and answers within about "
+        Detail = $"{Detail} Docker is starting again, and is back within about "
             + $"{budget.TotalSeconds:0} seconds.",
         StartsAgain = false,
     };
