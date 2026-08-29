@@ -195,6 +195,51 @@ public sealed class SingleTrayTests
     }
 
     [FactUnlessTheTrayIsRunning]
+    public void The_stop_a_verb_asks_for_reaches_the_tray_and_is_none_of_the_other_three()
+    {
+        // DD213. DD210 closed this for the window, which is in the tray's own process and can call
+        // the method. A verb cannot, so `freewilly --fsck` took the engine down and the tray beside
+        // it saw only an engine that had gone away — fifteen seconds later announcing the outage the
+        // user had typed.
+        RequireTheTraySlot();
+
+        Assert.True(SingleTray.TryClaim(out var only));
+        using (only)
+        {
+            using var expecting = new ManualResetEventSlim(false);
+            using var raised = new ManualResetEventSlim(false);
+            using var quit = new ManualResetEventSlim(false);
+            using var build = new ManualResetEventSlim(false);
+            only!.OnEngineStopAsked(() => expecting.Set());
+            only.OnRaise(() => raised.Set());
+            only.OnQuit(() => quit.Set());
+            only.OnBuild(() => build.Set());
+
+            Assert.True(SingleTray.AskTheLiveOneToExpectAStop());
+            Assert.True(
+                expecting.Wait(TimeSpan.FromSeconds(5)),
+                "the tray was never told the stop was asked for");
+
+            // A fourth named object, for the reason there is a third and a second: an auto-reset
+            // event carries no payload, so a shared handle would make announcing a stop the same
+            // signal as raising a window or closing the tray.
+            Assert.False(raised.IsSet, "announcing a stop also raised the window");
+            Assert.False(quit.IsSet, "announcing a stop also closed the tray");
+            Assert.False(build.IsSet, "announcing a stop also opened a build");
+        }
+    }
+
+    [FactUnlessTheTrayIsRunning]
+    public void Announcing_a_stop_with_no_tray_running_is_not_a_failure()
+    {
+        // The ordinary case for a verb: nobody has the tray open. There is then nothing that could
+        // mistake the teardown for an outage, which is the state the announcement was for.
+        RequireTheTraySlot();
+
+        Assert.False(SingleTray.AskTheLiveOneToExpectAStop());
+    }
+
+    [FactUnlessTheTrayIsRunning]
     public void Asking_a_machine_with_no_tray_to_quit_is_not_a_failure()
     {
         // What the uninstaller runs on a machine where nobody ever opened the tray. It asked for a

@@ -408,7 +408,7 @@ internal sealed class TrayApplication : ApplicationContext
             () => _shown,
             StartEngine,
             engine: Ui.EngineDestination.OnThisMachine(
-                new TrayInterlude(ExpectTheEngineDown, StartEngine)));
+                new TrayInterlude(() => ExpectTheEngineDown(ThePage), StartEngine)));
         _open.Closed += (_, _) => _open = null;
         _open.Show();
         _ = _open.RefreshAsync();
@@ -545,8 +545,14 @@ internal sealed class TrayApplication : ApplicationContext
     private bool _balloonOffersUpdate;
 
     /// <summary>
-    /// The engine is going down because the Engine page asked, not because it failed (DD210).
+    /// The engine is going down because somebody asked, not because it failed (DD210, DD213).
     /// </summary>
+    /// <param name="asker">
+    /// Who asked, as the journal line reads. Named rather than left generic because the two are
+    /// different mornings-after: one is a button in this window, the other is a command somebody
+    /// typed at a prompt, and a reader working out why the engine went down at 14:35 wants to know
+    /// which.
+    /// </param>
     /// <remarks>
     /// <see cref="StopEngine"/> without the stop, because the caller does the stopping: a filesystem
     /// check takes the engine down through the same route <c>--stop</c> takes and then holds the
@@ -558,14 +564,37 @@ internal sealed class TrayApplication : ApplicationContext
     /// answering, which is true and is the same way every other stop reaches it; asserting it here
     /// would be this process claiming an outcome a second before it has one.</para>
     /// </remarks>
-    private void ExpectTheEngineDown()
+    private void ExpectTheEngineDown(string asker)
     {
-        _journal.Say($"{"tray",-8}  a filesystem check asked for the engine to stop");
+        _journal.Say($"{"tray",-8}  {asker} asked for the engine to stop");
         _stopAsked = true;
         _startRequested = false;
         StopWatchingTheStart();
         StopWaitingOutTheBlip();
     }
+
+    /// <summary>What the window's own interruption is called in the journal (DD213).</summary>
+    internal const string ThePage = "the Engine page";
+
+    /// <summary>What a verb's is called (DD213).</summary>
+    internal const string ACommand = "a FreeWilly command";
+
+    /// <summary>
+    /// A verb somewhere on this session is about to take the engine down (DD213).
+    /// </summary>
+    /// <remarks>
+    /// Posted for the reason <see cref="RaiseWindow"/> is: the signal arrives on a background thread
+    /// and this touches the journal and the timers the UI thread owns.
+    ///
+    /// <para>It does not start the engine again at the other end, and there is no other end to hear
+    /// about. That is the decision DD213 settles rather than leaves silent: a command is a scripting
+    /// surface, and it leaves the machine where the script asked for it to be. The window starts the
+    /// engine back because it interrupted somebody who had not asked for an interruption; a person
+    /// who typed <c>--stop</c> asked for exactly this, and <c>--fsck</c> ends by naming the command
+    /// that starts it again (DD205).</para>
+    /// </remarks>
+    internal void ExpectTheEngineDownFromSignal() =>
+        _ui.Post(_ => ExpectTheEngineDown(ACommand), null);
 
     private void StopEngine()
     {
@@ -949,6 +978,11 @@ internal static class Program
                 only!.OnRaise(tray.RaiseWindow);
                 only.OnQuit(tray.QuitFromSignal);
                 only.OnBuild(tray.ShowBuildFromSignal);
+
+                // DD213. Without this the tray hears nothing about a stop a verb asked for, and
+                // fifteen seconds after `freewilly --fsck` takes the engine down it announces the
+                // outage the user themselves typed.
+                only.OnEngineStopAsked(tray.ExpectTheEngineDownFromSignal);
 
                 // The link this launch arrived on, if it arrived on one (DD126). Only then: reading
                 // the handoff on every start would make a file left by an earlier run open a build

@@ -115,10 +115,14 @@ internal sealed class FilesystemWork : IFilesystemWork
     /// <para>Shared with the compaction since DD211 rather than copied into it. The hazard is the
     /// same one and so is the order, and the second copy of a sequence is the one that goes stale.
     /// </para>
+    ///
+    /// <para>The tray is told at the same moment since DD213. It was told only when the window ran
+    /// this, so the same work started from a prompt left a tray watching an engine that went away,
+    /// and fifteen seconds later announcing a failure about a stop the user had typed.</para>
     /// </remarks>
     private static RepairStep StopTheEngine()
     {
-        var heard = SingleEngine.TellTheLiveOneToStop();
+        var heard = AskedStop.Announce();
 
         new EngineLifecycle(new Wsl(), new WslDaemonProcess(), new WslSocatBackend())
             .StopAsync(EngineLifecycle.PatientGrace).GetAwaiter().GetResult();
@@ -126,7 +130,7 @@ internal sealed class FilesystemWork : IFilesystemWork
         return new RepairStep(
             FilesystemRepair.StopStep,
             true,
-            heard
+            heard.Host
                 ? "told the host to stop, so it will not put the engine back under this"
                 : "no host was running, so nothing will put the engine back");
     }

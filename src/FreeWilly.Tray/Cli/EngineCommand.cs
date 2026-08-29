@@ -658,7 +658,12 @@ internal static class EngineCommand
         // engine it loses, and from in there this teardown is indistinguishable from WSL2 dying
         // under a suspend. So the one thing it cannot infer is said out loud, and said first, or
         // the host starts reviving the engine this is in the middle of taking down.
-        _ = SingleEngine.TellTheLiveOneToStop();
+        //
+        // To the tray as well since DD213, which is the same argument one listener over: a tray
+        // beside this prompt sees only an engine that stopped answering. It is less visible here
+        // than under --fsck only because somebody typing `--stop` is not surprised to watch the
+        // engine go, and a balloon calling it a failure is wrong either way.
+        _ = AskedStop.Announce();
 
         // Patient, because somebody asked for this and nothing is waiting on it: Quit spawns this
         // verb and returns, so the icon is already gone while the containers are still stopping.
@@ -680,6 +685,13 @@ internal static class EngineCommand
     /// <para>The check's own output is printed rather than summarised. What <c>e2fsck</c> found is
     /// the thing somebody is deciding on, and a verdict without it is a button that says "trust
     /// me".</para>
+    ///
+    /// <para><b>It does not start the engine again, and since DD213 that is a decision rather than
+    /// a silence.</b> The window does start it, because it interrupted somebody who had not asked
+    /// for an interruption. A command is a scripting surface: the next line of the script decides
+    /// what this machine should be doing, and a verb that quietly brought the engine back would
+    /// overrule it. So the engine is left where the caller asked for it to be, and the last line
+    /// names the command that starts it (DD205).</para>
     /// </remarks>
     private static int Fsck(string flag)
     {

@@ -51,19 +51,37 @@ internal sealed class SingleTray : IDisposable
     /// </remarks>
     private const string BuildName = "FreeWilly.tray.build";
 
+    /// <summary>
+    /// What a verb sets to say the stop about to happen was asked for (DD213).
+    /// </summary>
+    /// <remarks>
+    /// A fourth object for the reason there are three: an auto-reset event carries no payload, so
+    /// anything sharing a handle with one of the others would be the same signal saying a different
+    /// thing. This one is the tray's half of what <c>FreeWilly.engine.stop</c> already tells the host
+    /// (DD136) — two listeners with two different decisions to make, and a tray is very often running
+    /// with no host of its own in the same process.
+    /// </remarks>
+    private const string StopName = "FreeWilly.tray.enginestop";
+
     private readonly Mutex _held;
     private readonly EventWaitHandle _raise;
     private readonly EventWaitHandle _quit;
     private readonly EventWaitHandle _build;
+    private readonly EventWaitHandle _engineStop;
     private readonly CancellationTokenSource _stopping = new();
 
     private SingleTray(
-        Mutex held, EventWaitHandle raise, EventWaitHandle quit, EventWaitHandle build)
+        Mutex held,
+        EventWaitHandle raise,
+        EventWaitHandle quit,
+        EventWaitHandle build,
+        EventWaitHandle engineStop)
     {
         _held = held;
         _raise = raise;
         _quit = quit;
         _build = build;
+        _engineStop = engineStop;
     }
 
     /// <summary>
@@ -98,7 +116,8 @@ internal sealed class SingleTray : IDisposable
             mutex,
             new EventWaitHandle(false, EventResetMode.AutoReset, RaiseName),
             new EventWaitHandle(false, EventResetMode.AutoReset, QuitName),
-            new EventWaitHandle(false, EventResetMode.AutoReset, BuildName));
+            new EventWaitHandle(false, EventResetMode.AutoReset, BuildName),
+            new EventWaitHandle(false, EventResetMode.AutoReset, StopName));
         return true;
     }
 
@@ -123,6 +142,20 @@ internal sealed class SingleTray : IDisposable
     /// become the tray itself rather than exiting, or the link would do nothing at all.
     /// </returns>
     internal static bool AskTheLiveOneToShowABuild() => Signal(BuildName);
+
+    /// <summary>
+    /// Tell whatever holds the tray that the stop about to happen was asked for (DD213).
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/> where a tray was there to hear it. False is not a failure: with no
+    /// tray running there is nothing that could announce the stop as an outage.
+    /// </returns>
+    /// <remarks>
+    /// The other half of what DD210 gave the window. The window says this in process, because it is
+    /// the tray; a verb cannot, and a tray watching an engine that went away has fifteen seconds of
+    /// patience and then a balloon about a stop the user typed themselves.
+    /// </remarks>
+    internal static bool AskTheLiveOneToExpectAStop() => Signal(StopName);
 
     /// <summary>Set one of the two named events, if anything is listening on it.</summary>
     private static bool Signal(string name)
@@ -195,6 +228,14 @@ internal sealed class SingleTray : IDisposable
     /// </param>
     internal void OnBuild(Action show) => Listen(_build, "freewilly-tray-build", show);
 
+    /// <summary>Run <paramref name="expect"/> when a verb announces a stop (DD213).</summary>
+    /// <param name="expect">
+    /// What the tray does about a stop it did not make itself. Called off the UI thread like the
+    /// other three, and it touches the icon and the journal, so it has to marshal.
+    /// </param>
+    internal void OnEngineStopAsked(Action expect) =>
+        Listen(_engineStop, "freewilly-tray-enginestop", expect);
+
     /// <summary>Watch one named event until the claim is disposed.</summary>
     private void Listen(EventWaitHandle signal, string name, Action act)
     {
@@ -227,6 +268,7 @@ internal sealed class SingleTray : IDisposable
         _raise.Dispose();
         _quit.Dispose();
         _build.Dispose();
+        _engineStop.Dispose();
         _stopping.Dispose();
     }
 }

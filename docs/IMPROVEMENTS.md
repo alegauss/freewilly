@@ -2,30 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD213 The terminal's stop is somebody asking too
-
-DD210 closed this for the window and left it open for the terminal. `freewilly --fsck`
-stops the engine through the signal that reaches the host and nothing else, so a tray
-running beside it sees only an engine that went away. Fifteen seconds later it announces
-a failure about a stop the user typed themselves.
-
-Measured here on 29 August 2026, both paths in the same hour. The window writes `a
-filesystem check asked for the engine to stop` before the crossing and stays quiet. The
-CLI writes nothing, and the run ends by telling the reader to start the engine again by
-hand.
-
-`--stop` has the same hole and has had it longer. It is less visible only because
-somebody typing that word is not surprised to watch the engine go.
-
-The tray already owns the decision and the flag. What is missing is a way for another
-process to reach it: the quit and raise signals the tray already answers are the shape
-this wants, and the balloon it would suppress is the one DD183 suppresses for the menu
-item.
-
-Worth settling at the same time is whether the verb should put the engine back, as the
-window now does. There is a case for a scripting surface leaving the machine where the
-script asked, and it should be a decision rather than the current silence.
-
 ### §DD215 The write path is exercised on a disk made dirty on purpose
 
 Everything ever measured has been a clean disk. The check runs `e2fsck -fn`, which

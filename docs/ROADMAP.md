@@ -4,7 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD213** (deps: —) **a check run from the terminal is announced as an outage, because only the window tells the tray** — The stop a CLI verb asks for reaches the tray the way the window's does, so the balloon stays down for a stop somebody typed. → §DD213
 - 📋 **DD215** (deps: —) **the repair has never run against a dirty filesystem, so the one path that writes is unexercised** — A scratch ext4 image dirtied on purpose goes through the same sequence, so what e2fsck prints and what the page shows before a write are both seen once. → §DD215
 - 📋 **DD216** (deps: —) **every check fetches e2fsprogs over the network, so the first one is slow and an offline one refuses** — The rescue gets its tools without a network, so a check works on the machine that most needs it and the dialog can stop blaming the disk for the wait. → §DD216
 - 📋 **DD217** (deps: —) **the findings end with the version banner, because the two streams are concatenated rather than interleaved** — What a tool wrote to each stream is put back in the order it was written, so a repair's complaints sit beside the work they are about. → §DD217

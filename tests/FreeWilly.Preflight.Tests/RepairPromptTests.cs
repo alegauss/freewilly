@@ -227,10 +227,13 @@ public sealed class RepairPromptTests
         // terminate with no host behind it, and the revival that makes this dangerous only exists on
         // a machine running the product. Measured there instead — the host had the engine back nine
         // seconds into the first real run, with the root mounted read-write under e2fsck.
+        //
+        // Through AskedStop since DD213, which announces to the host and the tray together. The
+        // ordering argument is unchanged and now covers both listeners.
         var work = File.ReadAllText(
             Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/FilesystemWork.cs"));
 
-        var told = work.IndexOf("SingleEngine.TellTheLiveOneToStop()", StringComparison.Ordinal);
+        var told = work.IndexOf("AskedStop.Announce()", StringComparison.Ordinal);
         var stopped = work.IndexOf("StopAsync(", StringComparison.Ordinal);
 
         Assert.True(told >= 0, "the check tears the engine down without telling the host, so it "
@@ -238,6 +241,52 @@ public sealed class RepairPromptTests
         Assert.True(
             told < stopped,
             "the host is told after the teardown has begun, which is the window the revival fits in");
+    }
+
+    [Fact]
+    public void Every_stop_this_tool_asks_for_is_announced_to_the_tray_as_well_as_the_host()
+    {
+        // DD213. The two signals are always sent together and always before the teardown, and the
+        // way that stops being true is a third caller copying one of them. Source-asserted for the
+        // reason DD207's neighbour is: the mistake only happens on a machine with a tray up, and
+        // what it produces there is a balloon eight seconds long.
+        var root = RepositoryRoot();
+        var announcement = File.ReadAllText(
+            Path.Combine(root, "src/FreeWilly.Tray/Cli/AskedStop.cs"));
+
+        Assert.Contains(
+            "SingleEngine.TellTheLiveOneToStop()", announcement, StringComparison.Ordinal);
+        Assert.Contains(
+            "SingleTray.AskTheLiveOneToExpectAStop()", announcement, StringComparison.Ordinal);
+
+        // And nothing else reaches past it for one half of the pair. The tray's own in-process path
+        // is the exception the window has and a verb does not.
+        foreach (var verb in new[]
+        {
+            "src/FreeWilly.Tray/Cli/FilesystemWork.cs",
+            "src/FreeWilly.Tray/Cli/EngineCommand.cs",
+        })
+        {
+            var source = File.ReadAllText(Path.Combine(root, verb));
+
+            Assert.Contains("AskedStop.Announce()", source, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "SingleEngine.TellTheLiveOneToStop()", source, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void A_verb_leaves_the_engine_where_the_caller_asked_and_says_which_command_starts_it()
+    {
+        // The half DD213 settles rather than implements. The window starts the engine back because
+        // it interrupted somebody who had not asked for an interruption; a command is a scripting
+        // surface, and a verb that quietly brought the engine back would overrule the next line of
+        // the script. So the verb ends by naming the command instead (DD205).
+        var verb = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/EngineCommand.cs"));
+
+        Assert.Contains("--run` starts the engine again", verb, StringComparison.Ordinal);
+        Assert.DoesNotContain("_interlude", verb, StringComparison.Ordinal);
     }
 
     [Fact]

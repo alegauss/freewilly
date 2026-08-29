@@ -67,6 +67,7 @@
 - ✅ **DD210** **the filesystem check stops Docker with no warning, reports its own stop as an outage, and leaves the engine down** — The check asks before it interrupts anything, tells the tray the stop was asked for so no failure is announced, and starts the engine again when it finishes.
 - ✅ **DD212** **the readings panel still says the distribution is not running after the check has started the engine again** — The readings follow the engine state change the window is already told about, so the panel stops disagreeing with the strip above it.
 - ✅ **DD211** **the virtual disk keeps every gigabyte an image or a build cache ever used, and nothing on the page hands it back** — The Engine page has a Compact button: it drops the build cache, trims the filesystem and hands the freed blocks back to Windows with wsl --manage --set-sparse, reporting both sizes.
+- ✅ **DD213** **a check run from the terminal is announced as an outage, because only the window tells the tray** — A stop a verb asks for reaches the tray through a signal of its own, so no balloon calls it an outage, and the verb leaves the engine where the caller asked and names the command that starts it.
 
 ## Block B — The daemon client (talk to the engine)
 
