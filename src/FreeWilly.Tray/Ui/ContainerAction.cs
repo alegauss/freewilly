@@ -110,6 +110,33 @@ public static class ContainerAction
     }
 
     /// <summary>
+    /// Whether asking the daemon for <paramref name="verb"/> would change anything (DD208).
+    /// </summary>
+    /// <remarks>
+    /// The daemon answers <c>304 Not Modified</c> to a container already in the state asked for, and
+    /// a 304 is the one answer with no event behind it — so a row put into a wait DD8 ends on the
+    /// event waits forever. This is the question asked instead of asking, and it is what keeps a
+    /// project's fan-out off the migration container that exited yesterday.
+    ///
+    /// <para><see cref="ContainerVerb.Restart"/> and <see cref="ContainerVerb.Remove"/> change
+    /// something whatever the state is, so they are never filtered out: restarting a stopped
+    /// container starts it, and the daemon has no 304 for either.</para>
+    /// </remarks>
+    /// <param name="verb">The verb.</param>
+    /// <param name="row">The row, carrying the state the daemon last reported.</param>
+    /// <returns><see langword="true"/> where the call has work to do.</returns>
+    public static bool Changes(ContainerVerb verb, ContainerRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        return verb switch
+        {
+            ContainerVerb.Start => !row.AnyUp,
+            ContainerVerb.Stop => row.AnyUp,
+            _ => true,
+        };
+    }
+
+    /// <summary>
     /// Ask the engine to do <paramref name="verb"/> to <paramref name="id"/>.
     /// </summary>
     /// <param name="api">The client.</param>
@@ -210,11 +237,24 @@ public sealed class RowActivity
     }
 
     /// <summary>Put this row's pending state and failure on it.</summary>
+    /// <remarks>
+    /// A wait also ends here, where the daemon's own list says the outcome already happened (DD208).
+    /// <see cref="Settled"/> is the event that was refreshed for, and this is every other way the
+    /// same fact can arrive: a container that went down while a different container's event was
+    /// being handled, or a stop the daemon answered 304 to because it was already down. Reading the
+    /// state rather than the response keeps DD8 intact, because the list is still what confirms it.
+    /// </remarks>
     /// <param name="row">The freshly projected row.</param>
     /// <returns>The same row, carrying whatever is known about it.</returns>
     public ContainerRow Dress(ContainerRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
+
+        if (_pending.TryGetValue(row.Id, out var verb) && !ContainerAction.Changes(verb, row))
+        {
+            _pending.Remove(row.Id);
+        }
+
         return row with { Pending = PendingFor(row.Id), Failure = FailureFor(row.Id) };
     }
 

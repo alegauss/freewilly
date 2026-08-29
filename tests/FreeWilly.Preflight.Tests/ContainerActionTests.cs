@@ -117,6 +117,63 @@ public sealed class ContainerActionTests
         Assert.Null(activity.Dress(row).Pending);
     }
 
+    // ---- a wait that no event would ever end (DD208) ---------------------------------------------
+
+    [Theory]
+    [InlineData("exited")]
+    [InlineData("created")]
+    public void Stopping_something_already_down_is_the_one_call_with_no_event_behind_it(string state)
+    {
+        // The daemon answers 304, which is not a failure and is not an event either. Asking is what
+        // strands the row, so the answer is not to ask.
+        Assert.False(ContainerAction.Changes(ContainerVerb.Stop, Row(state)));
+        Assert.True(ContainerAction.Changes(ContainerVerb.Start, Row(state)));
+    }
+
+    [Theory]
+    [InlineData("running")]
+    [InlineData("paused")]
+    [InlineData("restarting")]
+    public void Starting_something_already_up_is_the_same_304_from_the_other_side(string state)
+    {
+        Assert.False(ContainerAction.Changes(ContainerVerb.Start, Row(state)));
+        Assert.True(ContainerAction.Changes(ContainerVerb.Stop, Row(state)));
+    }
+
+    [Theory]
+    [InlineData(ContainerVerb.Restart)]
+    [InlineData(ContainerVerb.Remove)]
+    public void Restart_and_remove_have_work_to_do_in_any_state(ContainerVerb verb)
+    {
+        // Restarting a stopped container starts it, and a removal has nothing to be already. Filtering
+        // either out of a project's fan-out would leave containers behind.
+        Assert.True(ContainerAction.Changes(verb, Row("exited")));
+        Assert.True(ContainerAction.Changes(verb, Row("running")));
+    }
+
+    [Fact]
+    public void A_wait_ends_when_the_list_reports_the_outcome_and_not_only_on_its_own_event()
+    {
+        // The refresh this row is dressed on can be some other container's event. The daemon is
+        // reporting it down, which is the whole of what the wait was for.
+        var activity = new RowActivity();
+        activity.Began(Row("running").Id, ContainerVerb.Stop);
+
+        Assert.Null(activity.Dress(Row("exited")).Pending);
+    }
+
+    [Fact]
+    public void A_restart_waits_for_its_event_because_no_state_could_confirm_one()
+    {
+        // Up before and up after, so nothing the list can report says a restart happened. Only the
+        // event does, which is the other half of why Restart is never filtered out of a fan-out.
+        var activity = new RowActivity();
+        var row = Row("running");
+        activity.Began(row.Id, ContainerVerb.Restart);
+
+        Assert.Equal("Restarting…", activity.Dress(row).Pending);
+    }
+
     // ---- failures land where the click was ------------------------------------------------------
 
     [Fact]

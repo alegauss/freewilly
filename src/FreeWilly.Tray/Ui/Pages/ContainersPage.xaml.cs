@@ -468,8 +468,15 @@ internal partial class ContainersPage : System.Windows.Controls.UserControl
     /// </remarks>
     private void SendProject(ContainerRow header, ContainerVerb verb, bool force)
     {
+        // Only the children this verb has something to do to (DD208). A compose project almost
+        // always holds one that exited on purpose — a migration, a one-shot — and asking that one to
+        // stop gets a 304, which is the single answer the daemon gives with no event behind it: the
+        // row would say `Stopping…` for the life of the window, and the header would borrow it.
+        // Asked before the ordering rather than inside it, because which containers a verb reaches
+        // and what order it reaches them in are two questions and only one is about depends_on.
         var children = _rows
             .Where(row => string.Equals(row.Project, header.Project, StringComparison.Ordinal))
+            .Where(row => ContainerAction.Changes(verb, row))
             .ToList();
 
         // Which end wants the dependency first is the verb's question, and it is asked where the

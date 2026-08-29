@@ -121,6 +121,7 @@
 - ✅ **DD107** **A project is stopped one service at a time, so its row carries no verb and four clicks do what one should** — A project's row carries the four verbs, fanned across its containers in compose's own dependency order, with each refusal on the child that refused and the count on the header.
 - ✅ **DD108** **A project's row stops waiting when the last call was answered, not when its containers are down** — A project header reads its wait off its own containers, so it says `Stopping…` for exactly as long as something under it is stopping and ends on the event that ends theirs.
 - ✅ **DD114** **Restarting a project reaches its database last, so its dependents end up pointing at one that restarted after them** — A restart reaches what is depended on first, like a start, because the fan-out now splits on where the project lands rather than on whether the verb brings it up or takes it down.
+- ✅ **DD208** **stopping a project leaves every service that was already down saying Stopping… forever, and the header with them** — A verb now reaches only the containers it has something to do to, and a wait ends where the list reports the outcome, so a project stop no longer strands a one-shot that exited yesterday.
 
 ## Block E — Images, volumes and networks
 
