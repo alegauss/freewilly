@@ -2,31 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD225 A sparse file keeps its length and stops costing the volume
-
-Handing blocks back makes the virtual disk a sparse file, and a sparse file keeps its
-length. NTFS records the ranges nothing wrote to and stops charging for them, so the
-volume gets its space back while `FileInfo.Length` goes on reporting the size the file
-grew to. That is the point of `--set-sparse`, and it is why measuring the length cannot
-see it work.
-
-`DiskCompaction.Sizes` reads the length. So even on a machine where the hand-back
-succeeds, both readings would be the same number, `HandedBack` would be null, and the
-panel would say the disk was compacted and gave nothing back — about a run that had just
-returned gigabytes. The one sentence the button exists to be able to say is the one it
-cannot say.
-
-Nothing had noticed because nothing had ever watched a successful compaction. DD221's
-rehearsal reads both numbers for exactly this reason and carries `FileOnDisk`, which
-asks Windows what a file is actually costing through `GetCompressedFileSize` — the call
-that reports physical storage for sparse and compressed files and the plain length for
-an ordinary one. There is no managed equivalent.
-
-So that is the reading to take, and the two sizes already side by side become three
-questions: what the filesystem may grow into, what it is using, and what the volume is
-charging for. The third is the one a user came about, and the only one a compaction
-moves.
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

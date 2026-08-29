@@ -74,6 +74,7 @@
 - ✅ **DD220** **the panel can call a filesystem clean while showing e2fsck's complaints about it directly underneath** — A clean verdict over a transcript says the tool declined to change anything and printed something anyway, on both surfaces, without either of them reading e2fsck's prose for a verdict.
 - ✅ **DD221** **the compaction has never run against a real virtual disk, so the one path that hands blocks back is unexercised** — A --compact-drill verb grows a scratch disk, empties it and drives the shipped compaction at it; the first run showed WSL refuses --set-sparse outright, so the button cannot work.
 - ✅ **DD224** **the Compact button cannot succeed: WSL refuses --set-sparse outright and names the flag DD211 will not pass** — A hand-back Windows refuses is recognised by the flag it points at, not its translated prose, and the page says Windows has turned this off rather than inviting a second interruption.
+- ✅ **DD225** **the compaction measures the disk's length, which a sparse file keeps, so a hand-back that worked reports no bytes** — The compaction and the panel read what the volume is charging for through GetCompressedFileSize, so a hand-back that worked reports the space a sparse file's length cannot show.
 
 ## Block B — The daemon client (talk to the engine)
 

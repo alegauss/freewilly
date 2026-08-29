@@ -99,10 +99,15 @@ public sealed class MachineReportTests
             ["WSL", "Filesystem", "Errors", "Disk", "Engine"],
             groups.Select(group => group.Title));
 
-        // The two sizes as a pair, which is what a question about a full disk actually needs: a
-        // sparse file that has grown and a filesystem holding data are different facts.
+        // The sizes as a set, which is what a question about a full disk actually needs: a file that
+        // has grown and a filesystem holding data are different facts.
+        //
+        // "used on Windows" is the one DD225 added and it is not a duplicate of "virtual disk". A
+        // disk handed back becomes a sparse file, which keeps its length while NTFS stops charging
+        // for the ranges nothing wrote to, so only one of the two moves when a compaction works.
         var disk = groups.Single(group => group.Title == "Disk");
         Assert.Contains(disk.Readings, r => r.Name == "virtual disk");
+        Assert.Contains(disk.Readings, r => r.Name == "used on Windows");
         Assert.Contains(disk.Readings, r => r.Name == "used inside");
         Assert.Contains(disk.Readings, r => r.Name == "free on Windows");
     }

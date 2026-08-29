@@ -14,8 +14,13 @@ namespace FreeWilly.Core.Fixtures;
 /// <para><b>Every value is fixed and none is derived from this machine</b>, which is what makes a
 /// capture the same picture on every run and the same picture everywhere (DD38). The sizes are the
 /// pair DD197 exists for — a virtual disk on the Windows volume beside the space used inside the
-/// distribution — and they differ from each other for the reason real ones do: a sparse file that
-/// has grown holds more than the filesystem inside it is using.</para>
+/// distribution — and they differ from each other for the reason real ones do: a disk that has grown
+/// holds more than the filesystem inside it is using.</para>
+///
+/// <para><b>What the volume is charging for equals the length here, and that is the honest fixture
+/// (DD225).</b> The two only diverge on a disk that has been handed back, and this machine's has
+/// not: sparse VHD support is off in Windows, so a picture showing a compacted disk would be a
+/// picture of a state nothing on this desk can reach.</para>
 /// </remarks>
 public sealed class SampleMachineReport : IMachineReport
 {
@@ -47,6 +52,7 @@ public sealed class SampleMachineReport : IMachineReport
         new MachineGroup("Disk",
         [
             new MachineReading("virtual disk", "58.3 GB"),
+            new MachineReading("used on Windows", "58.3 GB"),
             new MachineReading("used inside", "56.5 GB"),
             new MachineReading("free on Windows", "214.7 GB"),
         ]),

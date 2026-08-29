@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD225** (deps: DD224 ✅) **the compaction measures the disk's length, which a sparse file keeps, so a hand-back that worked reports no bytes** — The panel reads what the volume is charging for rather than what the file says it is, so the figure it claims is the space the user actually got back. → §DD225
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

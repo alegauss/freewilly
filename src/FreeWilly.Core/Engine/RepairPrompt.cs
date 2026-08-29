@@ -324,15 +324,23 @@ public sealed record RepairPrompt(
           + "about a disk it decided not to change."
         : "Nothing needed mending.";
 
-    /// <summary>The two virtual disk readings, as a clause the detail can end on.</summary>
+    /// <summary>The two readings the claim rests on, as a clause the detail can end on.</summary>
     /// <param name="outcome">What the compaction did.</param>
     /// <returns>The clause, ending in a full stop.</returns>
+    /// <remarks>
+    /// What the volume was charging for, and not the file's length (DD225): the hand-back makes the
+    /// disk sparse and a sparse file keeps its length, so quoting the length as evidence would be
+    /// quoting the one number a successful run does not move. The length is the fallback where
+    /// Windows would not answer, which on an ordinary file is the same figure anyway.
+    /// </remarks>
     private static string Sizes(CompactionOutcome outcome) =>
-        (outcome.Before?.VirtualDisk, outcome.After?.VirtualDisk) switch
+        (outcome.Before?.OnDisk ?? outcome.Before?.VirtualDisk,
+            outcome.After?.OnDisk ?? outcome.After?.VirtualDisk) switch
         {
             ({ } before, { } after) =>
-                $"was {MachineReport.Size(before)} and is now {MachineReport.Size(after)}.",
-            ({ } before, null) => $"was {MachineReport.Size(before)} before this ran.",
+                $"was costing {MachineReport.Size(before)} and is now costing "
+                + $"{MachineReport.Size(after)}.",
+            ({ } before, null) => $"was costing {MachineReport.Size(before)} before this ran.",
             _ => "could not be measured, so there is no figure to compare.",
         };
 

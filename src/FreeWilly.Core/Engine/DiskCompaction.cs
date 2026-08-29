@@ -4,18 +4,26 @@ namespace FreeWilly.Core.Engine;
 /// The two sizes the Engine panel puts side by side (DD197), read at one moment.
 /// </summary>
 /// <param name="VirtualDisk">
-/// What <c>ext4.vhdx</c> costs on the Windows volume, or <see langword="null"/> where it could not
-/// be measured.
+/// How large <c>ext4.vhdx</c> says it is, or <see langword="null"/> where it could not be measured.
 /// </param>
 /// <param name="UsedInside">
 /// What the distribution says is in use inside it, or <see langword="null"/> where it would not say.
 /// </param>
+/// <param name="OnDisk">
+/// What the Windows volume is actually charging for, or <see langword="null"/> where Windows would
+/// not say (DD225).
+/// </param>
 /// <remarks>
-/// Both, and taken together rather than separately, because the whole reading is the gap between
-/// them: a virtual disk of fifty gigabytes against sixteen in use is the sentence this task acts on,
-/// and two numbers read minutes apart are not that sentence.
+/// <para>Taken together rather than separately, because the whole reading is the gap between them: a
+/// virtual disk of fifty gigabytes against sixteen in use is the sentence this task acts on, and two
+/// numbers read minutes apart are not that sentence.</para>
+///
+/// <para><b>Three since DD225, and the third is the only one a compaction moves.</b> Handing blocks
+/// back makes the file sparse, and a sparse file keeps its length: NTFS records the ranges nothing
+/// wrote to and stops charging for them. So a compaction measured by length would report the same
+/// number either side of a run that had just returned gigabytes.</para>
 /// </remarks>
-public sealed record DiskSizes(long? VirtualDisk, long? UsedInside);
+public sealed record DiskSizes(long? VirtualDisk, long? UsedInside, long? OnDisk = null);
 
 /// <summary>What a compaction did, and what the disk was before and after it (DD211).</summary>
 /// <param name="Steps">The steps, in the order they ran.</param>
@@ -44,15 +52,23 @@ public sealed record CompactionOutcome(IReadOnlyList<RepairStep> Steps)
     public RepairStep? Failure => Steps.FirstOrDefault(step => !step.Ok);
 
     /// <summary>
-    /// How many bytes the virtual disk gave back, or <see langword="null"/> where it cannot be said.
+    /// How many bytes the volume gave back, or <see langword="null"/> where it cannot be said.
     /// </summary>
     /// <remarks>
-    /// Never negative. A virtual disk that grew across the run is a real reading and not a reclaim,
-    /// and reporting it as one would be this button claiming credit for the opposite of its job —
-    /// so the figure is withheld and the two sizes stand on their own.
+    /// <para><b>Off what Windows is charging for and not off the file's length (DD225).</b> The
+    /// hand-back makes the virtual disk sparse, and a sparse file keeps its length, so a figure
+    /// taken from the length would be zero on every successful run. The length is still the
+    /// fallback, for a machine whose volume would not answer: on an ordinary file the two are the
+    /// same number, and no reading at all is worse than one taken the old way.</para>
+    ///
+    /// <para>Never negative. A disk that grew across the run is a real reading and not a reclaim,
+    /// and reporting it as one would be this button claiming credit for the opposite of its job, so
+    /// the figure is withheld and the sizes stand on their own.</para>
     /// </remarks>
     public long? HandedBack =>
-        Before?.VirtualDisk is { } before && After?.VirtualDisk is { } after && after < before
+        (Before?.OnDisk ?? Before?.VirtualDisk) is { } before
+        && (After?.OnDisk ?? After?.VirtualDisk) is { } after
+        && after < before
             ? before - after
             : null;
 
@@ -244,7 +260,12 @@ public sealed class DiskCompaction
             "/bin/sh", "-c", DistributionState.Script);
 
         var used = asked.Succeeded ? DistributionState.Of(asked.Output)?.UsedKb : null;
-        return new DiskSizes(onDisk, used is { } kb ? kb * 1024 : null);
+
+        // What the volume is charging for, which is the only one of the three a hand-back moves
+        // (DD225). Asked of Windows rather than derived, because a sparse file's length says
+        // nothing about it.
+        return new DiskSizes(
+            onDisk, used is { } kb ? kb * 1024 : null, FileOnDisk.Bytes(VirtualDiskPath));
     }
 
     /// <summary>Tell ext4 to discard the blocks it is no longer using.</summary>
@@ -335,9 +356,10 @@ public sealed class DiskCompaction
                 : $"`wsl --manage {_paths.DistributionName} --set-sparse true` was refused: {said}");
     }
 
-    /// <summary>One reading, in the words the panel uses for the same two numbers.</summary>
+    /// <summary>One reading, in the words the panel uses for the same three numbers.</summary>
     private static string Describe(DiskSizes sizes) =>
-        $"virtual disk {Size(sizes.VirtualDisk)}, used inside {Size(sizes.UsedInside)}";
+        $"virtual disk {Size(sizes.VirtualDisk)}, used on Windows {Size(sizes.OnDisk)}, "
+        + $"used inside {Size(sizes.UsedInside)}";
 
     private static string Size(long? bytes) =>
         bytes is { } value ? MachineReport.Size(value) : MachineReport.Unread;

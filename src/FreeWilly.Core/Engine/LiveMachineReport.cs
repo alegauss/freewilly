@@ -146,21 +146,34 @@ public sealed class LiveMachineReport(
     ];
 
     /// <remarks>
-    /// Three numbers rather than one, and the third is the one nobody thinks to look at. A
+    /// <para>Four numbers rather than one, and the last is the one nobody thinks to look at. A
     /// distribution cannot grow past the space left on the volume its virtual disk sits on, so a
-    /// full Windows drive is a full engine however much room ext4 believes it has.
+    /// full Windows drive is a full engine however much room ext4 believes it has.</para>
+    ///
+    /// <para><b>The second was added by DD225 and it is not a duplicate of the first.</b> A virtual
+    /// disk handed back to Windows becomes a sparse file, and a sparse file keeps its length: NTFS
+    /// records the ranges nothing wrote to and stops charging for them. So the file goes on saying
+    /// fifty gigabytes while the volume charges for twelve, and only one of those two is the number
+    /// somebody came to this page about.</para>
     /// </remarks>
     private IReadOnlyList<MachineReading> Disk(DistributionState? state)
     {
         var vhdx = Path.Combine(paths.Distribution, "ext4.vhdx");
-        var onDisk = Guarded(() => File.Exists(vhdx) ? (long?)new FileInfo(vhdx).Length : null);
+        var length = Guarded(() => File.Exists(vhdx) ? (long?)new FileInfo(vhdx).Length : null);
+        var charged = Guarded(() => FileOnDisk.Bytes(vhdx));
         var free = Guarded(() =>
             (long?)new DriveInfo(Path.GetPathRoot(paths.Root) ?? paths.Root).AvailableFreeSpace);
 
         return
         [
             new MachineReading(
-                "virtual disk", onDisk is { } size ? MachineReport.Size(size) : MachineReport.Unread),
+                "virtual disk", length is { } size ? MachineReport.Size(size) : MachineReport.Unread),
+
+            // Named to pair with the row below it: the same word either side of the boundary, so
+            // the two are read as one comparison rather than as two unrelated figures.
+            new MachineReading(
+                "used on Windows",
+                charged is { } cost ? MachineReport.Size(cost) : MachineReport.Unread),
             new MachineReading(
                 "used inside",
                 state?.UsedKb is { } used ? MachineReport.Size(used * 1024) : MachineReport.Unread),

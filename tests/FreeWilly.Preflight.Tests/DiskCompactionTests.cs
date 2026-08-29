@@ -182,15 +182,44 @@ public sealed class DiskCompactionTests
         // nothing.
         var outcome = new CompactionOutcome([])
         {
-            Before = new DiskSizes(50L * 1024 * 1024 * 1024, null),
-            After = new DiskSizes(52L * 1024 * 1024 * 1024, null),
+            Before = new DiskSizes(50L * Gigabyte, null, 50L * Gigabyte),
+            After = new DiskSizes(50L * Gigabyte, null, 52L * Gigabyte),
         };
 
         Assert.Null(outcome.HandedBack);
 
-        var shrank = outcome with { After = new DiskSizes(30L * 1024 * 1024 * 1024, null) };
-        Assert.Equal(20L * 1024 * 1024 * 1024, shrank.HandedBack);
+        var shrank = outcome with { After = new DiskSizes(50L * Gigabyte, null, 30L * Gigabyte) };
+        Assert.Equal(20L * Gigabyte, shrank.HandedBack);
     }
+
+    [Fact]
+    public void The_figure_comes_off_what_the_volume_is_charging_for_and_not_off_the_length()
+    {
+        // DD225, and it is the whole claim the button makes. A hand-back turns the virtual disk
+        // into a sparse file, which keeps its length while NTFS stops charging for the ranges
+        // nothing wrote to — so a run measured by length reports no bytes on every occasion it
+        // worked, which is the one sentence the button exists to be able to say.
+        var handedBack = new CompactionOutcome([])
+        {
+            Before = new DiskSizes(50L * Gigabyte, null, 50L * Gigabyte),
+            After = new DiskSizes(50L * Gigabyte, null, 12L * Gigabyte),
+        };
+
+        Assert.Equal(38L * Gigabyte, handedBack.HandedBack);
+
+        // And the length is the fallback rather than a second opinion: on a volume that would not
+        // answer, a figure taken the old way beats no figure at all, and on an ordinary file the
+        // two are the same number anyway.
+        var unreadable = new CompactionOutcome([])
+        {
+            Before = new DiskSizes(50L * Gigabyte, null),
+            After = new DiskSizes(30L * Gigabyte, null),
+        };
+
+        Assert.Equal(20L * Gigabyte, unreadable.HandedBack);
+    }
+
+    private const long Gigabyte = 1024L * 1024 * 1024;
 
     [Fact]
     public void Both_readings_are_taken_by_the_run_itself()
