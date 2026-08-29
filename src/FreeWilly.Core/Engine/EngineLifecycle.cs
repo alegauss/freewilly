@@ -319,12 +319,42 @@ public sealed class EngineLifecycle : IAsyncDisposable
     }
 
     /// <summary>
+    /// How long a deliberate teardown gives the daemon to stop its containers (DD189).
+    /// </summary>
+    /// <remarks>
+    /// The daemon's own default is fifteen seconds per container, and this is that with room for one
+    /// slow one. It costs nothing a user waits on: the Quit menu item spawns <c>--stop</c> and
+    /// returns, so the icon is gone while this is still going.
+    /// </remarks>
+    public static readonly TimeSpan PatientGrace = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// How long a teardown that is out of time gives it instead (DD189).
+    /// </summary>
+    /// <remarks>
+    /// A session ending, and a revival that has an engine to get back. Neither can spend
+    /// <see cref="PatientGrace"/> — Windows is not waiting and the second is a recovery — and both
+    /// are still worth two seconds, because a database that flushes its tables in under a second is
+    /// the common case rather than the lucky one.
+    /// </remarks>
+    public static readonly TimeSpan HurriedGrace = TimeSpan.FromSeconds(2);
+
+    /// <summary>How often the grace asks whether the daemon has gone.</summary>
+    private static readonly TimeSpan GracePoll = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
     /// Stop serving, stop the daemon, and terminate the distribution — an idle WSL2 virtual machine
     /// holds memory a laptop user notices, which is the complaint this project exists about.
     /// </summary>
+    /// <param name="grace">
+    /// How long the daemon is given to stop its containers before it is killed. No default, because
+    /// there is no number that is right for both callers: a quit can afford
+    /// <see cref="PatientGrace"/> and a session ending cannot.
+    /// </param>
     /// <param name="cancellation">Cancellation.</param>
     /// <returns>Stopped, and what was done.</returns>
-    public async Task<EngineStatus> StopAsync(CancellationToken cancellation = default)
+    public async Task<EngineStatus> StopAsync(
+        TimeSpan grace, CancellationToken cancellation = default)
     {
         // Whatever was found about the engine being stopped here is about to stop being true of it.
         _found = null;
@@ -335,6 +365,16 @@ public sealed class EngineLifecycle : IAsyncDisposable
             await _relay.DisposeAsync().ConfigureAwait(false);
             _relay = null;
             done.Add("stopped serving the pipe");
+        }
+
+        // Before the kill, and it is the whole of DD189. What follows kills the launcher tree, and
+        // WSL2 then reaps the user processes behind it with a SIGKILL — so dockerd never ran its own
+        // shutdown and no container ever received a stop signal, on every exit since DD128 including
+        // the Quit menu item. The difference this buys is a MariaDB that closed its tables and one
+        // that recovers them on the next boot.
+        if (await AskTheDaemonToStopAsync(grace, cancellation).ConfigureAwait(false) is { } asked)
+        {
+            done.Add(asked);
         }
 
         if (_daemon.Alive)
@@ -351,10 +391,69 @@ public sealed class EngineLifecycle : IAsyncDisposable
                 : $"could not terminate {Distribution}: {terminated.Output.Trim()}");
         }
 
-        _ = cancellation;
         return new EngineStatus(EngineState.Stopped,
             done.Count == 0 ? "nothing was running" : string.Join(", ", done));
     }
+
+    /// <summary>
+    /// Send the daemon a SIGTERM and wait for it to go, so its containers are stopped (DD189).
+    /// </summary>
+    /// <param name="grace">How long it is given.</param>
+    /// <param name="cancellation">Cancellation.</param>
+    /// <returns>What to report, or <see langword="null"/> where there was nothing to ask.</returns>
+    /// <remarks>
+    /// Gated on the distribution being up, for the reason <see cref="WhatIsThere"/> gives: an
+    /// <c>--exec</c> against one that is not running would <em>start</em> it, and a teardown that
+    /// boots a virtual machine in order to shut it down is worse than the kill it replaced.
+    ///
+    /// <para><c>kill -TERM</c> over <c>pidof</c> rather than <c>pkill</c>, because <c>pidof</c> is
+    /// the spelling this file already relies on being present in the minirootfs. A distribution with
+    /// no daemon in it makes that command fail, which is the answer rather than an error.</para>
+    /// </remarks>
+    private async Task<string?> AskTheDaemonToStopAsync(
+        TimeSpan grace, CancellationToken cancellation)
+    {
+        var running = _wsl.Run("--list", "--running", "--quiet");
+        if (!running.Succeeded || !NamesTheDistribution(running.Output))
+        {
+            return null;
+        }
+
+        var signalled = _wsl.Run(
+            "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", "kill -TERM $(pidof dockerd)");
+        if (!signalled.Succeeded)
+        {
+            return null;
+        }
+
+        // Waiting on the daemon and not on the containers, because they are the same event: dockerd
+        // answers a SIGTERM by stopping what it is running and then exiting, so it being gone is the
+        // proof that they were stopped rather than reaped.
+        var deadline = DateTimeOffset.UtcNow + grace;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(GracePoll, cancellation).ConfigureAwait(false);
+
+            var alive = _wsl.Run(
+                "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", "pidof dockerd");
+            if (!alive.Succeeded)
+            {
+                return "the daemon stopped its containers and exited";
+            }
+        }
+
+        // Said out loud rather than folded into the kill below, because it is the one outcome where
+        // a container was killed after all and the reader of this file is entitled to know which of
+        // the two teardowns they got.
+        return $"the daemon did not stop within {grace.TotalSeconds:0}s";
+    }
+
+    /// <summary>Whether a <c>wsl --list</c> answer names the distribution this install owns.</summary>
+    /// <param name="output">What the launcher printed.</param>
+    /// <returns><see langword="true"/> where the name is in it.</returns>
+    private bool NamesTheDistribution(string output) => output
+        .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+        .Any(line => line.Trim().Equals(Distribution, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// What is actually there, asked of the machine rather than inferred from a handle (DD175).
@@ -385,11 +484,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
             return "the launcher is alive";
         }
 
-        var up = running.Output
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-            .Any(line => line.Trim().Equals(Distribution, StringComparison.OrdinalIgnoreCase));
-
-        if (!up)
+        if (!NamesTheDistribution(running.Output))
         {
             return $"{Distribution} is not running";
         }

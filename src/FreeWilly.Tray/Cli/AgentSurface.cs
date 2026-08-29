@@ -1687,7 +1687,8 @@ public static class AgentSurface
                 var lifecycle = new EngineLifecycle(new Wsl(), new WslDaemonProcess(), new WslSocatBackend());
                 try
                 {
-                    var status = lifecycle.StopAsync().GetAwaiter().GetResult();
+                    var status = lifecycle.StopAsync(EngineLifecycle.PatientGrace)
+                        .GetAwaiter().GetResult();
                     Console.Out.WriteLine($"engine  {status.State.ToString().ToLowerInvariant()}  {status.Detail}");
                     return Ok;
                 }

@@ -194,6 +194,12 @@ internal static class EngineCommand
         // race this ending cannot afford.
         var torndown = new TaskCompletionSource();
 
+        // Which teardown this host is going to get (DD189). Ctrl+C and an announced `--stop` are
+        // somebody at a keyboard and can wait for the containers; a session ending is Windows, which
+        // cannot. Read at the moment the stop runs rather than fixed here, because the ending has
+        // not happened yet and only one of the two endings changes it.
+        var grace = EngineLifecycle.PatientGrace;
+
         void OnSessionEnding(object? _, Microsoft.Win32.SessionEndingEventArgs e)
         {
             // DD187. The host held the two things a teardown needs and was never told the session
@@ -205,6 +211,7 @@ internal static class EngineCommand
             // The reason is in the line because a logoff and a shutdown are different things to be
             // reading about the next morning, which is the same argument the tray's line makes.
             Note(journal, $"  {"session",-8}  Windows is ending the session ({e?.Reason})");
+            grace = EngineLifecycle.HurriedGrace;
             stopping.Cancel();
 
             // Waiting is the point. Returning from here tells Windows this process is ready, and a
@@ -240,11 +247,11 @@ internal static class EngineCommand
             Console.WriteLine();
             Note(journal, "Serving the engine. Ctrl+C stops it.");
 
-            return Supervise(lifecycle, stopping, asked, resumed, journal);
+            return Supervise(lifecycle, stopping, asked, resumed, journal, () => grace);
         }
         catch (OperationCanceledException)
         {
-            Report(lifecycle.StopAsync().GetAwaiter().GetResult(), journal);
+            Report(lifecycle.StopAsync(grace).GetAwaiter().GetResult(), journal);
             return Ok;
         }
         finally
@@ -278,6 +285,10 @@ internal static class EngineCommand
     /// <param name="asked">A <c>--stop</c> that announced itself.</param>
     /// <param name="resumed">Set when Windows says the machine came back.</param>
     /// <param name="journal">Where this host's account of itself is kept (DD137).</param>
+    /// <param name="grace">
+    /// How long the containers get to stop, asked at the moment they are stopped: which ending this
+    /// turned out to be is not known when the loop starts (DD189).
+    /// </param>
     /// <returns>The exit code.</returns>
     /// <remarks>
     /// What this replaced watched for the engine going away and came down with it, which was right
@@ -295,7 +306,8 @@ internal static class EngineCommand
         CancellationTokenSource stopping,
         CancellationTokenSource asked,
         ManualResetEventSlim resumed,
-        EngineHostLog journal)
+        EngineHostLog journal,
+        Func<TimeSpan> grace)
     {
         var watch = new EngineWatch();
         var revival = new EngineRevival();
@@ -416,7 +428,7 @@ internal static class EngineCommand
             Console.WriteLine();
         }
 
-        Report(lifecycle.StopAsync().GetAwaiter().GetResult(), journal);
+        Report(lifecycle.StopAsync(grace()).GetAwaiter().GetResult(), journal);
         return Ok;
     }
 
@@ -453,7 +465,10 @@ internal static class EngineCommand
         {
             Task.Delay(revival.Wait, ending).GetAwaiter().GetResult();
 
-            lifecycle.StopAsync(ending).GetAwaiter().GetResult();
+            // Hurried, because this is a recovery and not a teardown (DD189): whatever is left of
+            // the previous engine is in the way of the one being started, and a revival that spent
+            // twenty seconds asking it nicely would be an engine kept down to be polite to it.
+            lifecycle.StopAsync(EngineLifecycle.HurriedGrace, ending).GetAwaiter().GetResult();
             var back = lifecycle.StartAsync(cancellation: ending).GetAwaiter().GetResult();
             if (back.Usable)
             {
@@ -572,7 +587,10 @@ internal static class EngineCommand
         // the host starts reviving the engine this is in the middle of taking down.
         _ = SingleEngine.TellTheLiveOneToStop();
 
-        var status = NewLifecycle().StopAsync().GetAwaiter().GetResult();
+        // Patient, because somebody asked for this and nothing is waiting on it: Quit spawns this
+        // verb and returns, so the icon is already gone while the containers are still stopping.
+        var status = NewLifecycle().StopAsync(EngineLifecycle.PatientGrace)
+            .GetAwaiter().GetResult();
         Report(status);
         return Ok;
     }

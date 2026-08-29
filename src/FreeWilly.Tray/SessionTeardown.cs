@@ -113,11 +113,15 @@ internal sealed class LiveEngineTeardown(DockerApi api) : IEngineTeardown
     /// <inheritdoc/>
     /// <remarks>
     /// The same lifecycle <c>--stop</c> builds, doing the same work. In this process the relay is
-    /// null and no daemon handle is held, so what is left of <see cref="EngineLifecycle.StopAsync"/>
-    /// is the one call that matters: a terminate unmounts the distribution's ext4 and a kill does
-    /// not.
+    /// null and no daemon handle is held, so what is left of it is the two calls that matter: the
+    /// SIGTERM that lets the containers stop themselves (DD189), and the terminate that unmounts the
+    /// distribution's ext4 where a kill would not.
+    ///
+    /// <para>Hurried, because this runs inside a session ending. It is the same reason the host uses
+    /// that budget on the same event, and the two are the same constant so they cannot drift into
+    /// disagreeing about how long a shutdown has.</para>
     /// </remarks>
     public string Terminate() =>
         new EngineLifecycle(new Wsl(), new WslDaemonProcess(), new WslSocatBackend())
-            .StopAsync().GetAwaiter().GetResult().Detail;
+            .StopAsync(EngineLifecycle.HurriedGrace).GetAwaiter().GetResult().Detail;
 }

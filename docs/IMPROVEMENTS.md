@@ -2,26 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD189 DD189: the containers are killed, never stopped
-
-WslDaemonProcess.Stop calls Kill(entireProcessTree: true) on the launcher, and the class
-already records what follows: WSL2 reaps the user processes shortly after the launching
-wsl.exe exits. That reaping is a SIGKILL. dockerd never receives a SIGTERM, so it never
-runs the shutdown that stops containers, and no container receives one either.
-
-This is not only a shutdown problem. Every teardown this tool performs takes the same
-path, the Quit menu item included, so a database container has been killed rather than
-stopped on every exit since DD128. A stop signal is the difference between a MariaDB
-that closed its tables and one that recovers them on the next boot.
-
-The shape is a signal before the kill: ask dockerd to stop inside the distribution, give
-it a budget, then kill whatever is left and terminate as now. The budget is the
-argument. The daemon's own default is fifteen seconds per container, which is more than
-a session ending can spend, so the two callers want different numbers rather than one. A
-quit can afford to wait and a shutdown cannot, and the honest version of that is a
-parameter rather than a single constant chosen for whichever caller was thought of
-first.
-
 ### §DD190 DD190: the failure that names a WSL internal and no remedy
 
 What the host wrote on 29 August was "the daemon exited while starting", followed by

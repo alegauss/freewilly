@@ -4,7 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD189** (deps: —) **the daemon is killed rather than asked to stop, so no container gets a SIGTERM at a quit or a shutdown** — WslDaemonProcess.Stop kills the launcher tree and WSL2 reaps dockerd behind it, so a database container is killed rather than shut down on every teardown. → §DD189
 - 📋 **DD190** (deps: —) **a distribution whose root went read-only fails with getpwnam and a pointer to a log inside it** — The 29 August start died on getpwnam(root) failed 5, which is an EIO and not a missing user, and the tray answered it by naming a log the unreadable filesystem was holding. → §DD190
 - 📋 **DD191** (deps: DD190) **nothing asks whether the distribution filesystem is clean, so a dirty one is found by the start that fails** — WSL said the filesystem needed e2fsck on the mount before the fatal one, and FreeWilly read neither that nor the read-only remount that followed. → §DD191
 - 📋 **DD192** (deps: —) **stdout and stderr share one buffer, so a journal line decodes half of what wsl.exe said as noise** — DD162 drains both streams into one list and Decode picks a single encoding, so a UTF-16 stdout beside a UTF-8 stderr wrote WSL_E_USER_NOT_FOUND into the journal as mojibake. → §DD192

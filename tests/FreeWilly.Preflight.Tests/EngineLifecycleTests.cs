@@ -260,8 +260,12 @@ internal sealed class FakeDaemon(bool aliveWhenLaunched = true) : IDaemonProcess
         Alive = aliveWhenLaunched;
     }
 
+    /// <summary>Run at the moment the kill happens, so a test can see what came before it (DD189).</summary>
+    internal Action? Watching { get; set; }
+
     public void Stop()
     {
+        Watching?.Invoke();
         Stops++;
         Alive = false;
     }
@@ -794,7 +798,11 @@ public sealed class EngineLifecycleTests
             wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
         await engine.StartAsync(TimeSpan.FromSeconds(20));
 
-        var status = await engine.StopAsync();
+        // Queued after the start, which has its own probes and would eat these: the running gate,
+        // the SIGTERM, then a pidof that finds nothing, which is the daemon having answered.
+        wsl.Answer(0, "freewilly\r\n").Answer(0).Answer(1);
+
+        var status = await engine.StopAsync(EngineLifecycle.HurriedGrace);
 
         Assert.Equal(EngineState.Stopped, status.State);
         Assert.Equal(1, daemon.Stops);
@@ -811,11 +819,93 @@ public sealed class EngineLifecycleTests
         var daemon = new FakeDaemon();
         await using var engine = new EngineLifecycle(wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
 
-        var status = await engine.StopAsync();
+        var status = await engine.StopAsync(EngineLifecycle.HurriedGrace);
 
         Assert.Equal(EngineState.Stopped, status.State);
         Assert.Contains("nothing was running", status.Detail, StringComparison.Ordinal);
         Assert.Equal(0, daemon.Stops);
+    }
+
+    // ---- the containers get a stop signal (DD189) ----------------------------------------------
+
+    [Fact]
+    public async Task The_daemon_is_asked_to_stop_before_anything_is_killed()
+    {
+        // The kill takes the launcher tree and WSL2 reaps dockerd behind it with a SIGKILL, so a
+        // signal sent after it reaches nothing. Ordering is the whole of this task: every teardown
+        // since DD128, the Quit menu item included, killed a database rather than stopping it.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+
+        var asked = -1;
+        var daemon = new FakeDaemon();
+        daemon.Watching = () => asked = wsl.Invocations.FindIndex(
+            argv => argv.Any(word => word.Contains("kill -TERM", StringComparison.Ordinal)));
+
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
+        await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        // Queued after the start, whose own probes would consume them.
+        wsl.Answer(0, "freewilly\r\n").Answer(0).Answer(1);
+
+        var status = await engine.StopAsync(EngineLifecycle.HurriedGrace);
+
+        Assert.True(asked >= 0, "the daemon was killed without being asked to stop first");
+        Assert.Contains("stopped its containers", status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_distribution_that_is_not_running_is_not_started_in_order_to_be_stopped()
+    {
+        // `wsl -d` against a stopped distribution boots it. A teardown that starts a virtual machine
+        // so that it can shut one down is worse than the kill this replaced, so the running list
+        // gates the signal the same way it gates the status probe.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "Ubuntu\r\n", null);
+        var daemon = new FakeDaemon();
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
+
+        await engine.StopAsync(EngineLifecycle.HurriedGrace);
+
+        Assert.DoesNotContain(wsl.Invocations, argv => argv.Length > 0 && argv[0] == "-d");
+    }
+
+    [Fact]
+    public async Task A_daemon_that_will_not_go_within_the_grace_is_named_and_then_killed()
+    {
+        // The one outcome where a container was killed after all, so the journal says which of the
+        // two teardowns this was rather than reporting them identically.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var daemon = new FakeDaemon();
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
+        await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        // Nothing is queued, so every pidof succeeds: dockerd is still there when the budget runs
+        // out. Zero rather than a real grace, because what is asserted is the sentence and not the
+        // wait, and a test that spent the budget would be measuring the build machine.
+        var status = await engine.StopAsync(TimeSpan.Zero);
+
+        Assert.Contains("did not stop within", status.Detail, StringComparison.Ordinal);
+        Assert.Equal(1, daemon.Stops);
+    }
+
+    [Fact]
+    public void The_two_teardown_budgets_are_ordered_the_way_the_two_endings_are()
+    {
+        // A quit waits and a shutdown cannot, which is the argument for there being two of these
+        // rather than one constant chosen for whichever caller was thought of first. Fifteen seconds
+        // is the daemon's own per-container default, and a patient stop that undercut it would be
+        // giving containers a budget their own engine does not believe in.
+        Assert.True(EngineLifecycle.PatientGrace > EngineLifecycle.HurriedGrace);
+        Assert.True(EngineLifecycle.PatientGrace >= TimeSpan.FromSeconds(15));
+        Assert.InRange(
+            EngineLifecycle.HurriedGrace,
+            TimeSpan.FromSeconds(1),
+            FreeWilly.Tray.Cli.EngineCommand.SessionEndingBudget);
     }
 
     [Fact]
