@@ -25,6 +25,73 @@ image and volume the user has. The user sees what the check found before being a
 approve anything. And the engine is down for the duration, so the control belongs where
 that state is already on screen.
 
+### §DD200 The buffer that belongs to the machine, not the distribution
+
+DD191 reads the distribution's `dmesg` after a start and reports the four phrases an
+ext4 fault produces. Two things about that buffer make the reading wrong, and both were
+seen on 29 August 2026 while measuring DD199.
+
+It belongs to the virtual machine and not to a distribution. WSL2 runs one kernel for
+all of them, so the same buffer carried lines for sda, sdb, sdd and sde at once. Every
+line names its device, which is what the match has to use and does not: a complaint
+about the user's Ubuntu is currently reported as the engine's filesystem needing a
+check.
+
+And it is a history rather than a state. The buffer held the original incident in full,
+naming the bad block bitmap checksum in group 348, on a filesystem that `dumpe2fs -h`
+called clean with no recorded errors and that a full `e2fsck -fn` agreed was clean. A
+check that reads it announces a fault that was repaired.
+
+The superblock answers what dmesg cannot. `dumpe2fs -h` reports Filesystem state and FS
+Error count, both of which are this filesystem's own and both of which a repair clears,
+and DD196 already put that binary in the distribution. dmesg is still worth reading for
+what the superblock does not carry, which is the mount that has just happened, and the
+device name in each line is what makes that half sound.
+
+### §DD201 The sequence nobody has run
+
+DD199's mechanism was measured on a real machine and its code was written afterwards.
+Those are two different things, and only the first has met a real `wsl.exe`.
+
+The nine tests drive `FilesystemRepair` through a fake, so what they prove is the
+ordering and the decisions: that the hold opens before the terminate, that the disk is
+found by UUID rather than by device name, that a read answers no and a write answers
+yes, that exit 4 is a finding, and that the rescue is unregistered even after a failure.
+None of that is the verb working.
+
+What has never happened is one run of `--fsck` against this machine: an import of the
+rescue from the pinned rootfs, an `apk add` into it, a terminate, a `blkid -U` that
+resolves, an `e2fsck` that returns, and an unregister that leaves nothing behind. Each
+of those is a place the real thing can differ from the fake, and the import and the
+unregister are the two that leave state on somebody's machine if they half-happen.
+
+It cannot become an ordinary test. Importing and unregistering a distribution is not
+something a suite can do on a build machine, and the failure this guards against is
+minutes long. What it can be is a scripted check run deliberately, the way
+`--capture-window` is, with its output recorded next to the measurement DD199 already
+has.
+
+### §DD202 The suite that cannot pass where the product is installed
+
+`SingleTrayTests` and `SingleEngineTests` claim the session-local mutexes that hold the
+tray and the engine host to one process each. A machine running FreeWilly holds both, so
+all fourteen fail together, every run, on the machine most likely to be developing it.
+
+They already know. Each prints that the object it found is the very one the test claims
+and that nothing below was asserted, which is the right diagnosis written into the wrong
+outcome: a red suite that says "this did not run" is indistinguishable at a glance from
+one that says "this is broken", and the habit it teaches is reading past fourteen
+failures to find the one that matters.
+
+A skip is the honest marker for it. The condition is knowable before the assertions run
+and it is not a defect in anything, so `Assert.Skip` with the same sentence puts the
+fact where a reader already looks for it. What must not happen is the tests quietly
+passing: the slot being held is exactly what they exist to notice, and a green run that
+asserted nothing is worse than a red one that said so.
+
+CI is unaffected either way, since no FreeWilly runs there, which is also why this has
+survived: the only person it costs is whoever is working on the product.
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
