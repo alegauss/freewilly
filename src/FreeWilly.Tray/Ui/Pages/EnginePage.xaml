@@ -66,6 +66,12 @@
                  writes, so only the second asks first — and Repair stays hidden until a check has
                  found something for it to do, which is the design's rule that nobody approves a
                  write before seeing what it is for. -->
+            <!-- Beside the outcome that stopped it (DD205), because this is the page that took the
+                 engine down and the alternative is the Containers empty state two clicks away or
+                 the tray icon off-window entirely. Hidden where the run failed: an engine started
+                 on a filesystem the check could not finish reading is DD190's state. -->
+            <Button x:Name="StartEngine" Content="Start engine" Click="StartTheEngine"
+                    Visibility="Collapsed" Padding="12,2" Margin="0,0,8,0" FontSize="12" />
             <Button x:Name="Repair" Content="Repair" Click="RepairTheFilesystem"
                     Visibility="Collapsed" Padding="12,2" Margin="0,0,8,0" FontSize="12" />
             <Button x:Name="Check" Content="Check filesystem" Click="CheckTheFilesystem"

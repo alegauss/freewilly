@@ -27,13 +27,18 @@ public interface IFilesystemWork
 /// <param name="Headline">The one line above the detail.</param>
 /// <param name="Detail">What was found, or what is about to happen.</param>
 /// <param name="OfferRepair">Whether a repair is worth offering from here.</param>
+/// <param name="OfferStart">
+/// Whether to offer to start the engine this left down (DD205). Never where the run failed: an
+/// engine started on a filesystem the check could not finish reading is the state DD190 is about.
+/// </param>
 /// <remarks>
 /// The page renders this and decides none of it. A window that worked out for itself whether to
 /// offer a repair would be a second opinion on the same <c>e2fsck</c> exit code the CLI already
 /// reads, and the two would drift — which for this pair means one surface offering to write to the
 /// filesystem holding every image the user has while the other says there is nothing to mend.
 /// </remarks>
-public sealed record RepairPrompt(string Headline, string Detail, bool OfferRepair)
+public sealed record RepairPrompt(
+    string Headline, string Detail, bool OfferRepair, bool OfferStart = false)
 {
     /// <summary>What the panel says before anything has been run.</summary>
     /// <remarks>
@@ -94,19 +99,38 @@ public sealed record RepairPrompt(string Headline, string Detail, bool OfferRepa
         {
             return new RepairPrompt(
                 "The filesystem is clean",
-                "Nothing needed mending. The engine is stopped and can be started again.",
-                OfferRepair: false);
+                "Nothing needed mending, and the engine this stopped can be started again.",
+                OfferRepair: false,
+                OfferStart: true);
         }
 
         return wrote
             ? new RepairPrompt(
                 "The filesystem was repaired",
-                "The engine is stopped and can be started again. What e2fsck did is below.",
-                OfferRepair: false)
+                "What e2fsck did is below. Starting the engine again is also the check that it "
+                + "worked.",
+                OfferRepair: false,
+                OfferStart: true)
             : new RepairPrompt(
                 "The filesystem has errors",
                 "A repair would mend them. What the check found is below, and it is worth reading "
                 + "before approving one.",
-                OfferRepair: true);
+                OfferRepair: true,
+                OfferStart: true);
     }
+
+    /// <summary>What the panel says once a start has been asked for (DD205).</summary>
+    /// <param name="budget">How long the tray gives a start before it gives up on it.</param>
+    /// <returns>The prompt.</returns>
+    /// <remarks>
+    /// The wait is named because a start is not instant and the panel beside this one will say the
+    /// engine is not answering until it lands. A button that looked like it had done nothing is how
+    /// somebody presses it twice.
+    /// </remarks>
+    public static RepairPrompt Starting(TimeSpan budget) => new(
+        "Starting the engine",
+        $"It answers within about {budget.TotalSeconds:0} seconds. The readings above are from "
+        + "before it was asked, and are re-read whenever this page is opened.",
+        OfferRepair: false,
+        OfferStart: false);
 }

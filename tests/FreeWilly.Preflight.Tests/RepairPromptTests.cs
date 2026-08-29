@@ -88,6 +88,48 @@ public sealed class RepairPromptTests
     }
 
     [Fact]
+    public void A_run_that_finished_offers_to_start_the_engine_it_left_down()
+    {
+        // DD205. Checking needs the root unmounted, so this page is the one that stopped the engine
+        // and the alternative is the Containers empty state or the tray icon. All three endings
+        // offer it: clean, repaired, and errors somebody has not decided about yet.
+        Assert.True(RepairPrompt.Of(Outcome(ok: true, clean: true), wrote: false).OfferStart);
+        Assert.True(RepairPrompt.Of(Outcome(ok: true, clean: false), wrote: true).OfferStart);
+        Assert.True(RepairPrompt.Of(Outcome(ok: true, clean: false), wrote: false).OfferStart);
+    }
+
+    [Fact]
+    public void A_run_that_did_not_finish_never_offers_to_start_the_engine()
+    {
+        // The one exclusion the design names. An engine started on a filesystem the check could not
+        // finish reading is the state DD190 was filed about.
+        foreach (var wrote in new[] { false, true })
+        {
+            Assert.False(RepairPrompt.Of(Outcome(ok: false, clean: false), wrote).OfferStart);
+        }
+    }
+
+    [Fact]
+    public void Nothing_is_offered_before_a_run_or_during_one()
+    {
+        // The engine is up before a check and going down during one, so an offer to start it is
+        // either premature or a race with the thing that is stopping it.
+        Assert.False(RepairPrompt.Idle.OfferStart);
+        Assert.False(RepairPrompt.Working.OfferStart);
+    }
+
+    [Fact]
+    public void A_start_that_was_asked_for_names_how_long_it_takes()
+    {
+        // The panel beside this says the engine is not answering until the start lands, and a button
+        // that looked like it had done nothing is how somebody presses it twice.
+        var prompt = RepairPrompt.Starting(TimeSpan.FromSeconds(75));
+
+        Assert.Contains("75 seconds", prompt.Detail, StringComparison.Ordinal);
+        Assert.False(prompt.OfferStart);
+    }
+
+    [Fact]
     public void The_verb_and_the_window_reach_one_assembly_of_the_sequence()
     {
         // DD204. Both had built the same five steps — the registered guard, the rootfs acquire, the

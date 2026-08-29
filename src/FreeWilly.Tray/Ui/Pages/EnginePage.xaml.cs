@@ -38,6 +38,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     private readonly DispatcherTimer _timer;
 
     private readonly IFilesystemWork _work;
+    private readonly Action _startEngine;
 
     /// <summary>What the readings said last, for the copy button.</summary>
     private MachineHealth? _readings;
@@ -59,9 +60,15 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// (L6): the live ones describe whatever this machine did that afternoon, and the last of them
     /// terminates a distribution.
     /// </param>
-    internal EnginePage(EngineSeams seams)
+    /// <param name="startEngine">
+    /// What the tray's Start engine does (DD205). The same action the Containers empty state uses,
+    /// because a second way to start the engine would be a second thing to keep right.
+    /// </param>
+    internal EnginePage(EngineSeams seams, Action startEngine)
     {
         ArgumentNullException.ThrowIfNull(seams);
+        ArgumentNullException.ThrowIfNull(startEngine);
+        _startEngine = startEngine;
         InitializeComponent();
         _journal = seams.Journal;
         _machine = seams.Machine;
@@ -323,6 +330,21 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
 
         Found.Visibility = Visibility.Visible;
         Repair.Visibility = prompt.OfferRepair ? Visibility.Visible : Visibility.Collapsed;
+        StartEngine.Visibility = prompt.OfferStart ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Start the engine this page stopped (DD205).</summary>
+    /// <param name="sender">Unused.</param>
+    /// <param name="e">Unused.</param>
+    /// <remarks>
+    /// The tray's own start, not a second one: it is the thing that knows a start cannot land on a
+    /// machine with no distribution registered (DD120) and that owns the state the icon shows. This
+    /// page asks for it and says so.
+    /// </remarks>
+    private void StartTheEngine(object sender, RoutedEventArgs e)
+    {
+        _startEngine();
+        Show(RepairPrompt.Starting(TrayState.StartBudget), FoundSteps.Text);
     }
 
     /// <summary>Hand the readings to whoever is being asked about this machine (DD197).</summary>

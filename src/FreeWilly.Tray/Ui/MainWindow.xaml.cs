@@ -178,7 +178,7 @@ internal partial class MainWindow : Window
                 // No refresh call beside it, unlike every other destination: the page reads its own
                 // file on a timer it starts when it becomes visible, because what it shows changes
                 // while somebody is looking at it and nothing here would know to ask again (DD165).
-                _engine ??= Add(new EnginePage(_engineSeams));
+                _engine ??= Add(new EnginePage(_engineSeams, _startEngine));
                 page = _engine;
                 break;
             case "About":

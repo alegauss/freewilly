@@ -5,7 +5,6 @@
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
 - 📋 **DD203** (deps: —) **no run of the check has ever imported a rescue, terminated the engine and read a disk in sequence, from either surface** — DD201 fixed the two commands a minirootfs lacks by measuring them one at a time, and the six steps have still only ever run against a fake. → §DD203
-- 📋 **DD205** (deps: —) **a check leaves the engine stopped, and the page that stopped it offers no way to start it again** — Both surfaces end by saying the engine can be started again, and neither does it: the window's start lives on another page and in the tray menu. → §DD205
 
 ## Block B — The daemon client (talk to the engine)
 

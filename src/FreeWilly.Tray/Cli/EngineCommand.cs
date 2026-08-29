@@ -725,10 +725,16 @@ internal static class EngineCommand
             return Failed;
         }
 
+        // Naming the command rather than the intention (DD205). "Start the engine when you are
+        // ready" was true and was not an instruction, and this is a console: the next thing wanted
+        // is the line to type.
         Console.WriteLine(outcome switch
         {
-            { Clean: true } => "  Nothing to mend. Start the engine when you are ready.",
-            { } when write => "  Repaired. Start the engine when you are ready.",
+            { Clean: true } =>
+                $"  Nothing to mend. `{CommandLine.ExecutableName} --run` starts the engine again.",
+            { } when write =>
+                $"  Repaired. `{CommandLine.ExecutableName} --run` starts the engine again, which "
+                + "is also the check that it worked.",
             _ => $"  Run `{CommandLine.ExecutableName} --fsck --repair` to mend this.",
         });
 
