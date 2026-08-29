@@ -259,6 +259,26 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
         PostJsonAsync<VolumesPruned>("volumes/prune", new { }, cancellation);
 
     /// <summary>
+    /// Drop the build cache the daemon itself calls reclaimable, and report what came back (DD211).
+    /// </summary>
+    /// <remarks>
+    /// <para>No <c>all=true</c>, and that is the whole safety of it. The bare endpoint takes only
+    /// what buildkit has marked reusable-no-longer; <c>all</c> takes every cached layer on the
+    /// machine, which is a rebuild of everything somebody has built this month, and it is not a
+    /// thing to arrive at by omitting a parameter. Same argument as
+    /// <see cref="PruneDanglingImagesAsync"/>, and the same shape.</para>
+    ///
+    /// <para><b>Not on <see cref="IEngineClient"/>.</b> That interface is what the window's pages
+    /// read the engine through, and this is not a page read: it is one step of a sequence that ends
+    /// by terminating the distribution, wired where the rest of that sequence is. Putting it on the
+    /// interface would make every fixture answer a question no page asks.</para>
+    /// </remarks>
+    /// <param name="cancellation">Cancellation.</param>
+    /// <returns>What was deleted and how much space came back.</returns>
+    public Task<BuildCachePruned> PruneBuildCacheAsync(CancellationToken cancellation = default) =>
+        PostJsonAsync<BuildCachePruned>("build/prune", new { }, cancellation);
+
+    /// <summary>
     /// What happened between two moments, from the daemon's own bounded history.
     /// </summary>
     /// <remarks>

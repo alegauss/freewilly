@@ -19,10 +19,21 @@ public interface IFilesystemWork
     /// <param name="report">Called with each step as it lands.</param>
     /// <returns>What was done.</returns>
     RepairOutcome Fix(Action<RepairStep> report);
+
+    /// <summary>Hand back what the virtual disk is holding and nothing wants (DD211).</summary>
+    /// <param name="report">Called with each step as it lands.</param>
+    /// <returns>What was done, and what the disk was either side of it.</returns>
+    /// <remarks>
+    /// Here rather than behind a seam of its own, because it is the same thing this one exists to
+    /// keep out of a capture: a window that constructed it could terminate this machine's
+    /// distribution. Two seams for two buttons with one hazard would only be two places to remember
+    /// to refuse.
+    /// </remarks>
+    CompactionOutcome Compact(Action<RepairStep> report);
 }
 
 /// <summary>
-/// What the window says about a filesystem check, and whether it offers to mend it (DD199).
+/// What the window says about work it started on the disk, and what it offers next (DD199, DD211).
 /// </summary>
 /// <param name="Headline">The one line above the detail.</param>
 /// <param name="Detail">What was found, or what is about to happen.</param>
@@ -99,6 +110,35 @@ public sealed record RepairPrompt(
         OfferRepair: false);
 
     /// <summary>
+    /// The plan a compaction is asked in, before anything runs (DD211).
+    /// </summary>
+    /// <remarks>
+    /// It names what goes and what stays, in that order, because the fear this dialog has to answer
+    /// is not how long it takes: it is whether a button called Compact is about to delete somebody's
+    /// images. So the removal is one sentence and the list of what is left alone is the next, and
+    /// both are above the question.
+    ///
+    /// <para>Build cache is named as build cache rather than as reclaimable space. The daemon calls
+    /// it reclaimable and that word belongs to the daemon; what the reader has to decide is whether
+    /// they mind rebuilding a layer, which is a thing they can answer.</para>
+    /// </remarks>
+    public const string CompactConfirmation =
+        "Docker stops while the disk is compacted.\n\n"
+        + "The build cache goes first, then the filesystem discards what it has already freed, then "
+        + "the virtual disk hands those blocks back to Windows.\n\n"
+        + "Images, containers and volumes are left alone. The only thing deleted is build cache, "
+        + "which Docker rebuilds the next time it needs it.\n\n"
+        + "Docker starts again by itself at the end.\n\n"
+        + "Stop Docker and compact now?";
+
+    /// <summary>What the panel says while a compaction is running.</summary>
+    public static readonly RepairPrompt Compacting = new(
+        "Compacting the disk",
+        "Docker is stopped, and starts again by itself when this finishes. How long it takes "
+        + "depends on how much the virtual disk is holding.",
+        OfferRepair: false);
+
+    /// <summary>
     /// What a repair is asked in, before it is allowed to write.
     /// </summary>
     /// <remarks>
@@ -166,6 +206,65 @@ public sealed record RepairPrompt(
                 OfferRepair: true,
                 StartsAgain: true);
     }
+
+    /// <summary>Read a compaction for what the page should now say (DD211).</summary>
+    /// <param name="outcome">What the compaction did.</param>
+    /// <returns>The prompt.</returns>
+    /// <remarks>
+    /// <para><b>It reports the two readings and not only the difference.</b> The button's claim is
+    /// that a gap on this page got smaller, so the sizes it got smaller between are the evidence, and
+    /// a headline naming gigabytes with nothing under it is the sentence a user has no way to check.
+    /// </para>
+    ///
+    /// <para><b>The engine goes back on every ending here, including the failing one</b>, which is
+    /// where this parts company with <see cref="Of(RepairOutcome, bool)"/>. DD190 keeps the engine
+    /// down after a check that could not finish because the disk under it may be unreadable. Nothing
+    /// in a compaction reads for damage: a hand-back that failed leaves a filesystem exactly as
+    /// sound as it was, and keeping Docker down over a tidy-up that did not work would be this page
+    /// punishing somebody for pressing a housekeeping button.</para>
+    /// </remarks>
+    public static RepairPrompt Of(CompactionOutcome outcome)
+    {
+        ArgumentNullException.ThrowIfNull(outcome);
+
+        var sizes = Sizes(outcome);
+        if (!outcome.Succeeded)
+        {
+            return new RepairPrompt(
+                "The disk was not compacted",
+                (outcome.Failure?.Detail ?? "nothing said where it stopped")
+                + (outcome.EngineWentDown
+                    ? " Nothing on the disk was changed by this, so Docker is being started again."
+                    : " Nothing was stopped, so Docker is as it was."),
+                OfferRepair: false,
+                StartsAgain: outcome.EngineWentDown);
+        }
+
+        return outcome.HandedBack is { } bytes
+            ? new RepairPrompt(
+                $"Windows got {MachineReport.Size(bytes)} back",
+                $"The virtual disk {sizes}",
+                OfferRepair: false,
+                StartsAgain: true)
+            : new RepairPrompt(
+                "The disk was compacted and gave nothing back",
+                $"There was nothing being held that the filesystem had finished with. The virtual "
+                + $"disk {sizes}",
+                OfferRepair: false,
+                StartsAgain: true);
+    }
+
+    /// <summary>The two virtual disk readings, as a clause the detail can end on.</summary>
+    /// <param name="outcome">What the compaction did.</param>
+    /// <returns>The clause, ending in a full stop.</returns>
+    private static string Sizes(CompactionOutcome outcome) =>
+        (outcome.Before?.VirtualDisk, outcome.After?.VirtualDisk) switch
+        {
+            ({ } before, { } after) =>
+                $"was {MachineReport.Size(before)} and is now {MachineReport.Size(after)}.",
+            ({ } before, null) => $"was {MachineReport.Size(before)} before this ran.",
+            _ => "could not be measured, so there is no figure to compare.",
+        };
 
     /// <summary>
     /// The same ending, with the start this page has just asked for named (DD205, DD210).

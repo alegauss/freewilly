@@ -148,6 +148,22 @@ public sealed record VolumesPruned
     public long SpaceReclaimed { get; init; }
 }
 
+/// <summary>What a build cache prune reclaimed (DD211).</summary>
+/// <remarks>
+/// Only the two fields the compaction reports. <c>CachesDeleted</c> is a list of build record ids,
+/// which is a thing nobody reads and would only make the panel longer.
+/// </remarks>
+public sealed record BuildCachePruned
+{
+    /// <summary>How many cache records went.</summary>
+    [JsonPropertyName("CachesDeleted")]
+    public IReadOnlyList<string>? CachesDeleted { get; init; }
+
+    /// <summary>How many bytes came back.</summary>
+    [JsonPropertyName("SpaceReclaimed")]
+    public long SpaceReclaimed { get; init; }
+}
+
 /// <summary>How an image reference reads when it is a digest rather than a name (DD166).</summary>
 public static class ImageReference
 {

@@ -70,8 +70,13 @@
                  undo an interruption it had caused without being asked to leave it in place, which
                  is a click charged for the tool's own bookkeeping: the run puts the engine back
                  itself now, on every ending but the one DD190 refuses to start from. -->
+            <!-- Beside Repair and not on a panel of its own (DD211). The gap it acts on is two of
+                 the readings above it, and the interruption it costs is the one Check filesystem
+                 already costs, so this is the row where both of those are already on screen. -->
             <Button x:Name="Repair" Content="Repair" Click="RepairTheFilesystem"
                     Visibility="Collapsed" Padding="12,2" Margin="0,0,8,0" FontSize="12" />
+            <Button x:Name="Compact" Content="Compact" Click="CompactTheDisk"
+                    Padding="12,2" Margin="0,0,8,0" FontSize="12" />
             <Button x:Name="Check" Content="Check filesystem" Click="CheckTheFilesystem"
                     Padding="12,2" Margin="0,0,8,0" FontSize="12" />
             <Button x:Name="CopyMachine" Content="Copy" Click="CopyTheMachine"

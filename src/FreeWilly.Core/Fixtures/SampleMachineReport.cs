@@ -84,6 +84,9 @@ public sealed class SampleFilesystemWork : IFilesystemWork
     /// <inheritdoc/>
     public RepairOutcome Fix(Action<RepairStep> report) => Refuse();
 
+    /// <inheritdoc/>
+    public CompactionOutcome Compact(Action<RepairStep> report) => new(Refuse().Steps);
+
     private static RepairOutcome Refuse() => new(
     [
         new RepairStep(

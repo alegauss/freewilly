@@ -4,7 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD211** (deps: DD210 ✅) **the virtual disk keeps every gigabyte an image or a build cache ever used, and nothing on the page hands it back** — The Engine page grows a Compact button beside Repair: it trims what the filesystem freed, then hands the blocks back to Windows with wsl --manage --set-sparse. → §DD211
 - 📋 **DD213** (deps: —) **a check run from the terminal is announced as an outage, because only the window tells the tray** — The stop a CLI verb asks for reaches the tray the way the window's does, so the balloon stays down for a stop somebody typed. → §DD213
 - 📋 **DD215** (deps: —) **the repair has never run against a dirty filesystem, so the one path that writes is unexercised** — A scratch ext4 image dirtied on purpose goes through the same sequence, so what e2fsck prints and what the page shows before a write are both seen once. → §DD215
 - 📋 **DD216** (deps: —) **every check fetches e2fsprogs over the network, so the first one is slow and an offline one refuses** — The rescue gets its tools without a network, so a check works on the machine that most needs it and the dialog can stop blaming the disk for the wait. → §DD216

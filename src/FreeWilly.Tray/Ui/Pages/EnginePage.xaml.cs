@@ -282,6 +282,87 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         }
     }
 
+    /// <summary>Hand back what the virtual disk is holding and nothing wants (DD211).</summary>
+    /// <param name="sender">Unused.</param>
+    /// <param name="e">Unused.</param>
+    /// <remarks>
+    /// It asks, like the check does, and about the same thing: the engine goes down for the
+    /// duration. What the plan adds is the half a button called Compact cannot state on its own,
+    /// which is what gets deleted. Build cache goes; images, containers and volumes do not.
+    /// </remarks>
+    private async void CompactTheDisk(object sender, RoutedEventArgs e)
+    {
+        var answer = System.Windows.MessageBox.Show(
+            RepairPrompt.CompactConfirmation,
+            "Compact the disk",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Question,
+            System.Windows.MessageBoxResult.No);
+
+        if (answer is System.Windows.MessageBoxResult.Yes)
+        {
+            await Compacting().ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>Run the compaction, off the thread that draws the result (DD211).</summary>
+    /// <returns>The work.</returns>
+    /// <remarks>
+    /// The same shape as <see cref="Run"/> and deliberately not folded into it: the two share a
+    /// bracket and nothing else. This one takes two readings and reports a difference, that one
+    /// reports what <c>e2fsck</c> found and may offer a write, and a single method with a flag
+    /// would be two methods with their bodies interleaved.
+    ///
+    /// <para>The panel is re-read at the end, which is the button being answerable for itself: the
+    /// two sizes it acted on are three rows further up this page, and a headline claiming gigabytes
+    /// above a panel still showing the old figure is one the reader has no reason to believe.</para>
+    /// </remarks>
+    internal async Task Compacting()
+    {
+        Busy(true);
+        _interlude.Expected();
+        Show(RepairPrompt.Compacting, steps: null);
+
+        var steps = new System.Collections.Concurrent.ConcurrentQueue<RepairStep>();
+        CompactionOutcome outcome;
+        try
+        {
+            outcome = await Task.Run(() => _work.Compact(steps.Enqueue)).ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            outcome = new CompactionOutcome(
+                [new RepairStep("compact the disk", false, exception.Message)]);
+        }
+
+        var prompt = RepairPrompt.Of(outcome);
+        if (prompt.StartsAgain)
+        {
+            _interlude.StartAgain();
+            prompt = prompt.AndStarting(TrayState.StartBudget);
+        }
+
+        // The queue and not the outcome's own list, for the reason the check uses it: a run that
+        // threw comes back holding one step describing the exception, and what the reader needs is
+        // the steps that had already landed underneath it.
+        Show(prompt, Transcript(steps, findings: null));
+        Busy(false);
+        await RereadTheMachine().ConfigureAwait(true);
+    }
+
+    /// <summary>Whether work that takes the engine down is running.</summary>
+    /// <param name="running">Whether to shut the buttons.</param>
+    /// <remarks>
+    /// All three together, because all three take the engine down and a second run started on top of
+    /// the first would be two processes terminating one distribution.
+    /// </remarks>
+    private void Busy(bool running)
+    {
+        Check.IsEnabled = !running;
+        Repair.IsEnabled = !running;
+        Compact.IsEnabled = !running;
+    }
+
     /// <summary>Run one of the two, off the thread that draws the result.</summary>
     /// <param name="wrote">Whether this is the repair.</param>
     /// <returns>The work.</returns>
@@ -300,8 +381,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// </remarks>
     internal async Task Run(bool wrote)
     {
-        Check.IsEnabled = false;
-        Repair.IsEnabled = false;
+        Busy(true);
         _interlude.Expected();
         Show(RepairPrompt.Working, steps: null);
 
@@ -326,17 +406,15 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
             prompt = prompt.AndStarting(TrayState.StartBudget);
         }
 
-        Show(prompt, Transcript(outcome, steps));
-        Check.IsEnabled = true;
-        Repair.IsEnabled = true;
+        Show(prompt, Transcript(steps, outcome.Findings));
+        Busy(false);
     }
 
     /// <summary>Everything the run said, as one block.</summary>
-    /// <param name="outcome">What it did.</param>
-    /// <param name="steps">The steps as they landed.</param>
+    /// <param name="steps">The steps, in the order they landed.</param>
+    /// <param name="findings">What a tool printed under them, where one did.</param>
     /// <returns>The transcript.</returns>
-    private static string Transcript(
-        RepairOutcome outcome, System.Collections.Concurrent.ConcurrentQueue<RepairStep> steps)
+    private static string Transcript(IEnumerable<RepairStep> steps, string? findings)
     {
         var text = new System.Text.StringBuilder();
         foreach (var step in steps)
@@ -345,7 +423,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
                 .Append(step.What.PadRight(22)).Append("  ").Append(step.Detail).Append('\n');
         }
 
-        if (outcome.Findings is { Length: > 0 } said)
+        if (findings is { Length: > 0 } said)
         {
             text.Append('\n').Append(said);
         }

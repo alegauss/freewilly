@@ -300,6 +300,87 @@ public sealed class RepairPromptTests
             "Visibility.Visible", shell[refresh..(reread + 20)], StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void The_compaction_plan_says_what_goes_and_what_stays_before_it_asks()
+    {
+        // DD211. The fear a button called Compact has to answer is not how long it takes: it is
+        // whether somebody's images are about to be deleted. So the removal and the list of what is
+        // left alone are both above the question.
+        var asked = RepairPrompt.CompactConfirmation;
+
+        Assert.Contains("build cache", asked, StringComparison.Ordinal);
+        Assert.Contains("Images, containers and volumes are left alone", asked, StringComparison.Ordinal);
+        Assert.Contains("Docker stops", asked, StringComparison.Ordinal);
+        Assert.Contains("starts again by itself", asked, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_compaction_that_gave_bytes_back_names_both_readings_and_not_only_the_difference()
+    {
+        // The claim is that a gap three rows up this page got smaller, so the sizes it got smaller
+        // between are the evidence. A headline naming gigabytes with nothing under it is a sentence
+        // the reader has no way to check.
+        var outcome = new CompactionOutcome(
+            [new RepairStep(DiskCompaction.HandBackStep, true, "freewilly is sparse")])
+        {
+            Before = new DiskSizes(50L * 1024 * 1024 * 1024, null),
+            After = new DiskSizes(30L * 1024 * 1024 * 1024, null),
+        };
+
+        var prompt = RepairPrompt.Of(outcome);
+
+        Assert.Contains("20 GB", prompt.Headline, StringComparison.Ordinal);
+        Assert.Contains("50 GB", prompt.Detail, StringComparison.Ordinal);
+        Assert.Contains("30 GB", prompt.Detail, StringComparison.Ordinal);
+        Assert.True(prompt.StartsAgain);
+    }
+
+    [Fact]
+    public void A_compaction_that_freed_nothing_says_so_rather_than_claiming_a_reclaim()
+    {
+        // The ordinary answer on a machine that was already tidy, and the one a button like this is
+        // most tempted to dress up.
+        var outcome = new CompactionOutcome(
+            [new RepairStep(DiskCompaction.HandBackStep, true, "freewilly is sparse")])
+        {
+            Before = new DiskSizes(30L * 1024 * 1024 * 1024, null),
+            After = new DiskSizes(30L * 1024 * 1024 * 1024, null),
+        };
+
+        var prompt = RepairPrompt.Of(outcome);
+
+        Assert.Contains("gave nothing back", prompt.Headline, StringComparison.Ordinal);
+        Assert.True(prompt.StartsAgain);
+    }
+
+    [Fact]
+    public void A_compaction_that_failed_still_starts_the_engine_it_took_down()
+    {
+        // Where this parts company with the check, and deliberately. DD190 keeps the engine down
+        // after a check that could not finish, because the disk under it may be unreadable. Nothing
+        // in a compaction reads for damage: a hand-back that failed leaves a filesystem exactly as
+        // sound as it was, and keeping Docker down over it would punish somebody for tidying up.
+        var outcome = new CompactionOutcome(
+        [
+            new RepairStep(FilesystemRepair.StopStep, true, "told the host to stop"),
+            new RepairStep(FilesystemRepair.TerminateStep, false, "stopped here"),
+        ]);
+
+        var prompt = RepairPrompt.Of(outcome);
+
+        Assert.False(outcome.Succeeded);
+        Assert.True(prompt.StartsAgain);
+        Assert.Contains("stopped here", prompt.Detail, StringComparison.Ordinal);
+
+        // And a run that never got that far says the engine is where they left it.
+        var early = new CompactionOutcome(
+            [new RepairStep("find the distribution", false, "nothing is registered")]);
+
+        Assert.False(RepairPrompt.Of(early).StartsAgain);
+        Assert.Contains(
+            "Docker is as it was", RepairPrompt.Of(early).Detail, StringComparison.Ordinal);
+    }
+
     /// <summary>Where the repository is, from a test binary under bin/.</summary>
     /// <returns>The root.</returns>
     private static string RepositoryRoot()
