@@ -63,6 +63,7 @@
 - ✅ **DD204** **the filesystem check is assembled twice, once for the verb and once for the window, so the two can drift apart** — The verb and the window reach one assembly of the check, and the routing gap that had left --fsck unreachable since it shipped is closed.
 - ✅ **DD205** **a check leaves the engine stopped, and the page that stopped it offers no way to start it again** — The outcome that stopped the engine now carries the action that starts it, on every ending but the one where the check could not finish.
 - ✅ **DD203** **no run of the check has ever imported a rescue, terminated the engine and read a disk in sequence, from either surface** — The check ran end to end against this machine, all eight steps, and found the live host reviving the engine into the middle of it.
+- ✅ **DD207** **the filesystem check stops the engine without announcing it, so the live host revives it while e2fsck reads the disk** — The check announces its stop the way --stop does, so the host ends deliberately instead of putting the engine back under e2fsck.
 
 ## Block B — The daemon client (talk to the engine)
 

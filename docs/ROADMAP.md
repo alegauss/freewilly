@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD207** (deps: —) **the filesystem check stops the engine without announcing it, so the live host revives it while e2fsck reads the disk** — Measured on the first real run: the host brought the engine back nine seconds in, remounting the filesystem read-write, and a repair would have been writing to it. → §DD207
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

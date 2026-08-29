@@ -66,11 +66,24 @@ internal sealed class FilesystemWork : IFilesystemWork
             ]);
         }
 
-        report(new RepairStep(
-            "stop the engine", true, "taking it down so its containers are stopped rather than cut"));
+        // Announced before it is done, exactly as `--stop` does, and DD207 is what skipping it
+        // cost. The host puts back an engine it loses (DD136), so a teardown it was not told about
+        // is indistinguishable in there from WSL2 dying under a suspend: measured on the first real
+        // run of this check, the host had the engine back nine seconds in and the distribution's
+        // root mounted read-write while e2fsck was still reading it. That run used -fn and wrote
+        // nothing; the repair uses -fy, and a write to a filesystem the kernel has mounted
+        // underneath it is the one way this tool could destroy the thing it exists to mend.
+        var heard = SingleEngine.TellTheLiveOneToStop();
 
         new EngineLifecycle(new Wsl(), new WslDaemonProcess(), new WslSocatBackend())
             .StopAsync(EngineLifecycle.PatientGrace).GetAwaiter().GetResult();
+
+        report(new RepairStep(
+            "stop the engine",
+            true,
+            heard
+                ? "told the host to stop, so it will not put the engine back under the check"
+                : "no host was running, so nothing will put the engine back"));
 
         var repair = new FilesystemRepair(new Wsl(), paths, VmHold.On);
         return write ? repair.Fix(rootfs, report) : repair.Check(rootfs, report);

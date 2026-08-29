@@ -146,6 +146,26 @@ public sealed class RepairPromptTests
         Assert.DoesNotContain("VmHold.On", verb, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void The_check_tells_the_host_before_it_takes_the_engine_down()
+    {
+        // DD207, and it is asserted on the source because no fake can show it: a fake wsl answers a
+        // terminate with no host behind it, and the revival that makes this dangerous only exists on
+        // a machine running the product. Measured there instead — the host had the engine back nine
+        // seconds into the first real run, with the root mounted read-write under e2fsck.
+        var work = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/FilesystemWork.cs"));
+
+        var told = work.IndexOf("SingleEngine.TellTheLiveOneToStop()", StringComparison.Ordinal);
+        var stopped = work.IndexOf("StopAsync(", StringComparison.Ordinal);
+
+        Assert.True(told >= 0, "the check tears the engine down without telling the host, so it "
+            + "will be put back under the disk being read");
+        Assert.True(
+            told < stopped,
+            "the host is told after the teardown has begun, which is the window the revival fits in");
+    }
+
     /// <summary>Where the repository is, from a test binary under bin/.</summary>
     /// <returns>The root.</returns>
     private static string RepositoryRoot()
