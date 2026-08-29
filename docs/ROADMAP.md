@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD221** (deps: —) **the compaction has never run against a real virtual disk, so the one path that hands blocks back is unexercised** — The drill grows a compaction rehearsal, so what wsl --manage prints and whether the disk really got smaller are both seen once before a user meets them. → §DD221
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

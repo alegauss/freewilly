@@ -62,6 +62,7 @@ internal static class EngineCommand
             "--stop" => Stop(),
             "--fsck" => Fsck(args.Length > 1 ? args[1] : ""),
             "--fsck-drill" => Drill(),
+            "--compact-drill" => CompactDrill(),
             "--autostart" => AutostartMode(args.Length > 1 ? args[1] : "status"),
             "-h" or "--help" => Help(Ok),
             _ => Complain($"unknown argument {mode}"),
@@ -827,6 +828,71 @@ internal static class EngineCommand
                 "  the repair ran and the disk is still not clean, which is the outcome this drill "
                 + "exists to be able to see",
             _ => "  the drill did not reach all three readings",
+        });
+
+        return Failed;
+    }
+
+    /// <summary>
+    /// Rehearse the compaction on a disk grown and emptied on purpose (DD221).
+    /// </summary>
+    /// <returns>The exit code.</returns>
+    /// <remarks>
+    /// Its own verb beside <c>--fsck-drill</c> rather than a flag on it, for the reason that one is
+    /// its own verb beside <c>--fsck</c>: what they rehearse are two different sequences with two
+    /// different hazards, and a flag would make them spellings of each other.
+    ///
+    /// <para>It prints the panel's own sentence too. The claim under test is a number of bytes shown
+    /// to a user, so the figure the window would put on screen is part of what is being checked.</para>
+    /// </remarks>
+    private static int CompactDrill()
+    {
+        var paths = new EnginePaths();
+        using var fetcher = new HttpArtefactFetcher();
+        var acquired = new ArtefactStore(fetcher, paths.Downloads)
+            .AcquireAsync(EngineManifest.Current.Rootfs).GetAwaiter().GetResult();
+
+        if (acquired.Path is not { } rootfs)
+        {
+            Console.Error.WriteLine(
+                "  the rehearsal runs in a distribution imported from the Alpine rootfs this "
+                + $"install pins, and it is not available: {acquired.Failure}");
+            return Failed;
+        }
+
+        Console.WriteLine(
+            "  Nothing on this machine is touched. The disk is a scratch distribution called");
+        Console.WriteLine(
+            $"  {CompactionDrill.DrillName}, unregistered when this finishes.");
+        Console.WriteLine();
+
+        var outcome = new CompactionDrill(new Wsl(), paths)
+            .Run(rootfs, step => Console.WriteLine(Line(step)));
+
+        Console.WriteLine();
+        if (outcome.Compaction is { } compaction)
+        {
+            var prompt = RepairPrompt.Of(compaction);
+            Console.WriteLine($"  the window would say: {prompt.Headline}");
+            Console.WriteLine($"  {prompt.Detail}");
+            Console.WriteLine();
+        }
+
+        if (outcome is { Rehearsed: true, Reclaimed: { } back })
+        {
+            Console.WriteLine($"  The volume gave back {MachineReport.Size(back)}.");
+            return Ok;
+        }
+
+        // Named rather than left as a bare failure. The interesting one is a compaction that
+        // reported success over a disk that did not move, which is the claim nobody had checked.
+        Console.Error.WriteLine(outcome switch
+        {
+            { Succeeded: false } => $"  stopped at: {outcome.Failure?.Detail}",
+            { Compaction.Succeeded: false } =>
+                $"  the compaction did not finish: {outcome.Compaction?.Failure?.Detail}",
+            _ => "  the compaction reported success and the volume is charging for the same "
+                + "space it was, so nothing was handed back",
         });
 
         return Failed;

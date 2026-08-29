@@ -2,29 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD221 The path that hands blocks back is rehearsed too
-
-DD215 made the argument and DD211 is the other half of it. The compaction prunes the
-daemon's build cache, trims the filesystem, terminates the distribution and converts its
-virtual disk to sparse. Every one of those writes, and not one of them has run outside a
-fake: the tests queue exit codes and the window was photographed, which between them
-prove the sequence and prove nothing about what the sequence does.
-
-Three things a queued integer cannot answer. What `wsl --manage --set-sparse true`
-prints and exits with on a disk that is already sparse, on a WSL too old to have the
-flag, and on one that is in use. Whether `fstrim` is in the distribution this tool
-provisions at all, which the code guesses at in a comment. And whether the arithmetic
-over the two readings tells the truth: the panel claims a number of gigabytes handed
-back, and nobody has watched a virtual disk actually get smaller.
-
-The rehearsal already exists. `--fsck-drill` imports a distribution, makes a disk inside
-it and walks a sequence against it, and a compaction rehearsal is the same shape: a
-scratch image, filled and then emptied, trimmed and handed back, with both readings
-taken either side. It does not have to be this machine's engine and it should not be.
-
-What it must not become is a second copy of the sequence. The steps the drill exercises
-have to be the ones `DiskCompaction` runs, or it rehearses something that ships nowhere.
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

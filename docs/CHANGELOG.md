@@ -72,6 +72,7 @@
 - ✅ **DD216** **every check fetches e2fsprogs over the network, so the first one is slow and an offline one refuses** — The rescue keeps a prepared image beside the install, so only the first check fetches e2fsprogs and every later one works offline; the dialog names that fetch instead of blaming the disk.
 - ✅ **DD217** **the findings end with the version banner, because the two streams are concatenated rather than interleaved** — Both streams are read as arrival-ordered pieces and decoded through one stateful decoder each, so e2fsck's banner sits where it was written instead of under the summary line.
 - ✅ **DD220** **the panel can call a filesystem clean while showing e2fsck's complaints about it directly underneath** — A clean verdict over a transcript says the tool declined to change anything and printed something anyway, on both surfaces, without either of them reading e2fsck's prose for a verdict.
+- ✅ **DD221** **the compaction has never run against a real virtual disk, so the one path that hands blocks back is unexercised** — A --compact-drill verb grows a scratch disk, empties it and drives the shipped compaction at it; the first run showed WSL refuses --set-sparse outright, so the button cannot work.
 
 ## Block B — The daemon client (talk to the engine)
 

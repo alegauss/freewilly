@@ -282,14 +282,18 @@ public sealed class DiskCompaction
         var sparse = _wsl.Run(
             WslBudget.Work, "--manage", _paths.DistributionName, "--set-sparse", "true");
 
+        // What WSL said, and nothing added to it. This used to claim the call needed "a WSL new
+        // enough to have it", which the DD221 rehearsal falsified on the first run: WSL has the
+        // flag, has disabled it, and says so in a sentence naming the reason. A guess about the
+        // cause printed over a tool's own explanation is worse than no guess at all.
         return sparse.Succeeded
             ? new RepairStep(
                 HandBackStep, true, $"{_paths.DistributionName} is sparse, so Windows has the blocks")
             : new RepairStep(
                 HandBackStep,
                 false,
-                $"`wsl --manage {_paths.DistributionName} --set-sparse true` failed, which needs a "
-                + $"WSL new enough to have it: {Said(sparse)}");
+                $"`wsl --manage {_paths.DistributionName} --set-sparse true` was refused: "
+                + Said(sparse));
     }
 
     /// <summary>One reading, in the words the panel uses for the same two numbers.</summary>
