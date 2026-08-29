@@ -15,6 +15,18 @@ internal static class EngineCommand
     private const int Failed = 1;
     private const int Usage = 2;
 
+    /// <summary>
+    /// How long a session ending waits for the teardown before letting Windows carry on (DD187).
+    /// </summary>
+    /// <remarks>
+    /// Under the five seconds Windows allows a <c>WM_QUERYENDSESSION</c> before it calls the
+    /// process hung and offers the user a screen naming it, and long enough for the one call that
+    /// matters: <c>wsl --terminate</c>, which is what unmounts the distribution's ext4. A shutdown
+    /// that shows the user this tool's name is a worse outcome than a distribution taken down
+    /// hard, so the budget is what gives way and the journal says which happened.
+    /// </remarks>
+    internal static readonly TimeSpan SessionEndingBudget = TimeSpan.FromSeconds(4);
+
     /// <summary>Run an engine verb.</summary>
     /// <param name="args">The verb and, for <c>--autostart</c>, its value.</param>
     /// <returns>The process exit code.</returns>
@@ -176,7 +188,43 @@ internal static class EngineCommand
             }
         }
 
+        // Set once the finally below has written its last line, which is the whole teardown done
+        // (DD187). A TaskCompletionSource rather than an event object because the thread waiting on
+        // it is Windows', and setting then disposing a ManualResetEventSlim under a waiter is a
+        // race this ending cannot afford.
+        var torndown = new TaskCompletionSource();
+
+        void OnSessionEnding(object? _, Microsoft.Win32.SessionEndingEventArgs e)
+        {
+            // DD187. The host held the two things a teardown needs and was never told the session
+            // was ending: seven endings in the journal between 23 and 28 August 2026 have no
+            // Stopped line and no host-is-done line, because this process was killed where it
+            // stood. WSL2 then reaped dockerd with the distribution root never unmounted, and the
+            // ext4 repaired by hand on 29 August is what that leaves behind.
+            //
+            // The reason is in the line because a logoff and a shutdown are different things to be
+            // reading about the next morning, which is the same argument the tray's line makes.
+            Note(journal, $"  {"session",-8}  Windows is ending the session ({e?.Reason})");
+            stopping.Cancel();
+
+            // Waiting is the point. Returning from here tells Windows this process is ready, and a
+            // process that says so before terminating the distribution has answered the question
+            // wrong: `wsl --terminate` unmounts ext4 and being killed does not.
+            //
+            // It is also what bounds the wait. Windows treats a slow WM_QUERYENDSESSION as a hung
+            // app, so this leans on the budget rather than on the teardown finishing, and says
+            // which of the two happened.
+            if (!torndown.Task.Wait(SessionEndingBudget))
+            {
+                Note(
+                    journal,
+                    $"  {"session",-8}  still tearing down after "
+                    + $"{SessionEndingBudget.TotalSeconds:0}s; Windows is not waiting longer");
+            }
+        }
+
         Microsoft.Win32.SystemEvents.PowerModeChanged += OnPower;
+        Microsoft.Win32.SystemEvents.SessionEnding += OnSessionEnding;
 
         var lifecycle = NewLifecycle();
         try
@@ -202,6 +250,7 @@ internal static class EngineCommand
         finally
         {
             Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPower;
+            Microsoft.Win32.SystemEvents.SessionEnding -= OnSessionEnding;
             resumed.Dispose();
             asked.Dispose();
             lifecycle.DisposeAsync().AsTask().GetAwaiter().GetResult();
@@ -213,6 +262,11 @@ internal static class EngineCommand
             // the host had walked away deliberately or been shot, and telling those apart was the
             // question DD134 had to answer from Hyper-V events.
             Note(journal, $"  {"host",-8}  this host is done");
+
+            // After that line and not before it, because what the session-ending handler is waiting
+            // for is the journal being complete (DD187). Releasing it any earlier would let Windows
+            // kill this process between the teardown and the account of it.
+            torndown.TrySetResult();
         }
     }
 

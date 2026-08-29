@@ -1,6 +1,7 @@
 using FreeWilly.Core.Api;
 using FreeWilly.Core.Engine;
 using FreeWilly.Tray;
+using FreeWilly.Tray.Cli;
 using Xunit;
 
 namespace FreeWilly.Preflight.Tests;
@@ -529,6 +530,57 @@ public sealed class TrayTests
             "SessionEnding -= OnSessionEnding",
             source,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_host_is_told_the_session_is_ending_as_well_as_the_tray()
+    {
+        // DD187. The tray has had this hook since DD129 and the host, which holds the wsl.exe
+        // handle the daemon runs under, never asked for it — so seven session endings in the
+        // journal are followed by neither a Stopped line nor a host-is-done line, while every Quit
+        // writes both in the same second. Source-asserted for the reason the tray's is: nothing in
+        // a test can raise a real SessionEnding, and the cost of getting it wrong is a distribution
+        // reaped with its ext4 never unmounted.
+        var source = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/EngineCommand.cs"));
+
+        Assert.Contains("SessionEnding += OnSessionEnding", source, StringComparison.Ordinal);
+        Assert.Contains("SessionEnding -= OnSessionEnding", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_ending_host_is_released_only_once_its_journal_is_complete()
+    {
+        // The waiting is the whole fix (DD187): returning from the handler tells Windows this
+        // process is ready to be killed, so a host that returns before `wsl --terminate` has run
+        // has answered the question wrong. Asserted as an order because the failure is an ordering
+        // one — a release moved above the last line is a teardown Windows may cut in half.
+        var source = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/EngineCommand.cs"));
+
+        var waits = source.IndexOf(
+            "torndown.Task.Wait(SessionEndingBudget)", StringComparison.Ordinal);
+        var done = source.IndexOf("this host is done", StringComparison.Ordinal);
+        var releases = source.IndexOf("torndown.TrySetResult()", StringComparison.Ordinal);
+
+        Assert.True(waits >= 0, "the session-ending handler no longer waits for the teardown");
+        Assert.True(done >= 0, "the host no longer writes its last line");
+        Assert.True(
+            releases > done,
+            "the session-ending handler is released before the journal's last line, so Windows may "
+            + "kill this host between the teardown and the account of it");
+    }
+
+    [Fact]
+    public void The_wait_for_a_teardown_gives_way_before_Windows_calls_the_host_hung()
+    {
+        // Five seconds is where Windows stops waiting on a WM_QUERYENDSESSION and offers the user a
+        // screen naming the app that is holding the shutdown up. Being that app is worse than a
+        // distribution taken down hard, so the budget gives way first and the journal says so.
+        Assert.InRange(
+            EngineCommand.SessionEndingBudget,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(4.5));
     }
 
     [Fact]

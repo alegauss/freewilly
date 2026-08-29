@@ -2,29 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD187 DD187: the host that owns the teardown hears nothing
-
-The engine host holds the two things a teardown needs: the wsl.exe handle the daemon
-runs under, and the relay serving the pipe. It already subscribes to PowerModeChanged
-and acts on a suspend, so the hidden window SystemEvents keeps for a process with no
-message loop of its own does receive broadcasts. SessionEnding is the one it never asked
-for.
-
-The journal shows the cost. Every ending the host reaches on its own passes through the
-finally that writes "this host is done" (DD163). That line follows every Quit and none
-of the seven session endings recorded between 23 and 28 August 2026, and the Stopped
-line naming the terminated distribution is missing from all seven as well. The host is
-killed where it stands, the launcher goes with it, and WSL2 reaps dockerd with no clean
-unmount of the distribution root. The ext4 corruption repaired by hand on 29 August is
-what that leaves behind.
-
-The fix is the subscription the host already has the shape for: SessionEnding cancels
-the token Ctrl+C cancels, and the handler waits for StopAsync to return rather than
-returning first. Waiting is what makes it work and also what bounds it, because Windows
-treats a slow WM_QUERYENDSESSION as a hung app. Terminating the distribution is one
-wsl.exe call and it is the one that matters, since a terminate unmounts ext4 and a kill
-does not.
-
 ### §DD188 DD188: the stop nobody waits for
 
 DD129 answers SessionEnding by calling EngineHolder.Stop, which is a Process.Start of
@@ -132,6 +109,52 @@ streams and may carry the same defect.
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
+
+### §DD193 The builds page renders a start in the machine's own clock
+
+buildx reports `created_at` in UTC, and `BuildRow.When` renders the value in whatever
+offset it arrived with, so the column states a real instant in a zone nobody at this
+machine reads it in. The capture that opened this task shows 2026-08-29 12:49 for a
+build its operator started at 09:49, three hours behind UTC. `BuildsPage.Fields` prints
+`Started` the same way and to the second, so the field the column defers to for the
+exact moment is wrong by the same amount.
+
+The offset was deliberate: the doc comment argues that the timestamp's own offset keeps
+a window capture identical whichever machine drew it, which is what DD38's fixture buys.
+That reasoning holds for the picture and not for the reader. A time is read against the
+clock in the corner of the same screen, and one three hours from it is not a time
+anybody can act on, while a capture whose only varying field is a time costs less than a
+page that is wrong on every machine outside UTC.
+
+So the render converts to local. The invariant culture stays, being about digit shapes
+and separators rather than about the zone, and so does the dash the empty cell prints,
+that being a glyph in a data column. `BuildRowTests` asserts the literal 2026-03-14
+09:10 against a fixture anchored at offset zero, so that expectation is computed through
+the same conversion rather than typed. What the conversion then costs a fixture capture
+is a line of its own.
+
+### §DD194 A fixture capture stops being the same picture once a time is local
+
+`SampleBuilds.Anchor` is fixed at offset zero and every row is derived from it, so today
+the WHEN column draws the same digits whichever machine ran `--fixture`. Once the render
+follows the machine's clock, four rows in that capture and the `Started` field beside
+them move with the operator's zone, and two people documenting the same build history
+produce two different pictures. That is the property DD38 exists to hold: a picture is
+comparable between runs only where nothing outside the fixture reaches it.
+
+The fixture is where this is answered, not the render. A render that treats fixture data
+differently is a second code path nobody looks at, which is the thing the seam was
+introduced to avoid.
+
+Two ways out, and they trade against each other. The capture can pin a zone for the
+process it draws in, so the conversion always lands on the offset the fixture states and
+the digits in a committed picture never move again. Or the anchor can be built from the
+local zone, so the digits are the anchor's whatever machine drew them, which keeps the
+fixture honest about what a real machine shows and gives the byte comparison up.
+
+Nothing compares those captures byte for byte today, and the README carries them as
+illustrations rather than as evidence, so the choice is open. Whoever takes this line
+decides it and says so here, because the reason will not be recoverable from the diff.
 
 ## Block D — Container operations (what a user came to do)
 
