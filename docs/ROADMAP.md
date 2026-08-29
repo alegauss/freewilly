@@ -10,8 +10,6 @@
 
 ## Block C — The window (claude-tray's elements)
 
-- 📋 **DD227** (deps: —) **Check filesystem and Compact show no confirmation, so pressing either does nothing at all** — The window's confirmation appears again, and something notices if it ever stops, because a door that silently shuts looks exactly like a user deciding not to go through it. → §DD227
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks

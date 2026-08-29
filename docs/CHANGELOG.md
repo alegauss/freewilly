@@ -126,6 +126,7 @@
 - ✅ **DD197** **no single surface says what state WSL, the distribution and the engine are in** — The Engine page carries the five readings the diagnosis took by hand, off one call the start check shares, with a copy button beside them.
 - ✅ **DD214** **every test of the window reads the window's own source, so nothing catches a control that is wired wrong** — A --drive-window verb works the real window through UI Automation and prints what it says; --check drives the filesystem check, and the dialog is pressed by control id rather than caption.
 - ✅ **DD222** **the driving verb's check half has never been run, because the tray holding the slot was an older build** — Both halves ran against a current window: the read-only one walked the whole page, and the check half found no confirmation appears at all, which is the window's defect and not the driver's.
+- ✅ **DD227** **Check filesystem and Compact show no confirmation, so pressing either does nothing at all** — The confirmation was there all along and the driver could not see it: DD222's finding was wrong, and a dialog is now found through the window that owns it rather than under the desktop.
 
 ## Block D — Container operations (what a user came to do)
 

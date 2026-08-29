@@ -16,18 +16,16 @@ namespace FreeWilly.Preflight.Tests;
 /// about the window cannot see.</para>
 ///
 /// <para><b>Both halves were run against a current window on 29 August 2026 (DD222), and the second
-/// one did not get past the first click.</b> The read-only half walked the whole page: the window,
-/// the destination, both buttons enabled, the panel, the machine verdict, and Repair correctly not
-/// offered. The <c>--check</c> half invoked the button and no confirmation ever appeared. Neither
-/// did it for a real keypress, nor for a synthesized mouse click at the button's own clickable
-/// point, nor on the installed build, and no dialog window existed anywhere on the desktop
-/// afterwards. The engine was still serving and the buttons were still enabled, so the handler had
-/// not gone on to do anything either.</para>
+/// one did not get past the first click.</b> The read-only half walked the whole page. The
+/// <c>--check</c> half invoked the button and reported that no confirmation appeared, which DD227
+/// then showed to be the driver's own blindness: the dialog was up, owned by the window and
+/// blocking it, and UI Automation simply does not list it. That correction is why the complaint no
+/// longer asserts the page took the engine down, and why the dialog is now found through the window
+/// that owns it rather than under the desktop.</para>
 ///
-/// <para>So the driver reaches the button and the button answers nothing, which is a defect in the
-/// window rather than in the driver and is filed as its own task. What was wrong here was the
-/// complaint: it asserted the page had taken the engine down without asking, which is a consequence
-/// this verb never watched for and which was not true.</para>
+/// <para><b>With that fixed the whole path ran, and it is the first time it has.</b> The dialog was
+/// found and answered by control id, the panel said it was working, the run ended on "The
+/// filesystem is clean", and the buttons came back. Exit 0.</para>
 ///
 /// <para>What is asserted here is the part that is pure: which surface the verb reaches, that its
 /// one flag survives the routing, and that it is not filed among the verbs that start an engine.</para>
@@ -116,6 +114,42 @@ public sealed class WindowDriverTests
     }
 
     [Fact]
+    public void Every_modal_this_window_shows_is_owned_by_the_window()
+    {
+        // DD227, and the reason it is a source assertion rather than a behaviour. An ownerless
+        // MessageBox asks Win32 for the calling thread's active window, and in a WinForms-hosted
+        // process on a click that arrived through the dispatcher there is none — so nothing appears
+        // and the handler carries on as though the answer were No. Measured: the Engine page held
+        // the only two ownerless calls in the product, and both of its buttons did nothing at all.
+        //
+        // The failure is invisible to every other check this project makes. It renders, it is
+        // enabled, its handler runs, the source mentions the confirmation, and pressing it looks
+        // exactly like deciding not to. What is left is holding the call shape itself.
+        var pages = Directory.EnumerateFiles(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Ui"), "*.xaml.cs",
+            SearchOption.AllDirectories);
+
+        foreach (var page in pages)
+        {
+            var source = File.ReadAllText(page);
+            var at = 0;
+            while ((at = source.IndexOf("MessageBox.Show(", at, StringComparison.Ordinal)) >= 0)
+            {
+                at += "MessageBox.Show(".Length;
+
+                // The owner is the first argument, so it is on the call's own line or the next one.
+                var opening = source[at..Math.Min(source.Length, at + 200)];
+                Assert.True(
+                    opening.Contains("Window.GetWindow(this)", StringComparison.Ordinal)
+                    || opening.Contains("owner", StringComparison.Ordinal),
+                    $"{Path.GetFileName(page)} shows a modal with no owner, so on a click that "
+                    + "arrives through the dispatcher it will not appear and the button will "
+                    + "silently do nothing");
+            }
+        }
+    }
+
+    [Fact]
     public void The_driver_never_claims_a_consequence_it_did_not_watch_for()
     {
         // DD222. The complaint for a missing confirmation used to end "so the page took the engine
@@ -139,11 +173,36 @@ public sealed class WindowDriverTests
         var driver = File.ReadAllText(
             Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/WindowDriver.cs"));
 
-        Assert.Contains("AutomationIdProperty", driver, StringComparison.Ordinal);
+        Assert.Contains("GetDlgItem", driver, StringComparison.Ordinal);
         foreach (var caption in new[] { "\"Sim\"", "\"Yes\"", "\"Ja\"", "\"Oui\"" })
         {
             Assert.DoesNotContain(caption, driver, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void The_confirmation_is_found_through_the_window_that_owns_it()
+    {
+        // DD227, and it took a long time to see because both halves of the old approach failed the
+        // same way. The driver looked under the desktop for a child of class #32770 — where a
+        // top-level dialog ought to be — and asked UI Automation for its buttons as descendants.
+        // Measured on 29 August 2026 with the box plainly on screen and blocking the window: UI
+        // Automation listed twelve desktop children and none was it, and the element it did find by
+        // handle exposed no buttons at all.
+        //
+        // GW_ENABLEDPOPUP asks the question the driver actually has: what modal does this window
+        // own. GetDlgItem then names the button by the control id, which is the property that does
+        // not change with the machine's language.
+        var driver = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/WindowDriver.cs"));
+
+        Assert.Contains("GW_ENABLEDPOPUP", driver, StringComparison.Ordinal);
+        Assert.Contains("GetWindow", driver, StringComparison.Ordinal);
+
+        // And it no longer hunts the desktop for a dialog that is not listed there. The class name
+        // still appears in the prose above the fix, which is where it belongs: it is what the old
+        // approach searched for, and a reader needs to know that to know what changed.
+        Assert.DoesNotContain("ClassNameProperty", driver, StringComparison.Ordinal);
     }
 
     /// <summary>Where the repository is, from a test binary under bin/.</summary>

@@ -238,14 +238,21 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// <param name="sender">Unused.</param>
     /// <param name="e">Unused.</param>
     /// <remarks>
-    /// It asks first, and what it asks about is not what the repair asks about. Reading cannot make
-    /// a filesystem worse, so nothing here needs consent to touch the disk; what needs consent is
-    /// stopping the engine and every container on it, which a check costs whatever it finds. That
-    /// was written in the panel beside the button and discovered by pressing it anyway.
+    /// <para>It asks first, and what it asks about is not what the repair asks about. Reading cannot
+    /// make a filesystem worse, so nothing here needs consent to touch the disk; what needs consent
+    /// is stopping the engine and every container on it, which a check costs whatever it finds. That
+    /// was written in the panel beside the button and discovered by pressing it anyway.</para>
+    ///
+    /// <para><b>The owner is passed, and until DD227 this page was the only one that did not.</b>
+    /// Every other confirmation in the window hands <c>Window.GetWindow(this)</c> to
+    /// <c>MessageBox.Show</c>, which is what centres the box on the window, disables the window
+    /// under it and keeps it above. Three calls here did not, and consistency is the whole argument:
+    /// it did not turn out to be why DD222's driver could not find the dialog.</para>
     /// </remarks>
     private async void CheckTheFilesystem(object sender, RoutedEventArgs e)
     {
         var answer = System.Windows.MessageBox.Show(
+            Window.GetWindow(this),
             RepairPrompt.CheckConfirmation(_work.ToolsAreReady),
             "Check the filesystem",
             System.Windows.MessageBoxButton.YesNo,
@@ -262,14 +269,19 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// <param name="sender">Unused.</param>
     /// <param name="e">Unused.</param>
     /// <remarks>
-    /// The one place this window writes to the filesystem holding every image and volume on the
-    /// machine, so it is the one place it asks. A modal here rather than a second click on a
+    /// <para>The one place this window writes to the filesystem holding every image and volume on
+    /// the machine, so it is the one place it asks. A modal here rather than a second click on a
     /// differently worded button: what is being consented to takes a paragraph to state, and a
-    /// button caption is not a paragraph.
+    /// button caption is not a paragraph.</para>
+    ///
+    /// <para><b>It was the third ownerless call, and the guard DD227 added is what found it</b>: the
+    /// two above were spotted by hand and this one was not. Of the three it is the one that matters
+    /// most, because what it guards is a write.</para>
     /// </remarks>
     private async void RepairTheFilesystem(object sender, RoutedEventArgs e)
     {
         var answer = System.Windows.MessageBox.Show(
+            Window.GetWindow(this),
             RepairPrompt.Confirmation,
             "Repair the filesystem",
             System.Windows.MessageBoxButton.YesNo,
@@ -293,6 +305,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     private async void CompactTheDisk(object sender, RoutedEventArgs e)
     {
         var answer = System.Windows.MessageBox.Show(
+            Window.GetWindow(this),
             RepairPrompt.CompactConfirmation,
             "Compact the disk",
             System.Windows.MessageBoxButton.YesNo,

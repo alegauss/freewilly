@@ -38,15 +38,17 @@ internal static class WindowDriver
     /// The button on a Windows message box that means yes, addressed by its control id.
     /// </summary>
     /// <remarks>
-    /// <c>IDYES</c>, which WPF's <see cref="System.Windows.MessageBox"/> hands to the Win32 dialog
-    /// and which UI Automation reports as the element's automation id. Not the caption: this machine
-    /// renders it as <em>Sim</em>, a German one renders it as <em>Ja</em>, and a driver that matched
-    /// the word would pass on exactly one desk.
+    /// <c>IDYES</c>, which WPF's <see cref="System.Windows.MessageBox"/> hands to the Win32 dialog.
+    /// Not the caption: this machine renders it as <em>Sim</em>, a German one renders it as
+    /// <em>Ja</em>, and a driver that matched the word would pass on exactly one desk.
     /// </remarks>
-    private const string YesButtonId = "6";
+    private const int YesButton = 6;
 
-    /// <summary>The class every Win32 dialog carries, message boxes included.</summary>
-    private const string DialogClass = "#32770";
+    /// <summary><c>GW_ENABLEDPOPUP</c>: the enabled popup a window owns, if it has one.</summary>
+    private const uint EnabledPopup = 6;
+
+    /// <summary><c>BM_CLICK</c>.</summary>
+    private const uint ClickMessage = 0x00F5;
 
     /// <summary>How long to wait for a window that is being launched.</summary>
     private static readonly TimeSpan WindowBudget = TimeSpan.FromSeconds(30);
@@ -176,32 +178,37 @@ internal static class WindowDriver
         Pattern<InvokePattern>(
             check, InvokePattern.Pattern, "the Check filesystem button").Invoke();
 
-        // Its own top-level window rather than anything in this window's tree, which is why it is
-        // looked for under the desktop and matched by class.
-        // The complaint says what was observed and stops there. It used to add "so the page took
-        // the engine down without asking", which the first real run of this verb disproved: no
-        // confirmation appeared and the engine was still serving afterwards. A driver that guesses
-        // at a consequence it did not watch for is the thing this whole verb exists to replace.
-        var dialog = Await(
-            () => Dialog(window.Current.ProcessId),
+        // Asked of the window and asked in Win32, which is DD227's whole finding. The confirmation
+        // is a native message box: UI Automation does not list it among the desktop's children and
+        // does not expose its buttons as descendants, so a driver looking there concludes it never
+        // appeared. It is there, it is owned by this window, and `GW_ENABLEDPOPUP` names it at once.
+        //
+        // The complaint says what was observed and stops there. It used to add "so the page took the
+        // engine down without asking", which the first real run disproved twice over: the dialog was
+        // up and the engine was still serving. A driver that guesses at a consequence it did not
+        // watch for is the thing this whole verb exists to replace.
+        var dialog = AwaitValue(
+            () => OwnedPopup(window),
             ControlBudget,
             "the Check filesystem button was invoked and no confirmation appeared. Whether the "
             + "engine was touched is not something this watched, so it is not being claimed");
 
-        Say("dialog", dialog.Current.Name);
+        Say("dialog", Caption(dialog));
 
-        var yes = Await(
-            () => dialog.FindFirst(
-                TreeScope.Descendants,
-                new PropertyCondition(AutomationElement.AutomationIdProperty, YesButtonId)),
-            ControlBudget,
-            $"the confirmation has no button with control id {YesButtonId}, so there is no way to "
-            + "agree to it that does not depend on what language this machine is in");
+        var yes = GetDlgItem(dialog, YesButton);
+        if (yes == IntPtr.Zero)
+        {
+            throw new TimeoutException(
+                $"the confirmation has no button with control id {YesButton}, so there is no way to "
+                + "agree to it that does not depend on what language this machine is in");
+        }
 
-        Pattern<InvokePattern>(
-            yes, InvokePattern.Pattern, "the confirmation's yes button").Invoke();
+        // BM_CLICK on the control itself, which is what a press is. A WM_COMMAND posted to the
+        // dialog is the other way and is worse: it is obeyed even where the button is disabled, so
+        // it would answer a question the window was not actually asking.
+        _ = SendMessage(yes, ClickMessage, IntPtr.Zero, IntPtr.Zero);
 
-        Say("agreed", $"pressed control {YesButtonId}, whatever this machine calls it");
+        Say("agreed", $"pressed control {YesButton}, whatever this machine calls it");
 
         // The working sentence has to arrive before the ending, or what follows would read a panel
         // that had not been touched yet and call the previous run's headline an outcome.
@@ -309,13 +316,57 @@ internal static class WindowDriver
         }
     }
 
-    /// <summary>The modal dialog that process has open, or nothing.</summary>
-    private static AutomationElement? Dialog(int processId) => AutomationElement.RootElement
-        .FindAll(
-            TreeScope.Children,
-            new PropertyCondition(AutomationElement.ClassNameProperty, DialogClass))
-        .Cast<AutomationElement>()
-        .FirstOrDefault(element => element.Current.ProcessId == processId);
+    /// <summary>
+    /// The modal dialog a window owns, or nothing (DD227).
+    /// </summary>
+    /// <param name="window">The window that would own it.</param>
+    /// <returns>The dialog's handle, or <see langword="null"/> where there is none.</returns>
+    /// <remarks>
+    /// <para><b>Win32 and not UI Automation, and that is the finding rather than a preference.</b>
+    /// This looked under the desktop for a child of class <c>#32770</c>, which is where a top-level
+    /// dialog ought to be and where this one is not: measured on 29 August 2026 with the box plainly
+    /// on screen, UI Automation listed twelve desktop children and none of them was it. It does not
+    /// expose the dialog's buttons as descendants either, so the second half of the old approach was
+    /// no better than the first.</para>
+    ///
+    /// <para><c>GW_ENABLEDPOPUP</c> answers the question the driver is actually asking: what is this
+    /// window's modal, if it has one. The window being disabled is the same fact from the other end,
+    /// and a nullable handle is enough to poll on.</para>
+    /// </remarks>
+    private static IntPtr? OwnedPopup(AutomationElement window)
+    {
+        var owner = (IntPtr)window.Current.NativeWindowHandle;
+        if (owner == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        var popup = GetWindow(owner, EnabledPopup);
+        return popup == IntPtr.Zero || popup == owner ? null : popup;
+    }
+
+    /// <summary>What a native window's title bar says.</summary>
+    private static string Caption(IntPtr window)
+    {
+        var text = new System.Text.StringBuilder(256);
+        return GetWindowText(window, text, text.Capacity) > 0 ? text.ToString() : "(no caption)";
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr window, uint command);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetDlgItem(IntPtr dialog, int controlId);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(
+        IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+    [System.Runtime.InteropServices.DllImport(
+        "user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode,
+        EntryPoint = "GetWindowTextW")]
+    private static extern int GetWindowText(
+        IntPtr window, System.Text.StringBuilder text, int capacity);
 
     /// <summary>One control, by the name it carries in markup.</summary>
     /// <param name="window">Where to look.</param>
@@ -352,6 +403,38 @@ internal static class WindowDriver
             : throw new TimeoutException(
                 $"{what} does not support {pattern.ProgrammaticName}, so there is no way to work it "
                 + "that is not a click at a coordinate");
+
+    /// <summary>
+    /// The same wait, for something that is a handle rather than an object.
+    /// </summary>
+    /// <typeparam name="T">What is being waited for.</typeparam>
+    /// <param name="look">Asks once.</param>
+    /// <param name="budget">How long to keep asking.</param>
+    /// <param name="complaint">What to say on giving up.</param>
+    /// <returns>The answer.</returns>
+    /// <remarks>
+    /// A second method rather than one relaxed constraint, because <c>T?</c> means two different
+    /// things either side of it and a single signature cannot mean both.
+    /// </remarks>
+    private static T AwaitValue<T>(Func<T?> look, TimeSpan budget, string complaint)
+        where T : struct
+    {
+        var deadline = DateTime.UtcNow + budget;
+        while (true)
+        {
+            if (look() is { } got)
+            {
+                return got;
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new TimeoutException(complaint);
+            }
+
+            Thread.Sleep(Poll);
+        }
+    }
 
     /// <summary>Ask again until there is an answer, or give up saying what was expected.</summary>
     private static T Await<T>(Func<T?> look, TimeSpan budget, string complaint)
