@@ -101,6 +101,32 @@ public sealed class DiskCompaction
     /// <summary>The step that trims what the filesystem has freed.</summary>
     public const string TrimStep = "trim the filesystem";
 
+    /// <summary>
+    /// The flag WSL names when it has turned sparse disks off (DD224).
+    /// </summary>
+    /// <remarks>
+    /// A command-line flag rather than a phrase, which is the whole reason the refusal is
+    /// recognised by it: WSL's explanation is translated and this machine reads it in Portuguese,
+    /// while the flag it points at is the same eleven characters everywhere. Matching the prose
+    /// would be a check that works on one desk.
+    /// </remarks>
+    public const string UnsafeFlag = "--allow-unsafe";
+
+    /// <summary>
+    /// Whether a failed hand-back was Windows saying the mechanism is switched off (DD224).
+    /// </summary>
+    /// <param name="detail">What the step reported.</param>
+    /// <returns><see langword="true"/> where WSL pointed at the unsafe flag.</returns>
+    /// <remarks>
+    /// Measured on 29 August 2026 by DD221's rehearsal: <c>wsl --manage &lt;distro&gt; --set-sparse
+    /// true</c> is refused outright, because sparse VHD support has been disabled over possible data
+    /// corruption, and the only way past it is the flag DD211 declined to pass. So this is not one
+    /// failure among many that a user might retry: it is the mechanism being gone, and a page that
+    /// reported it as a failed run would be sending somebody to look for a fault on their machine.
+    /// </remarks>
+    public static bool WindowsWithdrewIt(string? detail) =>
+        detail?.Contains(UnsafeFlag, StringComparison.Ordinal) is true;
+
     /// <summary>The step that hands the blocks back to Windows.</summary>
     /// <remarks>
     /// Named here because <see cref="CompactionOutcome.Succeeded"/> reads it back, and a literal at
@@ -282,18 +308,31 @@ public sealed class DiskCompaction
         var sparse = _wsl.Run(
             WslBudget.Work, "--manage", _paths.DistributionName, "--set-sparse", "true");
 
-        // What WSL said, and nothing added to it. This used to claim the call needed "a WSL new
-        // enough to have it", which the DD221 rehearsal falsified on the first run: WSL has the
-        // flag, has disabled it, and says so in a sentence naming the reason. A guess about the
-        // cause printed over a tool's own explanation is worse than no guess at all.
-        return sparse.Succeeded
-            ? new RepairStep(
-                HandBackStep, true, $"{_paths.DistributionName} is sparse, so Windows has the blocks")
-            : new RepairStep(
+        if (sparse.Succeeded)
+        {
+            return new RepairStep(
                 HandBackStep,
-                false,
-                $"`wsl --manage {_paths.DistributionName} --set-sparse true` was refused: "
-                + Said(sparse));
+                true,
+                $"{_paths.DistributionName} is sparse, so Windows has the blocks");
+        }
+
+        // What WSL said, and nothing invented over it. This used to claim the call needed "a WSL new
+        // enough to have it", which the DD221 rehearsal falsified on its first run: WSL has the
+        // flag, has disabled it, and says so in a sentence naming the reason.
+        //
+        // The one case worth its own words is that one (DD224). Everything else here is a failure a
+        // user might retry; this is the mechanism being gone, and reporting it as a failed run sends
+        // somebody looking for a fault on a machine that has none. WSL's own text still follows,
+        // because that is what goes into a bug report.
+        var said = Said(sparse);
+        return new RepairStep(
+            HandBackStep,
+            false,
+            WindowsWithdrewIt(said)
+                ? "Windows has turned off the only way of handing these blocks back that needs no "
+                  + $"administrator rights, and offers {UnsafeFlag} instead. This will not use that "
+                  + "on a disk holding every image and volume on the machine. WSL said: " + said
+                : $"`wsl --manage {_paths.DistributionName} --set-sparse true` was refused: {said}");
     }
 
     /// <summary>One reading, in the words the panel uses for the same two numbers.</summary>

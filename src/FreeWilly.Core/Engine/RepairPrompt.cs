@@ -270,8 +270,13 @@ public sealed record RepairPrompt(
         var sizes = Sizes(outcome);
         if (!outcome.Succeeded)
         {
+            // Windows withdrawing the mechanism is not one failure among many (DD224). A headline
+            // saying the disk was not compacted invites a second press and a second interruption,
+            // and there is nothing on this machine that a second press would find different.
+            var withdrawn = DiskCompaction.WindowsWithdrewIt(outcome.Failure?.Detail);
+
             return new RepairPrompt(
-                "The disk was not compacted",
+                withdrawn ? "Windows has turned this off" : "The disk was not compacted",
                 (outcome.Failure?.Detail ?? "nothing said where it stopped")
                 + (outcome.EngineWentDown
                     ? " Nothing on the disk was changed by this, so Docker is being started again."

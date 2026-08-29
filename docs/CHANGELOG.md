@@ -73,6 +73,7 @@
 - ✅ **DD217** **the findings end with the version banner, because the two streams are concatenated rather than interleaved** — Both streams are read as arrival-ordered pieces and decoded through one stateful decoder each, so e2fsck's banner sits where it was written instead of under the summary line.
 - ✅ **DD220** **the panel can call a filesystem clean while showing e2fsck's complaints about it directly underneath** — A clean verdict over a transcript says the tool declined to change anything and printed something anyway, on both surfaces, without either of them reading e2fsck's prose for a verdict.
 - ✅ **DD221** **the compaction has never run against a real virtual disk, so the one path that hands blocks back is unexercised** — A --compact-drill verb grows a scratch disk, empties it and drives the shipped compaction at it; the first run showed WSL refuses --set-sparse outright, so the button cannot work.
+- ✅ **DD224** **the Compact button cannot succeed: WSL refuses --set-sparse outright and names the flag DD211 will not pass** — A hand-back Windows refuses is recognised by the flag it points at, not its translated prose, and the page says Windows has turned this off rather than inviting a second interruption.
 
 ## Block B — The daemon client (talk to the engine)
 

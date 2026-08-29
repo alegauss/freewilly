@@ -496,6 +496,54 @@ public sealed class RepairPromptTests
     }
 
     [Fact]
+    public void Windows_withdrawing_the_mechanism_is_said_as_that_and_not_as_a_failed_run()
+    {
+        // DD224, from the refusal DD221's rehearsal met on its first run. Sparse VHD support is
+        // disabled over possible data corruption and the only way past it is a flag DD211 declined
+        // to pass, so a second press finds nothing different — and "The disk was not compacted" is
+        // an invitation to make one, at the cost of a second interruption.
+        var refused = new CompactionOutcome(
+        [
+            new RepairStep(FilesystemRepair.StopStep, true, "told the host to stop"),
+            new RepairStep(
+                DiskCompaction.HandBackStep,
+                false,
+                "Windows has turned off the only way of handing these blocks back that needs no "
+                + $"administrator rights, and offers {DiskCompaction.UnsafeFlag} instead."),
+        ]);
+
+        var prompt = RepairPrompt.Of(refused);
+
+        Assert.Equal("Windows has turned this off", prompt.Headline);
+        Assert.True(prompt.StartsAgain, "the engine went down for this and was left there");
+
+        // And any other refusal keeps the sentence that invites a retry, because a retry is what
+        // those are for.
+        var ordinary = new CompactionOutcome(
+        [
+            new RepairStep(FilesystemRepair.StopStep, true, "told the host to stop"),
+            new RepairStep(DiskCompaction.HandBackStep, false, "the disk is still in use"),
+        ]);
+
+        Assert.Equal("The disk was not compacted", RepairPrompt.Of(ordinary).Headline);
+    }
+
+    [Fact]
+    public void The_refusal_is_recognised_by_the_flag_and_never_by_the_prose()
+    {
+        // Measured in Portuguese on the machine this was written on: WSL translates its
+        // explanation and does not translate the flag it points at. A check on the words would
+        // work on one desk and report every other machine as having an ordinary failure.
+        Assert.True(DiskCompaction.WindowsWithdrewIt(
+            "O suporte ao VHD esparso está desabilitado no momento devido à possível corrupção de "
+            + "dados. Para forçar uma distribuição a usar um VHD esparso, execute: wsl.exe --manage "
+            + "<DistributionName> --set-sparse --allow-unsafe"));
+
+        Assert.False(DiskCompaction.WindowsWithdrewIt("the disk is still in use"));
+        Assert.False(DiskCompaction.WindowsWithdrewIt(null));
+    }
+
+    [Fact]
     public void A_compaction_that_failed_still_starts_the_engine_it_took_down()
     {
         // Where this parts company with the check, and deliberately. DD190 keeps the engine down

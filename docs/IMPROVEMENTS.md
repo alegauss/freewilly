@@ -2,30 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD224 Windows withdrew the mechanism the button was built on
-
-Measured on 29 August 2026 by DD221's rehearsal, on its first run. Every step landed
-until the last, where WSL answered: sparse VHD support is currently disabled due to
-possible data corruption, and named `--allow-unsafe` as the only way past it. So the
-button cannot succeed on this Windows, and the flag that would make it succeed is the
-one DD211 refused on purpose.
-
-That refusal still stands. A housekeeping button reaching for the unsafe form of a call,
-on a filesystem holding every image and volume somebody has, is how a tidy-up becomes
-the thing that loses their work — and Microsoft disabled the safe form for that reason
-rather than a bureaucratic one.
-
-Three routes and none is obvious. Waiting is one: the flag is disabled and not removed,
-so the button could name the refusal rather than reading as broken. `Optimize-VHD` and
-`diskpart compact vdisk` are the second, and DD199 measured and rejected both for
-putting a UAC prompt and a Hyper-V dependency behind a housekeeping button. Withdrawing
-the button is the third, and a control that cannot work is worse than no control.
-
-Worth carrying into whichever is chosen: the rehearsal also could not make a scratch
-disk grow. 512 MB written and deleted left the virtual disk at 76 MB, because WSL2
-mounts with discard and reclaims as it goes. The gap DD197 measured is real and older
-disks carry it, but a fresh one may no longer accumulate one.
-
 ### §DD225 A sparse file keeps its length and stops costing the volume
 
 Handing blocks back makes the virtual disk a sparse file, and a sparse file keeps its

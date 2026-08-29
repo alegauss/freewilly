@@ -4,8 +4,7 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD224** (deps: —) **the Compact button cannot succeed: WSL refuses --set-sparse outright and names the flag DD211 will not pass** — The button either hands blocks back by a route that needs no elevation, or says plainly that Windows withdrew the one it had, rather than reading as broken. → §DD224
-- 📋 **DD225** (deps: DD224) **the compaction measures the disk's length, which a sparse file keeps, so a hand-back that worked reports no bytes** — The panel reads what the volume is charging for rather than what the file says it is, so the figure it claims is the space the user actually got back. → §DD225
+- 📋 **DD225** (deps: DD224 ✅) **the compaction measures the disk's length, which a sparse file keeps, so a hand-back that worked reports no bytes** — The panel reads what the volume is charging for rather than what the file says it is, so the figure it claims is the space the user actually got back. → §DD225
 
 ## Block B — The daemon client (talk to the engine)
 
