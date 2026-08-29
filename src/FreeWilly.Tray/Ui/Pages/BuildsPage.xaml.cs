@@ -235,8 +235,10 @@ internal partial class BuildsPage : System.Windows.Controls.UserControl
 
         if (record.StartedAt is { } started)
         {
-            fields.Add(new BuildField(
-                "Started", started.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)));
+            // Through the column's own conversion (DD193). This is the field the column defers to
+            // for the exact moment, so a second spelling of the zone here is the pane and the row
+            // disagreeing about when one build started.
+            fields.Add(new BuildField("Started", BuildRow.Clock(started, "yyyy-MM-dd HH:mm:ss")));
         }
 
         if (record.CompletedAt is not null)

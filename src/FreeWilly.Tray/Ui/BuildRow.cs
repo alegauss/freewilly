@@ -53,13 +53,35 @@ public sealed record BuildRow(
     /// </summary>
     /// <remarks>
     /// No clock, deliberately. An age is nicer to read and would make every window capture differ
-    /// from the last one, which is the whole thing DD38's determinism buys. Rendered in the
-    /// timestamp's own offset and in the invariant culture, so the picture does not change with the
-    /// machine's locale either. The exact start and finish are on the detail pane.
+    /// from the last one, which is the whole thing DD38's determinism buys. The exact start and
+    /// finish are on the detail pane.
+    ///
+    /// <para><b>In this machine's zone since DD193, and it used to be the timestamp's own.</b> That
+    /// was argued for the picture: a capture drawn in the value's offset is the same picture on
+    /// every machine. It is the wrong trade for the reader. buildx reports <c>created_at</c> in UTC,
+    /// so a build started at 09:49 on a machine three hours behind was printed as 12:49, and a time
+    /// read against the clock in the corner of the same screen has to agree with it. A capture whose
+    /// only varying field is a time costs less than a column that is wrong everywhere outside
+    /// UTC.</para>
     /// </remarks>
     public string When => StartedAt is { } started
-        ? started.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
+        ? Clock(started, "yyyy-MM-dd HH:mm")
         : "—";
+
+    /// <summary>
+    /// A moment as the clock beside this window reads it (DD193).
+    /// </summary>
+    /// <param name="at">The moment, in whatever offset it arrived with.</param>
+    /// <param name="format">How much of it to show.</param>
+    /// <returns>The text.</returns>
+    /// <remarks>
+    /// One conversion for the column and for the detail pane, because they are two renderings of
+    /// one instant and the defect this fixes was both of them being wrong together. The invariant
+    /// culture stays: it decides digit shapes and separators, which is not what the zone was
+    /// deciding.
+    /// </remarks>
+    internal static string Clock(DateTimeOffset at, string format) =>
+        at.ToLocalTime().ToString(format, CultureInfo.InvariantCulture);
 
     /// <summary>How long it took, or an em dash while it is still going.</summary>
     public string DurationText => Duration is { } taken ? Human(taken) : "—";

@@ -117,8 +117,34 @@ public class BuildRowTests
     public void The_when_column_has_no_clock_in_it()
     {
         // An age would be nicer to read and would make every window capture differ from the last,
-        // which is the property DD38 exists for. Invariant, and in the record's own offset.
-        Assert.Equal("2026-03-14 09:10", Row("x", "aaa", "Completed", 10).When);
+        // which is the property DD38 exists for. Computed rather than typed since DD193: the literal
+        // that used to be here was the fixture's own offset, which is zero, so it read as correct on
+        // exactly one machine and asserted nothing about the conversion.
+        var started = new DateTimeOffset(2026, 3, 14, 9, 10, 0, TimeSpan.Zero);
+
+        Assert.Equal(
+            started.ToLocalTime().ToString(
+                "yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+            Row("x", "aaa", "Completed", 10).When);
+    }
+
+    [Fact]
+    public void A_start_is_shown_against_the_clock_beside_the_window()
+    {
+        // DD193. buildx reports created_at in UTC, and rendering it in its own offset put a build
+        // begun at 09:49 on the page as 12:49 for an operator three hours behind. A time is read
+        // against the clock in the corner of the same screen, so it has to agree with that one.
+        var started = new DateTimeOffset(2026, 3, 14, 12, 49, 0, TimeSpan.Zero);
+        var row = new BuildRow(
+            "api", "default/default/aaa", "Completed", started, TimeSpan.FromSeconds(1), 5, 0);
+
+        Assert.Equal(started.ToLocalTime().Hour, int.Parse(
+            row.When.AsSpan(11, 2), System.Globalization.CultureInfo.InvariantCulture));
+
+        // And the pane the column defers to for the exact moment agrees with it, rather than
+        // carrying a second spelling of the zone.
+        Assert.StartsWith(row.When, BuildRow.Clock(started, "yyyy-MM-dd HH:mm:ss"),
+            StringComparison.Ordinal);
     }
 
     [Fact]

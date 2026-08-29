@@ -103,6 +103,7 @@
 - ✅ **DD167** **Nothing says a container's image left the store, so a digest row and an empty USED BY read as two lists disagreeing** — A container running on an image the store no longer has says image gone beside the digest, read off Image equalling ImageID, and the sample machine carries one.
 - ✅ **DD170** **A destination already ticked is shown by the caller's spelling, so a capture of volumes photographs the containers list** — ShowTab hands Show the button's own tag on both paths, so a destination named in any casing draws its own page, and a strip entry the switch does not answer now fails a test.
 - ✅ **DD176** **About sets the daemon's newest API version beside the pinned one, so a working pin reads as a mismatch** — The row leads with the pinned version and then states the range the daemon serves, one spelling for all three numbers.
+- ✅ **DD193** **A build's start is printed in the daemon's UTC, so one begun at 09:49 on this machine shows on the page as 12:49** — The column and the detail pane convert a start to this machine's zone through one shared call, so the 09:49 build the page showed as 12:49 reads 09:49.
 
 ## Block D — Container operations (what a user came to do)
 

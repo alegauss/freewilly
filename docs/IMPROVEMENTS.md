@@ -96,29 +96,6 @@ survived: the only person it costs is whoever is working on the product.
 
 ## Block C — The window (claude-tray's elements)
 
-### §DD193 The builds page renders a start in the machine's own clock
-
-buildx reports `created_at` in UTC, and `BuildRow.When` renders the value in whatever
-offset it arrived with, so the column states a real instant in a zone nobody at this
-machine reads it in. The capture that opened this task shows 2026-08-29 12:49 for a
-build its operator started at 09:49, three hours behind UTC. `BuildsPage.Fields` prints
-`Started` the same way and to the second, so the field the column defers to for the
-exact moment is wrong by the same amount.
-
-The offset was deliberate: the doc comment argues that the timestamp's own offset keeps
-a window capture identical whichever machine drew it, which is what DD38's fixture buys.
-That reasoning holds for the picture and not for the reader. A time is read against the
-clock in the corner of the same screen, and one three hours from it is not a time
-anybody can act on, while a capture whose only varying field is a time costs less than a
-page that is wrong on every machine outside UTC.
-
-So the render converts to local. The invariant culture stays, being about digit shapes
-and separators rather than about the zone, and so does the dash the empty cell prints,
-that being a glyph in a data column. `BuildRowTests` asserts the literal 2026-03-14
-09:10 against a fixture anchored at offset zero, so that expectation is computed through
-the same conversion rather than typed. What the conversion then costs a fixture capture
-is a line of its own.
-
 ### §DD194 A fixture capture stops being the same picture once a time is local
 
 `SampleBuilds.Anchor` is fixed at offset zero and every row is derived from it, so today
