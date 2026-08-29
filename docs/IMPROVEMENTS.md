@@ -25,27 +25,6 @@ image and volume the user has. The user sees what the check found before being a
 approve anything. And the engine is down for the duration, so the control belongs where
 that state is already on screen.
 
-### §DD202 The suite that cannot pass where the product is installed
-
-`SingleTrayTests` and `SingleEngineTests` claim the session-local mutexes that hold the
-tray and the engine host to one process each. A machine running FreeWilly holds both, so
-all fourteen fail together, every run, on the machine most likely to be developing it.
-
-They already know. Each prints that the object it found is the very one the test claims
-and that nothing below was asserted, which is the right diagnosis written into the wrong
-outcome: a red suite that says "this did not run" is indistinguishable at a glance from
-one that says "this is broken", and the habit it teaches is reading past fourteen
-failures to find the one that matters.
-
-A skip is the honest marker for it. The condition is knowable before the assertions run
-and it is not a defect in anything, so `Assert.Skip` with the same sentence puts the
-fact where a reader already looks for it. What must not happen is the tests quietly
-passing: the slot being held is exactly what they exist to notice, and a green run that
-asserted nothing is worse than a red one that said so.
-
-CI is unaffected either way, since no FreeWilly runs there, which is also why this has
-survived: the only person it costs is whoever is working on the product.
-
 ### §DD203 The run that needs a machine
 
 DD199 was measured and DD201 was measured, and neither was run. The mechanism holds and

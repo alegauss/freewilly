@@ -1,4 +1,4 @@
-using FreeWilly.Tray.Cli;
+﻿using FreeWilly.Tray.Cli;
 using Xunit;
 
 namespace FreeWilly.Preflight.Tests;
@@ -25,12 +25,17 @@ public sealed class SingleTrayTests
     /// succeeded when it should not have, and the cause was a tray in the notification area left
     /// over from a smoke test.
     ///
-    /// <para><b>It fails rather than skipping, and that was a decision.</b> The task offered both,
-    /// and skipping is the friendlier of the two on a developer's machine — but a skipped test is
-    /// one nobody reads, and xUnit v2 has no supported way to ask for one anyway: <c>Assert.Skip</c>
-    /// and <c>SkipException</c> are v3, and reaching for the dynamic-skip token by hand would be a
-    /// magic string that stops working silently. So the failure stays and the message becomes the
-    /// remedy, which is the half that was actually missing.</para>
+    /// <para><b>The ordinary case is a skip now, and this is the narrow guard behind it</b> (DD202).
+    /// <see cref="FactUnlessTheTrayIsRunningAttribute"/> asks the same question at discovery, so a
+    /// machine with FreeWilly up gets nine skips rather than nine failures. What is left for this
+    /// method is the race the attribute cannot see: a tray started between discovery and execution,
+    /// where the body really did run and really did assert nothing.</para>
+    ///
+    /// <para><b>An earlier pass decided against skipping and its reason was too strong.</b> It said
+    /// xUnit v2 had no supported way to ask for one, which is true of <c>Assert.Skip</c> and
+    /// <c>SkipException</c> — both v3 — and not true of <see cref="FactAttribute.Skip"/>, which is
+    /// virtual and read at discovery. Overriding it is typed rather than a magic string: the concern
+    /// that it would stop working silently is what a compile error is for.</para>
     ///
     /// <para>The mutex is unprefixed and therefore session-local, so this is never about another
     /// user's tray. <c>TryClaim</c> answering false is the whole detection; what was missing was
@@ -44,12 +49,13 @@ public sealed class SingleTrayTests
             return;
         }
 
-        // Named as an unmade assertion rather than a wrong one. Reported as a failure this reads
-        // "FreeWilly is running", which is the sentence the three failures did not say.
+        // Named as an unmade assertion rather than a wrong one. Reached only where a tray appeared
+        // after discovery had already found the slot free, so it says that rather than repeating
+        // the attribute's sentence.
         Assert.Fail(
-            $"FreeWilly is running on this session and holds {SingleTray.Name}, which is the very "
-            + "object these tests claim — so nothing below was actually asserted. Quit it from the "
-            + "tray and re-run.");
+            $"FreeWilly's tray took {SingleTray.Name} after this run started, which is the very "
+            + "object these tests claim — so nothing below was actually asserted. Quit it and "
+            + "re-run.");
     }
 
     /// <summary>
@@ -77,7 +83,7 @@ public sealed class SingleTrayTests
         return got;
     }
 
-    [Fact]
+    [FactUnlessTheTrayIsRunning]
     public void A_running_tray_is_named_by_the_failure_rather_than_left_to_an_assertion()
     {
         // DD103 itself, asserted. Before this the reader of a red suite was told that a claim
@@ -116,7 +122,7 @@ public sealed class SingleTrayTests
         Assert.Contains("Quit it from the tray", failure.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [FactUnlessTheTrayIsRunning]
     public void The_first_claim_wins_and_the_second_is_told_to_step_aside()
     {
         RequireTheTraySlot();
@@ -130,7 +136,7 @@ public sealed class SingleTrayTests
         }
     }
 
-    [Fact]
+    [FactUnlessTheTrayIsRunning]
     public void The_slot_is_free_again_once_the_tray_lets_it_go()
     {
         RequireTheTraySlot();
@@ -143,7 +149,7 @@ public sealed class SingleTrayTests
         Assert.True(ClaimedElsewhere());
     }
 
-    [Fact]
+    [FactUnlessTheTrayIsRunning]
     public void A_second_launch_raises_the_live_one()
     {
         RequireTheTraySlot();
@@ -162,7 +168,7 @@ public sealed class SingleTrayTests
         }
     }
 
-    [Fact]
+    [FactUnlessTheTrayIsRunning]
     public void The_quit_signal_reaches_the_live_one_and_is_not_the_raise()
     {
         RequireTheTraySlot();
@@ -188,7 +194,7 @@ public sealed class SingleTrayTests
         }
     }
 
-    [Fact]
+    [FactUnlessTheTrayIsRunning]
     public void Asking_a_machine_with_no_tray_to_quit_is_not_a_failure()
     {
         // What the uninstaller runs on a machine where nobody ever opened the tray. It asked for a
@@ -199,7 +205,7 @@ public sealed class SingleTrayTests
         Assert.False(SingleTray.AskTheLiveOneToQuit());
     }
 
-    [Fact]
+    [FactUnlessTheTrayIsRunning]
     public void The_wait_answers_yes_only_once_the_slot_is_actually_free()
     {
         // The half that makes the verb usable from an uninstaller. The signal only says the request
@@ -239,7 +245,7 @@ public sealed class SingleTrayTests
             "the wait never noticed the slot come free");
     }
 
-    [Fact]
+    [FactUnlessTheTrayIsRunning]
     public void Quitting_when_nothing_holds_the_tray_leaves_the_slot_claimable()
     {
         // The probe the wait makes has to give the slot straight back, or a tray relaunched in the
@@ -250,7 +256,7 @@ public sealed class SingleTrayTests
         Assert.True(ClaimedElsewhere());
     }
 
-    [Fact]
+    [FactUnlessTheTrayIsRunning]
     public void Raising_when_nothing_holds_the_tray_is_silent()
     {
         // The fourth, and it did not fail — which is worse. Its premise is in its name, and with a

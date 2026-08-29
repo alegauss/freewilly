@@ -1,4 +1,4 @@
-using FreeWilly.Tray.Cli;
+﻿using FreeWilly.Tray.Cli;
 using Xunit;
 
 namespace FreeWilly.Preflight.Tests;
@@ -20,6 +20,11 @@ public sealed class SingleEngineTests
     /// DD103's lesson, applied to the second slot: a suite run on a machine with the engine up would
     /// otherwise report that a claim succeeded when it should not have, and the cause — a
     /// <c>--run</c> serving the pipe in another window — would appear in no message.
+    ///
+    /// <para>Since DD202 the ordinary case never reaches here:
+    /// <see cref="FactUnlessTheEngineIsRunningAttribute"/> asks the same question at discovery and
+    /// these five are skipped instead. What is left is the race — a host that started after
+    /// discovery — which is the one case where the body ran and asserted nothing.</para>
     /// </remarks>
     private static void RequireTheEngineSlot()
     {
@@ -30,9 +35,9 @@ public sealed class SingleEngineTests
         }
 
         Assert.Fail(
-            $"FreeWilly is serving the engine on this session and holds {SingleEngine.Name}, which "
-            + "is the very object these tests claim — so nothing below was actually asserted. Stop "
-            + "it with `freewilly --stop` and re-run.");
+            $"a FreeWilly host took {SingleEngine.Name} after this run started, which is the very "
+            + "object these tests claim — so nothing below was actually asserted. Stop it with "
+            + "`freewilly --stop` and re-run.");
     }
 
     /// <summary>
@@ -59,7 +64,7 @@ public sealed class SingleEngineTests
         return got;
     }
 
-    [Fact]
+    [FactUnlessTheEngineIsRunning]
     public void The_first_host_wins_and_the_second_is_turned_away()
     {
         RequireTheEngineSlot();
@@ -92,7 +97,7 @@ public sealed class SingleEngineTests
         holder.Join(TimeSpan.FromSeconds(5));
     }
 
-    [Fact]
+    [FactUnlessTheEngineIsRunning]
     public void The_slot_comes_free_when_the_host_goes_away()
     {
         RequireTheEngineSlot();
@@ -105,7 +110,7 @@ public sealed class SingleEngineTests
         Assert.True(ClaimedElsewhere(), "the slot stayed taken after the host released it");
     }
 
-    [Fact]
+    [FactUnlessTheEngineIsRunning]
     public void The_engine_slot_is_not_the_trays()
     {
         RequireTheEngineSlot();
@@ -116,7 +121,7 @@ public sealed class SingleEngineTests
         Assert.NotEqual(SingleTray.Name, SingleEngine.Name);
     }
 
-    [Fact]
+    [FactUnlessTheEngineIsRunning]
     public void A_stop_announced_with_no_host_listening_is_not_a_failure()
     {
         RequireTheEngineSlot();
@@ -127,7 +132,7 @@ public sealed class SingleEngineTests
         Assert.False(SingleEngine.TellTheLiveOneToStop());
     }
 
-    [Fact]
+    [FactUnlessTheEngineIsRunning]
     public void The_host_hears_a_stop_that_announced_itself()
     {
         RequireTheEngineSlot();
