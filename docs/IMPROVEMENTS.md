@@ -30,6 +30,31 @@ flag is disabled rather than gone, and may come back.
 
 ## Block C — The window (claude-tray's elements)
 
+### §DD227 The confirmation never appears, so the button does nothing
+
+Measured on 29 August 2026 by DD222's driver and then by hand. Invoking Check filesystem
+through UI Automation produced no dialog. Neither did a keypress posted to the focused
+button, nor a mouse click synthesized at its own clickable point. The installed build
+behaved the same, and no window of class `#32770` existed anywhere on the desktop.
+
+The handlers are reached. The same three input paths fire `Copy`, which is a `Click`
+handler on the same page, and the clipboard filled with the readings each time. So the
+button is found, is enabled, is on screen, supports Invoke, and its handler runs.
+
+Afterwards the engine was still serving and both buttons were still enabled. `Run`
+starts by disabling them, so it never began: `MessageBox.Show` returned something other
+than `Yes` without putting anything on screen. `Compact` behaves identically, which
+rules out `ToolsAreReady` and leaves the call itself.
+
+This is the whole of DD199's consent design failing silently. Nothing is destroyed and
+nothing is at risk, which is why it survived: pressing the button looks exactly like
+deciding not to. The check has been exercised from the verb throughout, so the sequence
+underneath is sound and only the window's door is shut.
+
+Whatever the cause turns out to be, the fix owes a way to notice next time. A
+confirmation that stops appearing is invisible to every source assertion and to the
+driver, which can only report that it waited.
+
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks
