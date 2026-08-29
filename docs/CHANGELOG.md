@@ -60,6 +60,7 @@
 - ✅ **DD200** **the start check reads a kernel log every distribution shares, so another disk's fault reads as this one's** — The start check reads this filesystem's own error count and mount options out of the kernel, and the shared log it used to match on is gone rather than filtered.
 - ✅ **DD201** **the filesystem check refuses on every machine, because two commands it runs are not in a minirootfs** — The two util-linux commands are gone: the root device comes out of /proc/mounts and blkid answers both directions from a listing, checked against the live distribution.
 - ✅ **DD202** **fourteen tests fail whenever a real FreeWilly is running, so the suite cannot go green on a machine that has one** — The fourteen single-instance tests skip with the reason where a live product holds their slot, so the suite goes green on the machine developing it.
+- ✅ **DD204** **the filesystem check is assembled twice, once for the verb and once for the window, so the two can drift apart** — The verb and the window reach one assembly of the check, and the routing gap that had left --fsck unreachable since it shipped is closed.
 
 ## Block B — The daemon client (talk to the engine)
 

@@ -151,6 +151,7 @@ public static class CommandLine
             "--run",
             "--stop",
             "--status",
+            "--fsck",
             "--api",
             "--watch",
             "--autostart",

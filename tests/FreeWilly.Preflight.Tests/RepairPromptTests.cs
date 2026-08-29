@@ -88,6 +88,37 @@ public sealed class RepairPromptTests
     }
 
     [Fact]
+    public void The_verb_and_the_window_reach_one_assembly_of_the_sequence()
+    {
+        // DD204. Both had built the same five steps — the registered guard, the rootfs acquire, the
+        // engine stop, the construction and the call — in their own spelling, and what must not
+        // differ between two surfaces is the order the engine comes down in. Source-asserted because
+        // the thing being guarded against is a second copy appearing, which no behaviour shows.
+        var verb = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/EngineCommand.cs"));
+
+        Assert.Contains("FilesystemWork.OnThisMachine()", verb, StringComparison.Ordinal);
+
+        // The parts it used to assemble for itself, now reached only through that one door.
+        Assert.DoesNotContain("new FilesystemRepair(", verb, StringComparison.Ordinal);
+        Assert.DoesNotContain("VmHold.On", verb, StringComparison.Ordinal);
+    }
+
+    /// <summary>Where the repository is, from a test binary under bin/.</summary>
+    /// <returns>The root.</returns>
+    private static string RepositoryRoot()
+    {
+        var at = new DirectoryInfo(AppContext.BaseDirectory);
+        while (at is not null && !File.Exists(Path.Combine(at.FullName, "FreeWilly.slnx")))
+        {
+            at = at.Parent;
+        }
+
+        Assert.True(at is not null, "the repository root was not found above the test binaries");
+        return at!.FullName;
+    }
+
+    [Fact]
     public void A_captured_window_cannot_run_the_thing_the_buttons_start()
     {
         // The seam is what makes that true by construction. A fixture that answered plausibly would

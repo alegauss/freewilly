@@ -689,41 +689,15 @@ internal static class EngineCommand
             return Complain($"unexpected argument {flag}: --fsck takes --repair or nothing");
         }
 
-        var paths = new EnginePaths();
-        if (!paths.DistributionRegistered)
-        {
-            Console.Error.WriteLine(
-                $"{CommandLine.ExecutableName}: {paths.DistributionName} is not registered, so "
-                + "there is no filesystem to check.");
-            return Failed;
-        }
-
-        // The same rootfs the install used, through the same verified store: a cached copy is
-        // digest-checked and reused, and a missing one is fetched. The rescue is imported from a
-        // tarball this project already pins rather than from anything found on the machine.
-        using var fetcher = new HttpArtefactFetcher();
-        var acquired = new ArtefactStore(fetcher, paths.Downloads)
-            .AcquireAsync(EngineManifest.Current.Rootfs).GetAwaiter().GetResult();
-        if (acquired.Path is not { } rootfs)
-        {
-            Console.Error.WriteLine(
-                $"{CommandLine.ExecutableName}: the rescue distribution is imported from the Alpine "
-                + $"rootfs this install pins, and it is not available: {acquired.Failure}");
-            return Failed;
-        }
-
-        // Down first and by the ordinary route, so the containers get the stop signal DD189 gives
-        // them. What follows terminates the distribution anyway, and a repair that killed a database
-        // on its way to mending the disk under it would be a poor trade.
-        Console.WriteLine("  Stopping the engine, which stays down until this finishes.");
-        Report(NewLifecycle().StopAsync(EngineLifecycle.PatientGrace).GetAwaiter().GetResult());
-        Console.WriteLine();
-
-        var repair = new FilesystemRepair(new Wsl(), paths, VmHold.On);
+        // Through the same object the window's button reaches (DD204). What this verb adds is the
+        // rendering: the guard, the rootfs, the engine stop and the sequence itself are one
+        // assembly, so the order the engine comes down in cannot differ between the two surfaces.
+        var work = FilesystemWork.OnThisMachine();
         var outcome = write
-            ? repair.Fix(rootfs, step => Console.WriteLine(Line(step)))
-            : repair.Check(rootfs, step => Console.WriteLine(Line(step)));
+            ? work.Fix(step => Console.WriteLine(Line(step)))
+            : work.Check(step => Console.WriteLine(Line(step)));
 
+        var paths = new EnginePaths();
         if (outcome.Findings is { Length: > 0 } said)
         {
             Console.WriteLine();
@@ -734,10 +708,18 @@ internal static class EngineCommand
         if (!outcome.Succeeded)
         {
             Console.WriteLine($"  {outcome.Failure?.Detail}");
-            foreach (var line in WslFailure
-                .OfDirtyFilesystem("by hand:", paths.DistributionName, paths.Distribution).Remedy)
+
+            // The manual sequence only where there is a disk it would run against. A machine with no
+            // distribution registered has nothing for e2fsck to check, and printing four commands
+            // about one is worse than printing none.
+            if (paths.DistributionRegistered)
             {
-                Console.WriteLine($"  {line}");
+                foreach (var line in WslFailure
+                    .OfDirtyFilesystem("by hand:", paths.DistributionName, paths.Distribution)
+                    .Remedy)
+                {
+                    Console.WriteLine($"  {line}");
+                }
             }
 
             return Failed;

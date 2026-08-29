@@ -71,7 +71,7 @@ internal partial class MainWindow : Window
         _engineState = engineState;
         _startEngine = startEngine;
         _builds = builds ?? new BuildHistory();
-        _engineSeams = engine ?? Cli.FilesystemWork.OnThisMachine();
+        _engineSeams = engine ?? EngineDestination.OnThisMachine();
 
         Containers = new ContainersPage(api, engineState, startEngine);
         DestinationHost.Children.Add(Containers);

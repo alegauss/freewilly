@@ -236,6 +236,34 @@ public sealed class CommandLineTests
             + $"enumerate them for the help: {string.Join(", ", literals)}");
     }
 
+    [Fact]
+    public void Every_flag_the_help_text_offers_is_one_the_router_answers()
+    {
+        // DD204's finding, and it is the guard rather than the fix. `--fsck` shipped with a line in
+        // the help, a case in EngineCommand's switch and no entry in EngineVerbs, so the router sent
+        // it to Unknown and the verb was unreachable from the moment it landed. Nothing noticed,
+        // because the help lists it and the switch handles it and neither is where the gap was.
+        // Given whatever the line says it takes. A flag written `--open-build <link>` refuses
+        // without one, and that refusal is correct rather than the gap being looked for here.
+        var offered = CommandLine.HelpText
+            .Split('\n', StringSplitOptions.TrimEntries)
+            .Where(line => line.StartsWith("--", StringComparison.Ordinal))
+            .Select(line => (Flag: line.Split(' ', 2)[0], Takes: line.Contains('<', StringComparison.Ordinal)))
+            .DistinctBy(offer => offer.Flag, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.NotEmpty(offered);
+        foreach (var (flag, takes) in offered)
+        {
+            string[] line = takes ? [flag, "argument"] : [flag];
+
+            Assert.True(
+                CommandLine.Of(line).Surface != Surface.Unknown,
+                $"{flag} is in the help text and the router does not answer it, so a caller who "
+                + "reads the help gets `unknown argument` back");
+        }
+    }
+
     private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

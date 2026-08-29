@@ -18,17 +18,16 @@ namespace FreeWilly.Tray.Cli;
 /// </remarks>
 internal sealed class FilesystemWork : IFilesystemWork
 {
-    /// <summary>
-    /// Everything the Engine destination reads and can start, against this machine.
-    /// </summary>
-    /// <returns>The seams.</returns>
+    /// <summary>The check and the repair, against this machine.</summary>
+    /// <returns>The work.</returns>
     /// <remarks>
-    /// The three wired in one place because they are one destination's, and because the shell's line
-    /// budget refuses to hold a collaborator per seam. Here rather than in Core: the hold on the
-    /// virtual machine is a process this assembly owns.
+    /// Reached by both surfaces since DD204. The verb and the window had each assembled the same
+    /// five steps — the registered guard, the rootfs acquire, the engine stop, the construction and
+    /// the call — and nothing was wrong with either copy, which is the state a duplicate is in until
+    /// one of them is edited. What differs between them is the rendering, and that is all that
+    /// should.
     /// </remarks>
-    internal static EngineSeams OnThisMachine() => new(
-        new EngineJournalFile(), LiveMachineReport.OnThisMachine(), new FilesystemWork());
+    internal static IFilesystemWork OnThisMachine() => new FilesystemWork();
 
     /// <inheritdoc/>
     public RepairOutcome Check(Action<RepairStep> report) => Run(report, write: false);
