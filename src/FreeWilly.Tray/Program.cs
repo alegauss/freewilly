@@ -481,7 +481,7 @@ internal sealed class TrayApplication : ApplicationContext
             return;
         }
 
-        var gaveUp = TrayState.StartDidNotLand(TrayState.StartBudget, _paths.DistributionName);
+        var gaveUp = TrayState.StartDidNotLand(TrayState.StartBudget, _paths.HostLog);
         _journal.Say($"{"tray",-8}  {gaveUp}");
         Complain(gaveUp);
     }

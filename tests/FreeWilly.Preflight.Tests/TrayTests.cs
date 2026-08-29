@@ -398,15 +398,18 @@ public sealed class TrayTests
     }
 
     [Fact]
-    public void A_start_that_never_answers_is_reported_against_the_log_that_holds_the_reason()
+    public void A_start_that_never_answers_is_reported_against_the_file_that_is_readable()
     {
-        // Every silent death that is not a missing distribution ends here, and there is one useful
-        // thing to say about all of them rather than a guess at which one it was.
-        var said = TrayState.StartDidNotLand(
-            TrayState.StartBudget, EnginePaths.CurrentDistribution);
+        // DD190. This used to name /var/log/dockerd.log inside the distribution, which is the
+        // pointer DD162 removed from the host and the tray kept a copy of. On 29 August 2026 it sent
+        // the reader into a filesystem the failure had just made unreadable, for a file dockerd had
+        // never opened. The journal is on Windows and holds what the host actually saw.
+        var journal = new EnginePaths().HostLog;
 
-        Assert.Contains(EngineLifecycle.LogPath, said, StringComparison.Ordinal);
-        Assert.Contains(EnginePaths.CurrentDistribution, said, StringComparison.Ordinal);
+        var said = TrayState.StartDidNotLand(TrayState.StartBudget, journal);
+
+        Assert.Contains(journal, said, StringComparison.Ordinal);
+        Assert.DoesNotContain(EngineLifecycle.LogPath, said, StringComparison.Ordinal);
         Assert.Contains("75s", said, StringComparison.Ordinal);
     }
 

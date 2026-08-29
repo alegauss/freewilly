@@ -486,6 +486,79 @@ public sealed class EngineLifecycleTests
         Assert.DoesNotContain(EngineLifecycle.LogPath, status.Detail, StringComparison.Ordinal);
     }
 
+    // ---- the failure that names a WSL internal (DD190) -----------------------------------------
+
+    [Fact]
+    public async Task An_unreadable_root_is_read_back_rather_than_quoted_at_the_user()
+    {
+        // What the host wrote on 29 August 2026, verbatim. Nothing in it says what happened, and
+        // the obvious reading is wrong: errno 5 is EIO, so root was not missing.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var daemon = new FakeDaemon(aliveWhenLaunched: false)
+        {
+            LastWords = "wsl.exe exited -1: getpwnam(root) failed 5",
+        };
+
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(null), Pipe(), Owned);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        // The evidence survives. A reading that replaced the launcher's own words would leave
+        // nobody able to check it.
+        Assert.Contains("getpwnam(root) failed 5", status.Detail, StringComparison.Ordinal);
+        Assert.Contains("EIO", status.Detail, StringComparison.Ordinal);
+        Assert.Contains("read-only", status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_missing_user_is_not_read_as_a_broken_filesystem()
+    {
+        // The whole diagnosis turns on the errno. Failing with 2 is ENOENT and really is a user that
+        // is not there, and answering that with e2fsck would send somebody to repair a healthy disk.
+        Assert.Null(WslFailure.Of(
+            "wsl.exe exited -1: getpwnam(root) failed 2", "freewilly", @"C:\FreeWilly\distro"));
+        Assert.Null(WslFailure.Of(
+            "wsl.exe exited 1: The Windows Subsystem for Linux instance has terminated.",
+            "freewilly",
+            @"C:\FreeWilly\distro"));
+        Assert.Null(WslFailure.Of(null, "freewilly", @"C:\FreeWilly\distro"));
+    }
+
+    [Fact]
+    public void The_remedy_names_the_disk_and_checks_it_from_somewhere_else()
+    {
+        // A root cannot check itself, which is the fact that makes this four commands rather than
+        // one and is why printing them is the value here. Nobody derives them from "getpwnam
+        // failed".
+        var failure = WslFailure.Of(
+            "wsl.exe exited -1: getpwuid(0) failed 5", "freewilly", @"C:\FreeWilly\distro");
+
+        Assert.NotNull(failure);
+        var remedy = string.Join("\n", failure.Remedy);
+
+        Assert.Contains(@"C:\FreeWilly\distro\ext4.vhdx", remedy, StringComparison.Ordinal);
+        Assert.Contains("e2fsck", remedy, StringComparison.Ordinal);
+        Assert.Contains("wsl --terminate freewilly", remedy, StringComparison.Ordinal);
+
+        // The distribution's own root is what is broken, so the check runs from another one.
+        Assert.Contains("another distribution", remedy, StringComparison.Ordinal);
+
+        // DD128's non-goal, and it would take every other distribution on the machine down.
+        Assert.DoesNotContain("--shutdown", remedy, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_error_code_spelling_of_the_same_failure_is_recognised_too()
+    {
+        // WSL resolves the user before it execs anything, so a root it cannot read surfaces either
+        // as the C call or as the code the launcher maps it to. DD192 found the second arriving as
+        // mojibake, which is why the match is on the code and not on a sentence around it.
+        Assert.NotNull(WslFailure.Of(
+            "wsl.exe exited -1: WSL_E_USER_NOT_FOUND", "freewilly", @"C:\FreeWilly\distro"));
+    }
+
     /// <summary>
     /// The bytes a real refused launch produced, decoded and flattened into one line (DD162).
     /// </summary>

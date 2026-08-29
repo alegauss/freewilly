@@ -126,8 +126,16 @@ public sealed class EngineLifecycle : IAsyncDisposable
         _daemon = daemon;
         _backend = backend;
         _pipeName = pipeName;
-        Distribution = distribution ?? new EnginePaths().DistributionName;
+
+        // One EnginePaths for both, because the disk belongs to the distribution and reading them
+        // from two constructions is how the pair drifts on a machine whose root has moved.
+        var paths = new EnginePaths();
+        Distribution = distribution ?? paths.DistributionName;
+        _basePath = paths.Distribution;
     }
+
+    /// <summary>Where WSL registered the distribution, which is where its disk is (DD190).</summary>
+    private readonly string _basePath;
 
     /// <summary>
     /// The distribution this install owns — the current name, or the legacy one where an install
@@ -515,8 +523,20 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// quietly, the pointer stands exactly as it did, because then the daemon really is the thing
     /// that died.</para>
     /// </remarks>
-    private string WhyItDied() =>
-        _daemon.LastWords ?? $"read {LogPath} inside {Distribution}";
+    private string WhyItDied()
+    {
+        if (_daemon.LastWords is not { } said)
+        {
+            return $"read {LogPath} inside {Distribution}";
+        }
+
+        // DD190. The launcher's own words are kept and the reading is added after them, never
+        // instead: "getpwnam(root) failed 5" is the evidence and has to survive into the journal,
+        // and what it means is the half a reader could not have supplied.
+        return WslFailure.Of(said, Distribution, _basePath) is { } read
+            ? $"{said} ({read.Meaning})"
+            : said;
+    }
 
     /// <summary>The same question, for a daemon that was up and is not (DD162).</summary>
     /// <returns>The detail.</returns>

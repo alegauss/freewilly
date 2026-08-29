@@ -161,14 +161,21 @@ public static class TrayState
 
     /// <summary>What to say about a start that was launched and never answered.</summary>
     /// <param name="budget">How long it was given.</param>
-    /// <param name="distribution">Where the daemon's own log is.</param>
+    /// <param name="journal">Where the host wrote its account of the start (DD137).</param>
     /// <returns>The sentence.</returns>
     /// <remarks>
-    /// Every silent death that is not a missing distribution lands here, and there is exactly one
-    /// useful thing to say about all of them: the daemon wrote down why. Naming the log rather than
-    /// guessing at a cause is the same rule the lifecycle follows when its own budget runs out.
+    /// <para>It used to name <c>/var/log/dockerd.log</c> inside the distribution, and DD190 took
+    /// that out. DD162 had already removed the same pointer from the host and the tray kept its own
+    /// copy: the log is the right file for a daemon that started and then died, and the wrong one
+    /// for every launch that never reached a daemon at all — which on 29 August 2026 meant sending
+    /// the reader into a filesystem the failure had just made unreadable, for a file dockerd had
+    /// never opened.</para>
+    ///
+    /// <para>What it names instead is the journal, which is on Windows, is readable whatever the
+    /// distribution is doing, and since DD190 carries both the launcher's words and what they mean.
+    /// That is the file with the answer in it in every case rather than in one of them.</para>
     /// </remarks>
-    public static string StartDidNotLand(TimeSpan budget, string distribution) =>
-        $"the engine did not answer within {budget.TotalSeconds:0}s. Its own log is "
-        + $"{EngineLifecycle.LogPath} inside {distribution}.";
+    public static string StartDidNotLand(TimeSpan budget, string journal) =>
+        $"the engine did not answer within {budget.TotalSeconds:0}s. What the host saw is in "
+        + $"{journal}.";
 }

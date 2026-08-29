@@ -52,6 +52,7 @@
 - ✅ **DD188** **the tray answers a session ending by spawning a stop process Windows kills before it reaches the distribution** — The tray now answers a session ending in-process: it tells the live host, waits out the same budget, and takes the distribution down where the host cannot.
 - 🗑 **DD195** **the distribution ships without e2fsprogs, so nothing on it can check or repair its own filesystem** — superseded by DD196: Filed with a section heading naming DD193, an unrelated task, and roadkeep has no verb that amends a heading in place.
 - ✅ **DD189** **the daemon is killed rather than asked to stop, so no container gets a SIGTERM at a quit or a shutdown** — Every teardown now sends dockerd a SIGTERM and waits, on a budget the caller chooses, so containers stop themselves before the kill.
+- ✅ **DD190** **a distribution whose root went read-only fails with getpwnam and a pointer to a log inside it** — getpwnam failing with 5 now reads back as an unreadable root, and the e2fsck commands are printed where a log inside it used to be named.
 
 ## Block B — The daemon client (talk to the engine)
 

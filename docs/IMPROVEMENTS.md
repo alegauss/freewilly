@@ -2,28 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD190 DD190: the failure that names a WSL internal and no remedy
-
-What the host wrote on 29 August was "the daemon exited while starting", followed by
-"wsl.exe exited -1: getpwnam(root) failed 5". Nothing in that says what happened. errno
-5 is EIO, so root was not missing: the file holding it could not be read, because the
-root filesystem of the distribution had remounted read-only after an unclean shutdown.
-The tray then sent the reader to /var/log/dockerd.log inside that distribution, which is
-the file the failure had just made unreadable and which dockerd had never reached in any
-case. DD162 removed exactly this pointer from the host, and the tray kept its own copy
-of it.
-
-So there are two pieces. Recognise the signature, which is getpwnam or getpwuid failing
-with 5, or WSL_E_USER_NOT_FOUND out of a distribution that is registered, and say in the
-sentence what it means rather than leaving a reader holding a WSL internal. Then name
-the remedy, which is e2fsck against the disk of the distribution.
-
-The remedy is awkward and the task has to decide how far to carry it. Repairing needs
-the filesystem unmounted and a second distribution to run the check from, because a root
-cannot check itself. Printing the exact commands is the floor and is worth shipping on
-its own; doing the repair unattended is a larger question about what this tool is
-allowed to register on somebody's machine.
-
 ### §DD191 DD191: the warning that arrived a boot early
 
 The 29 August failure was announced a boot early and nothing was listening. WSL wrote

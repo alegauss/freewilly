@@ -67,6 +67,21 @@ internal static class EngineCommand
         {
             Note(journal, $"  {"",-8}  Engine API {version}");
         }
+
+        // DD190. Here rather than inside the detail, because a remedy is four commands and a detail
+        // is one line: flattening them would produce a sentence nobody can copy. This is the one
+        // place every status passes through, so the commands reach the journal the host keeps and
+        // the console `--status` is being read at, without either growing its own copy.
+        var paths = new EnginePaths();
+        if (paths.DistributionRegistered
+            && WslFailure.Of(status.Detail, paths.DistributionName, paths.Distribution)
+                is { } failure)
+        {
+            foreach (var line in failure.Remedy)
+            {
+                Note(journal, $"  {"",-8}  {line}");
+            }
+        }
     }
 
     /// <summary>Say something the console shows and the journal keeps (DD137).</summary>
