@@ -29,6 +29,17 @@ internal sealed record RivalSignals
     internal bool EnginePipeOpen { get; init; }
 
     /// <summary>
+    /// Whether the thing listening on it is this tool's own engine (DD231).
+    /// </summary>
+    /// <remarks>
+    /// The exclusion the pipe signal never had. A signal rather than something
+    /// <see cref="RivalEngineProbe.Judge"/> reads for itself, so the judging stays a pure function
+    /// of this record: whether a host of ours is alive is a fact about the machine, and this row is
+    /// the one where a fact read inside the decision cannot be tested.
+    /// </remarks>
+    internal bool OurEngineServing { get; init; }
+
+    /// <summary>
     /// Where this tool puts its own <c>docker.exe</c>, so its own CLI is never read as a rival.
     /// </summary>
     internal string OwnCliDirectory { get; init; } = string.Empty;
@@ -163,7 +174,14 @@ internal static class RivalEngineProbe
 
         // 4. The pipe. Only ever its own row when nothing above identified anything: an engine
         //    nobody recognises still owns the one endpoint a client can reach.
-        if (signals.EnginePipeOpen)
+        //
+        //    Not when the engine holding it is ours (DD231). Signals 1 and 2 each drop this
+        //    project's own before judging, and this one did not: measured on a machine with the
+        //    tool's engine up, the row came back red saying an unidentified engine held the pipe and
+        //    telling the user to uninstall it, which is the failure DD56's remark says must never
+        //    happen. A host of ours being alive is what makes the pipe explained rather than
+        //    evidence, so it is dropped from the rival's row too and not only from its own.
+        if (signals.EnginePipeOpen && !signals.OurEngineServing)
         {
             if (order.Count == 0)
             {
@@ -358,6 +376,7 @@ internal static class RivalEngineProbe
             Distributions = ReadDistributions(),
             VendorInstalls = vendors,
             EnginePipeOpen = EnginePipeExists(),
+            OurEngineServing = EngineHostSlot.Held,
             OwnCliDirectory = new EnginePaths().CliDirectory,
         };
     }

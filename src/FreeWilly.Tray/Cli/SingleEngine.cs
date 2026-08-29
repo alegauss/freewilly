@@ -34,7 +34,12 @@ internal sealed class SingleEngine : IDisposable
     /// and the message it prints when a running engine already holds it has to name the object
     /// rather than a second spelling of it.
     /// </remarks>
-    internal const string Name = "FreeWilly.engine";
+    /// <remarks>
+    /// Spelled in Core since DD231, because the preflight opens the same object to tell this tool's
+    /// own engine from a rival's, and two literals is a probe that stops recognising its own engine
+    /// the day one of them is renamed.
+    /// </remarks>
+    internal const string Name = Core.Engine.EngineHostSlot.Name;
 
     /// <summary>What <c>--stop</c> sets to tell the live host the stop was asked for (DD136).</summary>
     /// <remarks>

@@ -77,6 +77,7 @@
 - ✅ **DD225** **the compaction measures the disk's length, which a sparse file keeps, so a hand-back that worked reports no bytes** — The compaction and the panel read what the volume is charging for through GetCompressedFileSize, so a hand-back that worked reports the space a sparse file's length cannot show.
 - ✅ **DD226** **the Compact plan asks somebody to stop Docker for a hand-back this machine has already refused once** — A hand-back Windows refuses is written down beside the install, so the plan says so and asks whether to try anyway; a hand-back that works forgets it, because the flag is disabled and not removed.
 - ✅ **DD228** **a temporary distribution left by an interrupted run makes the next one refuse instead of taking it back** — Every import first terminates and unregisters the name it is about to take, so a run that meets a leftover of its own clears it and says so instead of stopping on ERROR_ALREADY_EXISTS.
+- ✅ **DD231** **the preflight calls this tool's own running engine an unidentified rival and tells the user to uninstall it first** — The pipe signal drops out where a host of this tool's holds the engine slot, so a running FreeWilly is no longer reported as an unidentified engine the user is told to uninstall.
 
 ## Block B — The daemon client (talk to the engine)
 

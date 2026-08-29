@@ -198,6 +198,64 @@ public sealed class RivalEngineProbeTests
     }
 
     [Fact]
+    public void The_pipe_this_tool_is_serving_on_is_not_a_rival()
+    {
+        // DD231, measured by running --preflight on a machine with this tool's engine up: the row
+        // came back red naming an unidentified engine, with `uninstall it first` as the remedy. It
+        // was telling somebody to uninstall FreeWilly before installing FreeWilly, and
+        // CanHostEngine went false with it, so --provision refused on a machine that was working.
+        //
+        // Signals 1 and 2 each drop this project's own before judging (DD16, DD56). The pipe was
+        // the one that could not tell whose it was.
+        var found = RivalEngineProbe.Judge(
+            new RivalSignals { EnginePipeOpen = true, OurEngineServing = true });
+
+        Assert.Empty(found);
+    }
+
+    [Fact]
+    public void An_engine_of_ours_does_not_hide_a_rival_that_was_identified()
+    {
+        // The direction that matters most: a rival mistaken for us is a green row clearing an
+        // install into the collision DD16 exists to prevent. Our engine explains the pipe and
+        // nothing else, so everything the other signals found is still reported, and the pipe stops
+        // being offered as evidence against somebody it does not belong to.
+        var found = RivalEngineProbe.Judge(new RivalSignals
+        {
+            DockerCommand = @"C:\Program Files\Docker\Docker\resources\bin\docker.exe",
+            Distributions = ["docker-desktop"],
+            EnginePipeOpen = true,
+            OurEngineServing = true,
+        });
+
+        var rival = Assert.Single(found);
+        Assert.Equal("Docker Desktop", rival.Name);
+        Assert.Contains("docker resolves to", rival.Evidence, StringComparison.Ordinal);
+        Assert.DoesNotContain("docker_engine", rival.Evidence, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_engine_of_ours_that_is_not_running_hides_nothing()
+    {
+        // The exclusion is about a host that is alive, not about this product being installed. A
+        // machine with FreeWilly on it and nothing serving still has to report whoever holds the
+        // pipe, because that somebody is not us.
+        var rival = Assert.Single(RivalEngineProbe.Judge(
+            new RivalSignals { EnginePipeOpen = true, OurEngineServing = false }));
+
+        Assert.Equal("an unidentified engine", rival.Name);
+    }
+
+    [Fact]
+    public void The_probe_and_the_host_name_one_object()
+    {
+        // Two literals is a probe that stops recognising its own engine the day one is renamed, on
+        // the row that must never be wrongly red.
+        Assert.Equal(
+            FreeWilly.Core.Engine.EngineHostSlot.Name, FreeWilly.Tray.Cli.SingleEngine.Name);
+    }
+
+    [Fact]
     public void A_null_signal_set_is_a_defect_here_rather_than_an_empty_machine() =>
         Assert.Throws<ArgumentNullException>(() => RivalEngineProbe.Judge(null!));
 
