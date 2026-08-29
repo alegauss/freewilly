@@ -14,6 +14,21 @@ public sealed record MachineReading(string Name, string Value);
 public sealed record MachineGroup(string Title, IReadOnlyList<MachineReading> Readings);
 
 /// <summary>
+/// What the machine under the engine is doing, and whether that is well (DD197, DD198).
+/// </summary>
+/// <param name="Well">Whether nothing is wrong with it.</param>
+/// <param name="Summary">The verdict, in one clause.</param>
+/// <param name="Groups">The readings the verdict was made of.</param>
+/// <remarks>
+/// The verdict travels with the readings rather than being derived from them twice. A window that
+/// decided health by reading its own rendered strings and an agent surface that decided it again
+/// from the same strings would be two answers to one question, and the second one to change would
+/// be the one nobody noticed.
+/// </remarks>
+public sealed record MachineHealth(
+    bool Well, string Summary, IReadOnlyList<MachineGroup> Groups);
+
+/// <summary>
 /// Where the Engine page's readings come from. The seam that makes the page capturable (DD197, L6).
 /// </summary>
 /// <remarks>
@@ -33,7 +48,24 @@ public interface IMachineReport
     /// answers from memory and completes before the caller yields, which is what keeps a capture of
     /// this page deterministic.
     /// </remarks>
-    Task<IReadOnlyList<MachineGroup>> ReadAsync(CancellationToken cancellation = default);
+    Task<MachineHealth> ReadAsync(CancellationToken cancellation = default);
+}
+
+/// <summary>
+/// How a caller that already has an engine open gets the readings for it (DD198).
+/// </summary>
+/// <remarks>
+/// A named seam rather than a function, because <c>MachineReads</c> holds interfaces and the guard
+/// over it says why: a property a measurement cannot stand in for is a verb that reaches the real
+/// machine whatever it was handed. The indirection is the engine — the report asks the pipe one
+/// question, and a verb on the agent surface is given the engine it is to use.
+/// </remarks>
+public interface IMachineReports
+{
+    /// <summary>The readings, asking <paramref name="engine"/> the one question it owns.</summary>
+    /// <param name="engine">The engine the caller already has.</param>
+    /// <returns>The report.</returns>
+    IMachineReport Through(Agent.IEngineReads engine);
 }
 
 /// <summary>

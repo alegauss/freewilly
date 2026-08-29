@@ -19,9 +19,11 @@ namespace FreeWilly.Core.Fixtures;
 /// </remarks>
 public sealed class SampleMachineReport : IMachineReport
 {
-    /// <summary>The readings, which never change.</summary>
-    private static readonly IReadOnlyList<MachineGroup> Readings =
-    [
+    /// <summary>The readings and the verdict they add up to, which never change.</summary>
+    private static readonly MachineHealth Health = new(
+        true,
+        "wsl, the distribution and the engine are well",
+        [
         new MachineGroup("WSL",
         [
             new MachineReading("version", "2.7.1.0"),
@@ -53,7 +55,7 @@ public sealed class SampleMachineReport : IMachineReport
             new MachineReading("pipe", @"answers on \\.\pipe\docker_engine"),
             new MachineReading("API version", "1.55"),
         ]),
-    ];
+        ]);
 
     /// <inheritdoc/>
     /// <remarks>
@@ -61,6 +63,6 @@ public sealed class SampleMachineReport : IMachineReport
     /// the panel is drawn before the capture settles. A fixture that went through the thread pool
     /// would make the picture depend on how busy the machine drawing it was.
     /// </remarks>
-    public Task<IReadOnlyList<MachineGroup>> ReadAsync(CancellationToken cancellation = default) =>
-        Task.FromResult(Readings);
+    public Task<MachineHealth> ReadAsync(CancellationToken cancellation = default) =>
+        Task.FromResult(Health);
 }

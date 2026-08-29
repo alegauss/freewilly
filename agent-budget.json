@@ -184,6 +184,21 @@
         "mutually exclusive, so the worst case is measured twice; the longer is 296."
       ],
       "read doctor": 305,
+      "$read health": [
+        "DD198. The whole machine under the engine in one call: a verdict line and the seventeen",
+        "readings behind it - WSL and its kernel, the root device and its mount options, the ext4",
+        "error counters, the virtual disk beside the space used inside it and the space left on the",
+        "Windows volume, and whether the pipe answers. Measured at 138 on a healthy machine.",
+        "",
+        "200 rather than the measured figure, and the headroom is named rather than left as slack: a",
+        "fault replaces the verdict clause with a longer one, and the mount options are the one value",
+        "whose width is the kernel's rather than this project's.",
+        "",
+        "`--journal` is deliberately outside it, the same way `read logs --out` is. A tail's size is",
+        "decided by how badly the machine has been behaving, which is exactly the payload a surface",
+        "charging per token must not return unless it was asked for."
+      ],
+      "read health": 200,
       "read logs": 400,
       "$read changes": [
         "DD29. Four containers and two volumes made by one session render at 100 measured, against a",

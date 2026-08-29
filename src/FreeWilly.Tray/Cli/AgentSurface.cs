@@ -78,6 +78,8 @@ public static class AgentSurface
             "the whole machine in one budgeted payload; --as brief [--out path] for a project file"),
         new(AgentNamespace.Read, "doctor", "read doctor",
             "<name> why one container is not answering, as a verdict and a remedy"),
+        new(AgentNamespace.Read, "health", "read health",
+            "whether WSL, the distribution and the disk under the engine are well"),
         new(AgentNamespace.Read, "logs", "read logs",
             "<name> [--since t:..] [--level x] [--dedup] [--budget n] [--out path]"),
         new(AgentNamespace.Read, "ports", "read ports",
@@ -193,6 +195,7 @@ public static class AgentSurface
             "changes" => ReadChanges(engine, rest, output, machine),
             "context" => ReadContext(engine, rest, output, machine),
             "doctor" => ReadDoctor(engine, rest, output, machine),
+            "health" => ReadHealth(engine, rest, output, machine),
             "logs" => ReadLogs(engine, rest, output),
             "ports" => ReadPorts(engine, rest, output, machine),
             "ps" => ReadPs(engine, rest, output),
@@ -1018,6 +1021,85 @@ public static class AgentSurface
         output.Write(text.ToString());
         return Ok;
     }
+
+    /// <summary>How many journal lines <c>--journal</c> adds.</summary>
+    /// <remarks>
+    /// Enough to carry one incident and not enough to be a log. The default answer has none at all:
+    /// a tail is the shape whose size is decided by how badly the machine has been behaving, which
+    /// is exactly the payload a surface charging per token must not return without being asked.
+    /// </remarks>
+    internal const int JournalTail = 12;
+
+    /// <summary>
+    /// Whether the machine under the engine is well, in one call (DD198).
+    /// </summary>
+    /// <param name="engine">The engine, which the report asks its one question of.</param>
+    /// <param name="rest">The arguments after the verb.</param>
+    /// <param name="output">Where the answer goes.</param>
+    /// <param name="machine">The reads of this machine, behind their seam.</param>
+    /// <returns>The exit code.</returns>
+    /// <remarks>
+    /// <para><c>read doctor</c> answers for one container and nothing answered for the machine
+    /// underneath it, so an agent asked why the engine will not start had the same six tools a human
+    /// has and had to shell out to <c>wsl.exe</c> and parse console output arriving in UTF-16 in
+    /// whatever language Windows is set to. That is what happened on 29 August 2026.</para>
+    ///
+    /// <para><b>The same reading the window draws</b> (DD197), through the same
+    /// <see cref="IMachineReport"/>. Two surfaces asking the machine in their own spellings is how
+    /// they come to disagree, and the verdict travels with the readings so neither derives it
+    /// twice.</para>
+    ///
+    /// <para>Budget shapes the payload. The verdict and the readings that support it are small
+    /// enough to carry every time; a journal tail is not, and is behind a flag because its size is
+    /// decided by how much has gone wrong.</para>
+    /// </remarks>
+    private static int ReadHealth(
+        IEngineReads engine, string[] rest, TextWriter output, MachineReads machine)
+    {
+        var journal = false;
+        foreach (var argument in rest)
+        {
+            if (string.Equals(argument, "--journal", StringComparison.Ordinal))
+            {
+                journal = true;
+                continue;
+            }
+
+            return Refuse($"unexpected argument {argument}: read health takes --journal or nothing");
+        }
+
+        var health = machine.Health.Through(engine).ReadAsync().GetAwaiter().GetResult();
+
+        // The verdict first and on its own line, so a caller that only wants the answer can read one
+        // line and stop, and one that wants the evidence has it underneath.
+        output.WriteLine($"health  {(health.Well ? "ok" : "fault")}  {health.Summary}");
+
+        foreach (var group in health.Groups)
+        {
+            foreach (var reading in group.Readings)
+            {
+                output.WriteLine(
+                    $"{group.Title.ToLowerInvariant()}  {reading.Name}  {reading.Value}");
+            }
+        }
+
+        if (journal)
+        {
+            foreach (var line in Tail(machine.Journal.Read(), JournalTail))
+            {
+                output.WriteLine($"journal  {line}");
+            }
+        }
+
+        return health.Well ? Ok : NotReady;
+    }
+
+    /// <summary>The last <paramref name="count"/> of <paramref name="lines"/>.</summary>
+    /// <param name="lines">The journal, oldest first.</param>
+    /// <param name="count">How many to keep.</param>
+    /// <returns>The tail.</returns>
+    private static IEnumerable<string> Tail(IReadOnlyList<string> lines, int count) =>
+        lines.Count <= count ? lines : lines.Skip(lines.Count - count);
 
     /// <summary>How long the wait sleeps between attempts.</summary>
     /// <remarks>

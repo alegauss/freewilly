@@ -96,6 +96,27 @@ public sealed class MachineReads
     /// <summary>What Windows is listening on.</summary>
     public IHostPorts Ports { get; init; } = new HostPorts();
 
+    /// <summary>
+    /// What state WSL, the distribution and the disk under the engine are in (DD198).
+    /// </summary>
+    /// <remarks>
+    /// A function of the engine rather than a value, because the report asks the pipe one question
+    /// and a verb on this surface is handed the engine it is to use. One that opened its own would
+    /// be the single read here that no fake daemon could stand behind, which is exactly the hole
+    /// <c>Every_read_verb_issues_only_GET_requests</c> exists to find — and did.
+    ///
+    /// <para>The window reaches the same report by its other door, so the two surfaces answer from
+    /// one implementation rather than each asking the machine in its own spelling.</para>
+    /// </remarks>
+    public Engine.IMachineReports Health { get; init; } = new Engine.LiveMachineReport.Reports();
+
+    /// <summary>The engine's own journal, for the tail <c>read health --journal</c> asks for.</summary>
+    /// <remarks>
+    /// Behind the seam for the reason the rest are: it is a file on the machine, and a verb reading
+    /// one from inside its own body is a verb no test can put a fixture under.
+    /// </remarks>
+    public Engine.IEngineJournal Journal { get; init; } = new Engine.EngineJournalFile();
+
     /// <summary>Where the user's own <c>docker</c> command points.</summary>
     public IContextProbe Client { get; init; } = new ContextProbe();
 

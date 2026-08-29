@@ -31,6 +31,7 @@ cost this surface removes.
 read changes
 read context
 read doctor
+read health
 read logs
 read ports
 read ps

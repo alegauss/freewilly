@@ -93,7 +93,7 @@ public sealed class MachineReportTests
     public async Task The_report_answers_the_six_questions_the_diagnosis_took_by_hand()
     {
         // WSL and the distribution, the filesystem, its errors, the two sizes, and the engine.
-        var groups = await new SampleMachineReport().ReadAsync();
+        var groups = (await new SampleMachineReport().ReadAsync()).Groups;
 
         Assert.Equal(
             ["WSL", "Filesystem", "Errors", "Disk", "Engine"],
@@ -115,7 +115,19 @@ public sealed class MachineReportTests
         var reading = new SampleMachineReport().ReadAsync();
 
         Assert.True(reading.IsCompleted);
-        Assert.NotEmpty(await reading);
+        Assert.NotEmpty((await reading).Groups);
+    }
+
+    [Fact]
+    public async Task The_verdict_travels_with_the_readings_it_was_made_of()
+    {
+        // DD198. The window and `read health` print the same sentence, and neither derives it from
+        // the other's rendered strings: two answers to one question are one answer that goes stale.
+        var health = await new SampleMachineReport().ReadAsync();
+
+        Assert.True(health.Well);
+        Assert.NotEmpty(health.Summary);
+        Assert.Equal(5, health.Groups.Count);
     }
 
     [Fact]
@@ -123,7 +135,7 @@ public sealed class MachineReportTests
     {
         // The point of the panel is handing what it says to somebody else, so the text is the
         // deliverable rather than a convenience on top of one.
-        var groups = await new SampleMachineReport().ReadAsync();
+        var groups = (await new SampleMachineReport().ReadAsync()).Groups;
 
         var text = MachineReport.AsText(groups);
 

@@ -1,3 +1,4 @@
+using FreeWilly.Core.Agent;
 using FreeWilly.Core.Api;
 using FreeWilly.Core.Preflight;
 using FreeWilly.Core.Preflight.Windows;
@@ -20,9 +21,13 @@ namespace FreeWilly.Core.Engine;
 /// <param name="wsl">The WSL command.</param>
 /// <param name="paths">Where the distribution and its virtual disk are.</param>
 /// <param name="facts">What is installed of WSL, read the way the preflight reads it.</param>
-/// <param name="api">The engine, for the one question only it can answer.</param>
+/// <param name="api">
+/// The engine, for the one question only it can answer. An <see cref="IEngineReads"/> rather than a
+/// concrete client, because the agent surface hands its verbs the engine they are to use and a
+/// report that opened its own would reach past the fake daemon every read verb is driven against.
+/// </param>
 public sealed class LiveMachineReport(
-    IWsl wsl, EnginePaths paths, IMachineFacts facts, DockerApi api) : IMachineReport
+    IWsl wsl, EnginePaths paths, IMachineFacts facts, IEngineReads api) : IMachineReport
 {
     /// <summary>The report for the machine this is running on, wired to the real seams.</summary>
     /// <returns>The report.</returns>
@@ -36,9 +41,21 @@ public sealed class LiveMachineReport(
     public static IMachineReport OnThisMachine() => new LiveMachineReport(
         new Wsl(), new EnginePaths(), new WindowsMachineFacts(), new DockerApi());
 
+    /// <summary>The same report, reading whichever engine a caller has already opened.</summary>
+    /// <remarks>
+    /// What <c>read health</c> reaches through. A verb on that surface is handed its engine so the
+    /// whole of it can be driven against a fake, and a report that opened a second connection would
+    /// be the one read on the surface nothing could put a fake behind.
+    /// </remarks>
+    public sealed class Reports : IMachineReports
+    {
+        /// <inheritdoc/>
+        public IMachineReport Through(IEngineReads engine) => new LiveMachineReport(
+            new Wsl(), new EnginePaths(), new WindowsMachineFacts(), engine);
+    }
+
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<MachineGroup>> ReadAsync(
-        CancellationToken cancellation = default)
+    public async Task<MachineHealth> ReadAsync(CancellationToken cancellation = default)
     {
         ArgumentNullException.ThrowIfNull(wsl);
         ArgumentNullException.ThrowIfNull(paths);
@@ -48,16 +65,41 @@ public sealed class LiveMachineReport(
             paths.DistributionName);
 
         var state = Guarded(lifecycle.ReadState);
+        var answering = await Answering(cancellation).ConfigureAwait(false);
+        var wrong = Verdict(state, answering.Answered);
 
-        return
-        [
-            new MachineGroup("WSL", Wsl(lifecycle, state)),
-            new MachineGroup("Filesystem", Filesystem(state)),
-            new MachineGroup("Errors", Errors(state)),
-            new MachineGroup("Disk", Disk(state)),
-            new MachineGroup("Engine", await Engine(cancellation).ConfigureAwait(false)),
-        ];
+        return new MachineHealth(
+            wrong is null,
+            wrong ?? "wsl, the distribution and the engine are well",
+            [
+                new MachineGroup("WSL", Wsl(lifecycle, state)),
+                new MachineGroup("Filesystem", Filesystem(state)),
+                new MachineGroup("Errors", Errors(state)),
+                new MachineGroup("Disk", Disk(state)),
+                new MachineGroup("Engine", Engine(answering)),
+            ]);
     }
+
+    /// <summary>
+    /// What is wrong with this machine, or <see langword="null"/> where nothing is (DD198).
+    /// </summary>
+    /// <param name="state">What the root filesystem said, or null where it would not say.</param>
+    /// <param name="answering">Whether the engine answered the pipe.</param>
+    /// <returns>The one clause a caller acts on.</returns>
+    /// <remarks>
+    /// In the order a reader would work down it: nothing under the distribution matters if the
+    /// distribution is not there, and an engine that is not answering is the last question rather
+    /// than the first, because a read-only root is why it would not be.
+    /// </remarks>
+    private static string? Verdict(DistributionState? state, bool answering) => state switch
+    {
+        null => "the distribution is not running, so nothing under it could be read",
+        { Writable: false } => "the distribution's root is mounted read-only",
+        { Errors: > 0 } read =>
+            $"{read.Errors} error(s) are recorded against the distribution's filesystem",
+        _ when !answering => "the engine is not answering the pipe",
+        _ => null,
+    };
 
     private IReadOnlyList<MachineReading> Wsl(EngineLifecycle lifecycle, DistributionState? state)
     {
@@ -128,36 +170,46 @@ public sealed class LiveMachineReport(
         ];
     }
 
-    private async Task<IReadOnlyList<MachineReading>> Engine(CancellationToken cancellation)
+    /// <summary>Ask the engine the one question only it can answer.</summary>
+    /// <param name="cancellation">Cancellation.</param>
+    /// <returns>Whether it answered, and what version it said it was.</returns>
+    /// <remarks>
+    /// Asked once and shared between the verdict and the reading, because a page that pinged twice
+    /// could show an engine answering under a verdict saying it was not.
+    /// </remarks>
+    private async Task<(bool Answered, string? Version)> Answering(CancellationToken cancellation)
     {
         if (api is null)
         {
-            return [new MachineReading("pipe", MachineReport.Unread)];
+            return (false, null);
         }
 
-        var answered = false;
-        string? version = null;
         try
         {
-            answered = await api.PingAsync(cancellation).ConfigureAwait(false);
-            if (answered)
+            if (!await api.PingAsync(cancellation).ConfigureAwait(false))
             {
-                version = (await api.VersionAsync(cancellation).ConfigureAwait(false)).ApiVersion;
+                return (false, null);
             }
+
+            return (true, (await api.VersionAsync(cancellation).ConfigureAwait(false)).ApiVersion);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // The engine not answering is one of the answers this page exists to give, so it is a
             // reading rather than a failure.
+            return (false, null);
         }
-
-        return
-        [
-            new MachineReading(
-                "pipe", answered ? $@"answers on \\.\pipe\{EnginePipeRelay.DefaultPipeName}" : "no answer"),
-            new MachineReading("API version", version ?? MachineReport.Unread),
-        ];
     }
+
+    private static IReadOnlyList<MachineReading> Engine((bool Answered, string? Version) engine) =>
+    [
+        new MachineReading(
+            "pipe",
+            engine.Answered
+                ? $@"answers on \\.\pipe\{EnginePipeRelay.DefaultPipeName}"
+                : "no answer"),
+        new MachineReading("API version", engine.Version ?? MachineReport.Unread),
+    ];
 
     /// <summary>Take one reading, or nothing where taking it went wrong.</summary>
     /// <typeparam name="T">What is being read.</typeparam>

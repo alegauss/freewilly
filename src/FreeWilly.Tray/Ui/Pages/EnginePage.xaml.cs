@@ -38,7 +38,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     private readonly DispatcherTimer _timer;
 
     /// <summary>What the readings said last, for the copy button.</summary>
-    private IReadOnlyList<MachineGroup> _readings = [];
+    private MachineHealth? _readings;
 
     /// <summary>
     /// Whether the tree is built. Nothing may draw before it is.
@@ -125,13 +125,15 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         {
             // A panel describing a machine that is misbehaving is the last place an exception should
             // escape from. The page is still worth having with the journal alone.
-            _readings = [];
+            _readings = null;
         }
 
-        Machine.ItemsSource = _readings;
-        MachineHeading.Text = _readings.Count == 0
-            ? "Nothing could be read about this machine"
-            : "What this machine is doing, under the engine";
+        Machine.ItemsSource = _readings?.Groups;
+
+        // The verdict rather than a caption, and it is the same sentence `read health` prints
+        // (DD198). A heading that always said the same thing was a row of numbers with no reading
+        // of them, which is the work this page exists to do for somebody.
+        MachineHeading.Text = _readings?.Summary ?? "Nothing could be read about this machine";
     }
 
     /// <summary>Read the journal and redraw where it has moved.</summary>
@@ -229,7 +231,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     {
         try
         {
-            System.Windows.Clipboard.SetText(MachineReport.AsText(_readings));
+            System.Windows.Clipboard.SetText(MachineReport.AsText(_readings?.Groups ?? []));
         }
         catch (System.Runtime.InteropServices.ExternalException)
         {

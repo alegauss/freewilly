@@ -831,6 +831,7 @@ export const claudeCode = {
     { k: "read ports", v: "ports", d: "what is published, and whether it actually listens from Windows" },
     { k: "read changes", v: "changes --since <cur>", d: "the delta since last session, so N+1 is cheaper than N" },
     { k: "read verify", v: "verify <target>", d: "cheap textual proof a service answers, because the agent cannot see" },
+    { k: "read health", v: "health", d: "the machine under the engine: WSL, the distribution, the disk and whether the pipe answers" },
   ],
   doHeading: "do: the mutating path (still asks)",
   do: [

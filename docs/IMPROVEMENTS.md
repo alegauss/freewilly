@@ -84,24 +84,4 @@ reader inherits both.
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-### §DD198 The diagnosis an agent can ask for in one call
-
-`read doctor` answers for one container that is not responding. Nothing answers for the
-machine underneath it, so an agent asked why the engine will not start has the same six
-tools a human has, and has to shell out to `wsl.exe` and parse console output that
-arrives in UTF-16 in the language Windows is set to. That is what happened on 29 August
-2026.
-
-The reading is the one DD197 renders, and the two surfaces should share one
-implementation rather than each asking the machine in its own spelling. `read health`
-fits the namespace the agent surface already declares: reads mutate nothing, which is
-what lets a single allowlist line cover all of them, and a diagnosis an agent can ask
-for in one call is the difference between a session that answers the question and one
-that spends its budget rediscovering how to ask.
-
-Budget is what shapes the payload. The surface charges tokens, so what comes back is the
-verdict and the readings that support it, never a dmesg dump. A journal tail belongs
-behind a flag rather than in the default answer; the error counters, the mount options
-and the two disk numbers are small enough to carry every time.
-
 ## Block H — The public surface (the site a reader and an agent both read)

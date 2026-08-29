@@ -49,6 +49,11 @@ public sealed class AgentSurfaceTests
         ["context"] = [],
         ["ps"] = [],
         ["doctor"] = ["shop-api-1"],
+
+        // Reaches the daemon for the one reading only it can give: whether the pipe answers, and
+        // what version said so. Everything else it prints comes off Windows and out of the
+        // distribution, which is why the report is behind MachineReads like every other such read.
+        ["health"] = [],
         ["logs"] = ["shop-api-1"],
         ["ports"] = [],
 

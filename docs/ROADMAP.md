@@ -20,8 +20,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-- 📋 **DD198** (deps: DD197 ✅) **the agent surface has no reading for the health of WSL, the distribution or the disk** — read doctor answers for one container and nothing answers for the machine under it, so an agent asked why the engine will not start has to shell out to wsl.exe and parse it. → §DD198
-
 ## Block H — The public surface (the site a reader and an agent both read)
 
 ## Non-goals

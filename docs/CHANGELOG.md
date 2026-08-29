@@ -184,6 +184,7 @@
 - ✅ **DD147** **A budget figure is typed rather than produced, so an exact gate can bind a number nobody measured** — The measurement writes the figures it produced when asked to, so a recorded number is one a run produced rather than one somebody typed.
 - ✅ **DD148** **do compose up takes no arguments, so a project that names its own files cannot use the verb at all** — The verb takes -f the way compose does: given any, they are the project and no convention is consulted; given none, the directory answers as before.
 - ✅ **DD178** **the shaped surface figure moves with the calendar, so an exact gate goes red on a tree nobody touched** — The clock reaches read doctor through the machine seam and the shaped measurement pins it beside the fixtures, so the exact token figure is the fixtures' and no longer the calendar's.
+- ✅ **DD198** **the agent surface has no reading for the health of WSL, the distribution or the disk** — read health answers for the machine under the engine in one call, off the same report the window draws, at 138 tokens against a ceiling of 200.
 
 ## Block H — The public surface (the site a reader and an agent both read)
 
