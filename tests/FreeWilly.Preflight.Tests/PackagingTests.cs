@@ -524,6 +524,49 @@ public sealed class PackagingTests
     }
 
     [Fact]
+    public void No_step_folds_two_commands_onto_one_line()
+    {
+        // DD232, and it cost a release. A `run:` written as a plain scalar with a second line
+        // indented under it is one command as far as YAML is concerned, so the shell was handed
+        // `publish-release.ps1 -Version 1.0.8 -Draft Write-Output "drafted..."` and answered
+        // `A positional parameter cannot be found that accepts argument 'Write-Output'`. Build,
+        // test, Inno Setup, the installer and the tag check had all passed by then.
+        //
+        // It had been that way since DD161 took the tag trigger off, because that is what stopped
+        // anything running the file: the last successful run was v1.0.1, and every release since
+        // was cut by the local path, which does not read it. A gate nobody runs is a gate that is
+        // already broken, which is DD88's finding in a third file.
+        //
+        // The rule rather than the parse: a `run:` whose value starts on the same line ends on that
+        // line, so nothing below it may be indented further.
+        foreach (var name in Directory.EnumerateFiles(
+            Path.Combine(RepositoryRoot(), ".github", "workflows"), "*.yml"))
+        {
+            var lines = File.ReadAllLines(name);
+            for (var at = 0; at < lines.Length - 1; at++)
+            {
+                var run = System.Text.RegularExpressions.Regex.Match(
+                    lines[at], @"^(\s+)run:\s*(?<value>\S.*)$");
+
+                if (!run.Success || run.Groups["value"].Value.StartsWith('|')
+                    || run.Groups["value"].Value.StartsWith('>'))
+                {
+                    continue;
+                }
+
+                var next = lines[at + 1];
+                Assert.False(
+                    next.Trim().Length > 0
+                    && Indent(next) > run.Groups[1].Value.Length,
+                    $"{Path.GetFileName(name)} line {at + 1}: this run: is one line and the line "
+                    + "under it is indented into it, so YAML folds them into a single command");
+            }
+        }
+    }
+
+    private static int Indent(string line) => line.Length - line.TrimStart().Length;
+
+    [Fact]
     public void The_AppId_is_pinned_here_so_a_future_tidy_cannot_move_it()
     {
         // Inno identifies a product by AppId and by nothing else, so from the first release onward

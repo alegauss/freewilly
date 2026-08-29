@@ -182,6 +182,7 @@
 - ✅ **DD171** **The release check ships off, so an install learns a version exists only if somebody found the menu item first** — Reversing DD154: the tray asks on every launch, the setting and its menu tick are gone, and the site and About state the second host rather than qualifying it as a switch.
 - ✅ **DD172** **The balloon announcing a release does nothing when clicked, so the offer is reachable only through the tray menu** — Clicking the balloon reaches the same install the menu item does, guarded on the balloon on screen being that release's, so a click on a failure starts nothing.
 - ✅ **DD223** **prepared rescue images are never swept, so a manifest bump orphans one and an uninstall leaves it behind** — Keeping a new prepared image drops the ones this build no longer names, and the uninstaller takes whichever are left, so an Alpine bump and a removal both stop leaving tarballs behind.
+- ✅ **DD232** **the clean-room release fails on its last step, because two commands are folded into one line of YAML** — The drafting step is a literal block, so it runs as two commands, and a test refuses any run: whose next line is indented into it, which is what folded them.
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 

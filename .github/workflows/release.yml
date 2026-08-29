@@ -109,5 +109,6 @@ jobs:
       - name: Name the installer after the version, sum it, and draft the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: .\build\publish-release.ps1 -Version $env:VERSION -Draft
+        run: |
+          .\build\publish-release.ps1 -Version $env:VERSION -Draft
           Write-Output "drafted. Nothing is public until it is published by hand."
