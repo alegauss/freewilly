@@ -201,7 +201,7 @@ public static class ContextPack
         if (dropped > 0)
         {
             text.Append("truncated ").Append(dropped.ToString(CultureInfo.InvariantCulture))
-                .AppendLine(" more container(s) — ceiling reached, ask by name for the rest");
+                .AppendLine(" more container(s): ceiling reached, ask by name for the rest");
         }
 
         text.AppendLine(disk);

@@ -51,15 +51,21 @@ So when you reach for a `—`, name the relation instead:
 | an afterthought bolted on | a full stop and a new sentence |
 | a term before its definition, in a list | a colon, used the same way down the list |
 
-Two things are **not** covered by this rule, and both must stay:
+Three things are **not** covered by this rule, and all three must stay:
 
 - **Product output quoted verbatim.** `preflightTerminal` in `diagrams.ts`, the fenced
-  blocks in `README.md`, the mock window and tray tooltip in the SVG diagrams. Those em
-  dashes come from `ReportText.cs`, `PreflightInspection.cs`, `StateIcon.cs` and
-  `BuildRow.cs`. S1 says a depicted surface is the one the build produces, so editing the
-  quotation to suit a writing rule would make the page wrong. Change the string in the
-  product, or change neither.
-- **C# doc comments.** 721 of them. Not published, and not prose a reader meets.
+  blocks in `README.md`, the mock window and tray tooltip in the SVG diagrams. S1 says a
+  depicted surface is the one the build produces, so editing the quotation to suit a
+  writing rule would make the page wrong. Change the string in the product, or change
+  neither. DD185 changed the strings, so those quotations now read `:` or a comma; the
+  one left is the mock window's empty duration cell, below.
+- **A dash standing in for an absent value**, `BuildRow.When` and
+  `BuildRow.DurationText`, and the SVG that draws them. That is the same category as
+  `✓ ~ ✗`: a glyph in a data column, not punctuation in a sentence. claude-tray, the
+  interface reference, uses it that way in twenty-odd places and documents what it means
+  (`"—" means unknown, never "unused"`), so this is house style rather than a survivor.
+- **C# doc comments and XAML comments.** 721 of them. Not published, and not prose a
+  reader meets.
 
 ## What else is settled here, and is not to be "fixed"
 
@@ -123,14 +129,6 @@ A note on the hard-wrapped files. `llms.txt` and `README.md` wrap at a fixed wid
 `product.test.mjs` asserts that `llms.txt` names every visible tray menu item. Assert over
 text with its whitespace collapsed, never over the raw file, or the test is really
 checking where a paragraph happened to fold.
-
-## Open
-
-The engine's own user-facing strings still carry 64 em dashes across 27 files, and the
-site quotes some of them faithfully, so six survive in the published Markdown twins.
-Removing those is a change to the product rather than to the copy: it moves strings the
-window, the tray tooltip and the CLI print, and that the window captures and the preflight
-tests assert. It belongs in a DD task of its own, not in a writing pass.
 
 ## Reporting
 

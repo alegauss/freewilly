@@ -176,7 +176,7 @@ public sealed class EngineRevival
         ArgumentNullException.ThrowIfNull(back);
 
         var line = $"{back.State,-8}  {RestartMark} (restart {Revivals})";
-        return down is { } gap ? $"{line} — {Spell(gap)} down" : line;
+        return down is { } gap ? $"{line}, {Spell(gap)} down" : line;
     }
 
     /// <summary>An outage in the units somebody reads it in (DD182).</summary>
@@ -229,7 +229,7 @@ public sealed class EngineRevival
     public string WhyItIsSlowingDown(EngineStatus last)
     {
         ArgumentNullException.ThrowIfNull(last);
-        return $"{last.State,-8}  {last.Detail} — {Failures} attempts have failed; still trying, "
+        return $"{last.State,-8}  {last.Detail}: {Failures} attempts have failed; still trying, "
             + $"now every {PatientWait.TotalMinutes:0} minutes";
     }
 }

@@ -156,7 +156,7 @@ public static class TrayState
     public static string? WhyAStartWouldNotLand(bool engineInstalled, string distribution) =>
         engineInstalled
             ? null
-            : $"the engine is not installed — no WSL distribution named {distribution} is "
+            : $"the engine is not installed: no WSL distribution named {distribution} is "
               + "registered. Run `freewilly --provision` to download and install it.";
 
     /// <summary>What to say about a start that was launched and never answered.</summary>

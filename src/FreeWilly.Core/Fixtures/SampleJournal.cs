@@ -45,16 +45,16 @@ public sealed class SampleJournal : IEngineJournal
         "2026-08-21 12:41:55  power     the machine came back",
         "2026-08-21 12:41:58  Starting  freewilly is not running and no answer within 3s",
         "2026-08-21 12:42:07  Running   " + EngineRevival.RestartMark + " (restart 1)",
-        "2026-08-21 14:34:51  Starting  freewilly is not running and no answer within 3s "
-            + "— first quiet poll",
-        "2026-08-21 14:35:11  Starting  freewilly is not running and no answer within 3s "
-            + "— 6 polls in a row",
+        "2026-08-21 14:34:51  Starting  freewilly is not running and no answer within 3s"
+            + ", first quiet poll",
+        "2026-08-21 14:35:11  Starting  freewilly is not running and no answer within 3s"
+            + ", 6 polls in a row",
         "2026-08-21 14:35:11  tray      the engine stopped answering",
-        "2026-08-21 14:37:45  Stopped   the daemon exited while starting — wsl.exe exited -1: "
+        "2026-08-21 14:37:45  Stopped   the daemon exited while starting: wsl.exe exited -1: "
             + "The Windows Subsystem for Linux instance has terminated.",
-        "2026-08-21 14:42:00  Stopped   the daemon exited while starting — wsl.exe exited -1: "
+        "2026-08-21 14:42:00  Stopped   the daemon exited while starting: wsl.exe exited -1: "
             + "The Windows Subsystem for Linux instance has terminated.",
-        "2026-08-21 14:42:00  Starting  freewilly is not running and no answer within 3s — 5 attempts "
+        "2026-08-21 14:42:00  Starting  freewilly is not running and no answer within 3s: 5 attempts "
             + "have failed; still trying, now every 5 minutes",
         "2026-08-21 15:45:41  Running   " + EngineRevival.RestartMark + " (restart 2)",
         "2026-08-21 15:45:41  tray      the engine is answering",

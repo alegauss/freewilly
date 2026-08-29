@@ -136,7 +136,7 @@ public sealed class EngineWatch
     {
         ArgumentNullException.ThrowIfNull(first);
 
-        var line = $"{first.State,-8}  {first.Detail} — {FirstQuietPoll}";
+        var line = $"{first.State,-8}  {first.Detail}, {FirstQuietPoll}";
         return relay is not null
             && first.Detail.Contains(EnginePing.NoConnection, StringComparison.Ordinal)
                 ? $"{line}, {relay}"
@@ -161,6 +161,6 @@ public sealed class EngineWatch
         ArgumentNullException.ThrowIfNull(last);
         return last.Conclusive
             ? $"{last.State,-8}  {last.Detail}"
-            : $"{last.State,-8}  {last.Detail} — {QuietPolls} polls in a row";
+            : $"{last.State,-8}  {last.Detail}, {QuietPolls} polls in a row";
     }
 }

@@ -292,11 +292,11 @@ public sealed record ContainerRow(
         { State: "paused" } => "Paused: its processes are frozen, not stopped.",
         { State: "restarting" } => "Restarting: the daemon is bringing it back up.",
         { State: "created" } => "Created and never started.",
-        { ExitCode: 0 } => "Exited 0 — it finished and meant to.",
-        { ExitCode: 137 } => "Exited 137 — SIGKILL. Usually the memory limit, sometimes a stop that "
+        { ExitCode: 0 } => "Exited 0: it finished and meant to.",
+        { ExitCode: 137 } => "Exited 137: SIGKILL. Usually the memory limit, sometimes a stop that "
             + "ran out of its grace period.",
-        { ExitCode: { } code } => $"Exited {code.ToString(System.Globalization.CultureInfo.InvariantCulture)} "
-            + "— it stopped and did not mean to. Its log is the next thing to read.",
+        { ExitCode: { } code } => $"Exited {code.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            + ": it stopped and did not mean to. Its log is the next thing to read.",
         _ => Status,
     };
 
@@ -322,7 +322,7 @@ public sealed record ContainerRow(
     /// holds, so the reflex that would fix almost anything else does nothing here.
     /// </remarks>
     public string ImageEvidence => ImageIsGone
-        ? "This container's image is no longer in the image list — it was rebuilt or removed "
+        ? "This container's image is no longer in the image list: it was rebuilt or removed "
           + "while the container kept running, so the daemon has only its digest left to report. "
           + "Recreating the container is what picks up the current image; restarting it will not."
         : "";

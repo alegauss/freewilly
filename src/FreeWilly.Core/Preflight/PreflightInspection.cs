@@ -65,7 +65,7 @@ public static class PreflightInspection
                 Id = Rows.WindowsBuild,
                 Title = "Windows build",
                 Verdict = Verdict.Fail,
-                Detail = $"{detail} — WSL2 needs {MinimumWindowsBuild} or later",
+                Detail = $"{detail}: WSL2 needs {MinimumWindowsBuild} or later",
                 Remedy = "Install Windows updates until the build reaches "
                     + $"{MinimumWindowsBuild} (Windows 10 version 2004).",
                 Blocking = true,
@@ -88,7 +88,7 @@ public static class PreflightInspection
                 Id = Rows.Virtualization,
                 Title = "Hardware virtualization",
                 Verdict = Verdict.Unknown,
-                Detail = "this is a virtual machine — whether it can host another hypervisor "
+                Detail = "this is a virtual machine, and whether it can host another hypervisor "
                     + "cannot be read from inside it",
                 Remedy = "Enable nested virtualization for this VM on its host, then run this "
                     + "check again. In VMware that is Virtualize Intel VT-x/EPT in the VM's "
@@ -104,7 +104,7 @@ public static class PreflightInspection
         if (facts.HypervisorPresent is true)
         {
             return Green(Rows.Virtualization, "Hardware virtualization",
-                "enabled — a hypervisor is already running");
+                "enabled: a hypervisor is already running");
         }
 
         return facts.VirtualizationFirmwareEnabled switch
@@ -147,7 +147,7 @@ public static class PreflightInspection
                 Id = Rows.Wsl2,
                 Title = "WSL2",
                 Verdict = Verdict.Fail,
-                Detail = "not installed — wsl.exe is not on this machine",
+                Detail = "not installed: wsl.exe is not on this machine",
                 Remedy = "Run `wsl --install --no-distribution` in an administrator terminal, "
                     + "then reboot.",
                 Blocking = true,
@@ -165,7 +165,7 @@ public static class PreflightInspection
                 Id = Rows.Wsl2,
                 Title = "WSL2",
                 Verdict = Verdict.Fail,
-                Detail = "not installed — wsl.exe ships with Windows, the feature does not",
+                Detail = "not installed: wsl.exe ships with Windows, the feature does not",
                 Remedy = "Run `wsl.exe --install --no-distribution` in an administrator terminal, "
                     + "then reboot.",
                 Blocking = true,

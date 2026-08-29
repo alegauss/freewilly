@@ -25,8 +25,6 @@
 
 ## Block H — The public surface (the site a reader and an agent both read)
 
-- 📋 **DD185** (deps: —) **the window, tray and CLI print em dashes the site is bound to quote** — S1 forbids the page to paraphrase a string the product prints, so the six em dashes left in the published Markdown twins can only be removed at their source. → §DD185
-
 ## Non-goals
 
 - **Feature parity with Docker Desktop** Kubernetes, the extensions marketplace and Dev

@@ -519,7 +519,7 @@ internal partial class ContainersPage : System.Windows.Controls.UserControl
             var all = ordered.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
             _activity.Failed(
                 headerId,
-                $"{some} of {all} were refused — the row that failed says why.");
+                $"{some} of {all} were refused. The row that failed says why.");
         }
 
         Redress();

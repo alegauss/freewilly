@@ -73,9 +73,9 @@ public static class StateIcon
     /// <returns>One line.</returns>
     public static string TooltipFor(EngineState state) => state switch
     {
-        EngineState.Running => "FreeWilly — engine running",
-        EngineState.Starting => "FreeWilly — engine starting",
-        EngineState.Stopped => "FreeWilly — engine stopped",
+        EngineState.Running => "FreeWilly: engine running",
+        EngineState.Starting => "FreeWilly: engine starting",
+        EngineState.Stopped => "FreeWilly: engine stopped",
         _ => "FreeWilly",
     };
 

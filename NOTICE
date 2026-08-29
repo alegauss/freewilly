@@ -16,7 +16,7 @@ Alpine Linux minirootfs
   version  3.24.1
   licence  multiple; see the packages inside it
   source   https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-minirootfs-3.24.1-x86_64.tar.gz
-  A base filesystem made of separately licensed packages — musl (MIT), BusyBox and
+  A base filesystem made of separately licensed packages: musl (MIT), BusyBox and
   apk-tools (GPL-2.0-only) and others. Each package records its own licence under
   /usr/share/licenses inside the installed distribution.
 
@@ -47,7 +47,7 @@ Docker Buildx CLI plugin for Windows
   licence  Apache-2.0
   source   https://github.com/docker/buildx/releases/download/v0.36.1/buildx-v0.36.1.windows-amd64.exe
   The BuildKit builder, placed beside Compose. Without it the CLI falls back to the
-  legacy builder, which cannot parse a cache mount, a heredoc or a secret mount — so a
+  legacy builder, which cannot parse a cache mount, a heredoc or a secret mount, so a
   Dockerfile that builds anywhere else fails here.
 
 This file is generated from the same manifest the installer downloads from.

@@ -167,7 +167,7 @@ internal sealed partial class AboutPage : System.Windows.Controls.UserControl
         return $"Nothing is uploaded, there is no account and nothing is measured. This build "
             + $"downloads {artefacts} pinned artefacts, by digest, during a provision you asked for. "
             + $"It also asks {ReleaseCheck.Host} four times a day for the latest release tag, so it "
-            + "can tell you a version exists — that request carries this product's name and version "
+            + "can tell you a version exists. That request carries this product's name and version "
             + "and nothing about you.";
     }
 

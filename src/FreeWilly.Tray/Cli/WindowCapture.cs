@@ -56,7 +56,7 @@ internal static class WindowCapture
             // Naming the argument, not just the arity: a refusal that does not say what it failed to
             // understand leaves the caller to guess which of their words was wrong.
             return Complain(
-                $"unexpected argument {args[2]} — this takes an output path and optionally a tab");
+                $"unexpected argument {args[2]}: this takes an output path and optionally a tab");
         }
 
         // A path that looks like a flag is a caller who forgot the path, and writing a file called
@@ -140,7 +140,7 @@ internal static class WindowCapture
             {
                 var (width, height) = window.SaveSnapshot(outPath);
                 Console.Out.WriteLine(
-                    $"wrote {outPath} — {width}x{height}, "
+                    $"wrote {outPath}: {width}x{height}, "
                     + $"{tab ?? window.TabNames.FirstOrDefault() ?? "the window"} rendered off-screen");
                 code = Ok;
             }

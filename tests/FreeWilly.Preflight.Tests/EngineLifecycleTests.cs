@@ -749,7 +749,7 @@ public sealed class EngineLifecycleTests
 
         Assert.Equal(EngineState.Stopped, status.State);
         Assert.True(status.Conclusive);
-        Assert.Contains("the daemon exited — wsl.exe exited", status.Detail, StringComparison.Ordinal);
+        Assert.Contains("the daemon exited: wsl.exe exited", status.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

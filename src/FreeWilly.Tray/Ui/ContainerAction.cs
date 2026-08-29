@@ -102,7 +102,7 @@ public static class ContainerAction
             var containers = row.Total.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var plural = row.Total == 1 ? "container" : "containers";
             return $"Remove the {row.Name} project?\n\nAll {containers} {plural} go, and anything "
-                + "running is killed first. Its volumes stay — nothing here deletes those.";
+                + "running is killed first. Its volumes stay, and nothing here deletes those.";
         }
 
         return $"Remove {row.Name}?\n\nIt is {row.State} and will be killed first. "

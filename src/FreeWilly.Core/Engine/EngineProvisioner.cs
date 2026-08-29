@@ -302,7 +302,7 @@ public sealed class EngineProvisioner
             if (missing.Count > 0)
             {
                 return new StepResult(ProvisioningStep.InspectEngine, false,
-                    $"{_manifest.Engine.FileName} is missing {string.Join(", ", missing)} — "
+                    $"{_manifest.Engine.FileName} is missing {string.Join(", ", missing)}: "
                     + $"it carries {contents.Binaries.Count} file(s) under {contents.TopDirectory}/");
             }
 

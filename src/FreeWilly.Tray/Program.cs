@@ -258,7 +258,7 @@ internal sealed class TrayApplication : ApplicationContext
             $"FreeWilly {release.Version.ToString(3)} will be downloaded from the release page and "
             + "checked against the SHA-256 that release publishes for it. Nothing is run unless the "
             + "digest matches.\n\n"
-            + "FreeWilly then closes so it can be replaced, and the engine stops with it — every "
+            + "FreeWilly then closes so it can be replaced, and the engine stops with it, so every "
             + "running container stops too. The engine is not started again on your behalf: it comes "
             + $"back with the tray only if \"{TrayMenu.OnLaunchText.Replace("&", string.Empty, StringComparison.Ordinal)}\" is ticked.\n\n"
             + "Install it now?",
@@ -417,7 +417,7 @@ internal sealed class TrayApplication : ApplicationContext
             // In the journal as well as the balloon (DD163). A balloon is gone in eight seconds and
             // a refusal that was never written down is the shape of failure this whole file exists
             // to remove — somebody reads the log a day later and finds a start that never happened.
-            _journal.Say($"{"tray",-8}  a start was asked for and refused — {refusal}");
+            _journal.Say($"{"tray",-8}  a start was asked for and refused: {refusal}");
             Complain(refusal);
             return;
         }
@@ -430,7 +430,7 @@ internal sealed class TrayApplication : ApplicationContext
         var failure = _holder.Start();
         if (failure is not null)
         {
-            _journal.Say($"{"tray",-8}  the host would not launch — {failure}");
+            _journal.Say($"{"tray",-8}  the host would not launch: {failure}");
             Complain(failure);
             return;
         }
@@ -702,7 +702,7 @@ internal sealed class TrayApplication : ApplicationContext
 
         Balloon(
             $"The engine has not answered for {EngineRevival.BlipGrace.TotalSeconds:0} seconds. "
-            + "FreeWilly is trying to bring it back, and keeps trying until it does — there is "
+            + "FreeWilly is trying to bring it back, and keeps trying until it does, so there is "
             + "nothing to click.");
     }
 
@@ -885,7 +885,7 @@ internal static class Program
                 // the line goes nowhere, which is the right amount of noise for a double click.
                 Cli.ParentConsole.Attach();
                 Console.Error.WriteLine(
-                    $"{Cli.CommandLine.ExecutableName}: already running — raised its window.");
+                    $"{Cli.CommandLine.ExecutableName}: already running, so raised its window.");
                 return 0;
             }
 

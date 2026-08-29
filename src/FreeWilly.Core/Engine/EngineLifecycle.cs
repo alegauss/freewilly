@@ -231,7 +231,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
         if (registered is false)
         {
             return new EngineStatus(EngineState.Stopped,
-                $"{Distribution} is not registered — the engine is not installed")
+                $"{Distribution} is not registered: the engine is not installed")
             {
                 Conclusive = true,
             };
@@ -257,7 +257,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
         if (!DistributionRegistered)
         {
             return new EngineStatus(EngineState.Stopped,
-                $"{Distribution} is not registered — run the install first");
+                $"{Distribution} is not registered: run the install first");
         }
 
         var already = await EnginePing.AskAsync(_pipeName, cancellation: cancellation)
@@ -293,7 +293,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
             if (!_daemon.Alive)
             {
                 return new EngineStatus(
-                    EngineState.Stopped, $"the daemon exited while starting — {WhyItDied()}");
+                    EngineState.Stopped, $"the daemon exited while starting: {WhyItDied()}");
             }
 
             var ping = await EnginePing.AskAsync(
@@ -405,7 +405,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// <summary>
     /// Why a daemon that was launched is no longer there, said as well as it can be (DD162).
     /// </summary>
-    /// <returns>The clause that follows "the daemon exited while starting —".</returns>
+    /// <returns>The clause that follows "the daemon exited while starting:".</returns>
     /// <remarks>
     /// This used to be one sentence with no branch in it: read the daemon's log inside the
     /// distribution. That is the right answer for a daemon that started and then died, and the
@@ -432,7 +432,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// of the engine they already know they had.
     /// </remarks>
     private string WhatTookTheDaemon() =>
-        _daemon.LastWords is { } said ? $"the daemon exited — {said}" : "the daemon exited";
+        _daemon.LastWords is { } said ? $"the daemon exited: {said}" : "the daemon exited";
 
     private EnginePipeRelay StartRelay()
     {

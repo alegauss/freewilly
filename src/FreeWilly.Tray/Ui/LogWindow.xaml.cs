@@ -49,7 +49,7 @@ internal partial class LogWindow : Window
         _api = api;
         _id = id;
 
-        Title = $"{name} — logs";
+        Title = $"{name} logs";
         Heading.Text = name;
         Lines.ItemsSource = _buffer.Lines;
         _ready = true;

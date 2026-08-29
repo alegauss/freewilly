@@ -302,7 +302,7 @@ internal static class EngineCommand
                 // a state where the journal only keeps events.
                 if (!mourned && lifecycle.WhatEndedAccepting is { } ended)
                 {
-                    Note(journal, $"  relay     stopped accepting — {ended}");
+                    Note(journal, $"  relay     stopped accepting: {ended}");
                     mourned = true;
                 }
 
@@ -567,7 +567,7 @@ internal static class EngineCommand
         var manifest = EngineManifest.Current;
         var paths = new EnginePaths();
 
-        Console.WriteLine("FreeWilly engine — pinned artefacts");
+        Console.WriteLine("FreeWilly engine: pinned artefacts");
         Console.WriteLine();
         foreach (var artefact in manifest.Artefacts)
         {
@@ -606,7 +606,7 @@ internal static class EngineCommand
         // with the one thing that does work. Measured: WSL interop is on by default, and the
         // Windows docker.exe invoked from a Linux shell reaches the engine.
         Console.WriteLine();
-        Console.WriteLine("  From a WSL shell of your own, the Linux `docker` reaches nothing —");
+        Console.WriteLine("  From a WSL shell of your own, the Linux `docker` reaches nothing:");
         Console.WriteLine("  the engine is on the Windows side of a named pipe. Run the Windows");
         Console.WriteLine("  binary instead, which WSL's interop makes work:");
         Console.WriteLine($"    {Wsl.ToDistributionPath(paths.DockerCli)} ps");

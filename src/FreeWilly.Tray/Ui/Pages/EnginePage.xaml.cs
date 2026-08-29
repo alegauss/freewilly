@@ -130,7 +130,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         ? null
         : new LogEmptyState(
             "Nothing has happened to the engine",
-            "This file is written only when something does — a restart, a suspend, a stop. A "
+            "This file is written only when something does: a restart, a suspend, a stop. A "
             + "machine whose engine has simply been up leaves nothing here, and that is the "
             + "healthy answer.");
 

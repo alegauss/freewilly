@@ -92,7 +92,7 @@ public static class ChangeFeed
             // state — there is no moment inside it to ask the daemon about — and the caller is one
             // line away from the right one, which the pack prints beside it.
             why = $"{value} is a context cursor: it fingerprints the machine's state and carries no "
-                + $"moment. Run `freewilly read changes` with no cursor — it answers with a "
+                + $"moment. Run `freewilly read changes` with no cursor, and it answers with a "
                 + $"{CursorPrefix} one to continue from.";
             return false;
         }
@@ -202,7 +202,7 @@ public static class ChangeFeed
             {
                 text.Append("truncated ")
                     .Append((delta.Rows.Count - kept).ToString(CultureInfo.InvariantCulture))
-                    .AppendLine(" more object(s) moved — ceiling reached, re-read the context");
+                    .AppendLine(" more object(s) moved: ceiling reached, re-read the context");
             }
         }
 

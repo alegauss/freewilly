@@ -275,7 +275,7 @@ internal partial class MainWindow : Window
         {
             throw new InvalidOperationException(
                 $"the window measured {target.ActualWidth}x{target.ActualHeight}, so there is "
-                + "nothing to render — it was captured before it was laid out");
+                + "nothing to render: it was captured before it was laid out");
         }
 
         // Both names below are ambiguous unqualified: enabling WinForms puts System.Drawing in the

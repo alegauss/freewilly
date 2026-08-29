@@ -81,7 +81,7 @@ public sealed class BundledComposeCli : IComposeCli
         {
             // Named rather than thrown: an install that never provisioned has no CLI, and that is a
             // sentence the caller can act on rather than a stack trace.
-            return new ComposeResult(null, "", $"{_docker} is not there — run the install first");
+            return new ComposeResult(null, "", $"{_docker} is not there: run the install first");
         }
 
         var startInfo = new ProcessStartInfo(_docker)

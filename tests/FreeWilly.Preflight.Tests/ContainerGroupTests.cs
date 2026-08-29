@@ -297,7 +297,7 @@ public sealed class ContainerGroupTests
             Summary("shop-db-1", project: "shop"));
 
         activity.Began("shop-api-1-id", ContainerVerb.Stop);
-        activity.Failed(ContainerRow.ProjectId("shop"), "1 of 2 were refused — the row that failed says why.");
+        activity.Failed(ContainerRow.ProjectId("shop"), "1 of 2 were refused. The row that failed says why.");
 
         var dressed = rows.Select(activity.Dress).ToList();
         var header = ContainerRow.WithProjectWait(activity.Dress(Grouped(dressed)[0]), dressed);
@@ -315,7 +315,7 @@ public sealed class ContainerGroupTests
         var activity = new RowActivity();
         var id = ContainerRow.ProjectId("shop");
 
-        activity.Failed(id, "1 of 2 were refused — the row that failed says why.");
+        activity.Failed(id, "1 of 2 were refused. The row that failed says why.");
         activity.Acknowledged(id);
 
         var header = activity.Dress(Grouped(Rows(Summary("shop-api-1", project: "shop")))[0]);

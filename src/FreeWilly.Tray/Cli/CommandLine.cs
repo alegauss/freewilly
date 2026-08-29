@@ -260,7 +260,7 @@ public static class CommandLine
     /// <summary>Every verb, in one place, for the console's own help.</summary>
     public static string HelpText =>
         $"""
-        {ExecutableName} — install and drive Docker on Windows.
+        {ExecutableName} installs and drives Docker on Windows.
 
         With no arguments it is the tray icon and the window. Everything else is a console
         verb and prints into the terminal it was started from.

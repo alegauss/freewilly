@@ -62,8 +62,8 @@ internal static class PreflightCommand
 
     private static string HelpText =>
         $"""
-        {CommandLine.ExecutableName} {CommandLine.PreflightVerb} — read what this machine can host,
-        and change nothing.
+        {CommandLine.ExecutableName} {CommandLine.PreflightVerb} reads what this machine can host,
+        and changes nothing.
 
           --json    the same report as JSON, for an installer rather than a person
           --help    this

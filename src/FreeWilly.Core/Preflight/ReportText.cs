@@ -69,7 +69,7 @@ public static class ReportText
         ArgumentNullException.ThrowIfNull(report);
 
         var text = new StringBuilder();
-        text.AppendLine(heading ?? "FreeWilly preflight — what this machine can host");
+        text.AppendLine(heading ?? "FreeWilly preflight: what this machine can host");
         text.AppendLine();
 
         // ASCII tags in a fixed-width column: the report is the first thing a user sees, and it is

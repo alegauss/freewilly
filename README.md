@@ -173,7 +173,7 @@ check's state *beside what the check printed*:
   [FAIL]  port     :8080→8080/tcp no answer (ConnectionRefused)
            -> It is running and port 8080 refuses from Windows: the process inside
               never bound, or bound 127.0.0.1 rather than 0.0.0.0.
-  [FAIL]  health   unhealthy, 3 failing in a row — last said: connect ECONNREFUSED 127.0.0.1:8080
+  [FAIL]  health   unhealthy, 3 failing in a row, last said: connect ECONNREFUSED 127.0.0.1:8080
 ```
 
 `read doctor` says a port is **listening**, read from the socket table; this says it

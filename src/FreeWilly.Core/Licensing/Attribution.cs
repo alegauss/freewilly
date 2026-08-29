@@ -72,7 +72,7 @@ public static class Attribution
                 // licence for it would be a claim this project cannot support.
                 "multiple; see the packages inside it",
                 manifest.Rootfs.Url,
-                "A base filesystem made of separately licensed packages — musl (MIT), BusyBox and "
+                "A base filesystem made of separately licensed packages: musl (MIT), BusyBox and "
                 + "apk-tools (GPL-2.0-only) and others. Each package records its own licence "
                 + "under /usr/share/licenses inside the installed distribution."),
 
@@ -111,7 +111,7 @@ public static class Attribution
                 "Apache-2.0",
                 manifest.Buildx.Url,
                 "The BuildKit builder, placed beside Compose. Without it the CLI falls back to the "
-                + "legacy builder, which cannot parse a cache mount, a heredoc or a secret mount — "
+                + "legacy builder, which cannot parse a cache mount, a heredoc or a secret mount, "
                 + "so a Dockerfile that builds anywhere else fails here."),
         ];
     }
@@ -178,7 +178,7 @@ public static class Attribution
         {
             text.Append("  · ").Append(component.Name)
                 .Append(' ').Append(component.Version)
-                .Append(" — ").Append(component.Licence).Append('\n');
+                .Append(", ").Append(component.Licence).Append('\n');
         }
 
         text.Append("\nSee NOTICE for the full attribution.");

@@ -353,7 +353,7 @@ public static class LogDigest
         if (dropped > 0)
         {
             text.Append("truncated ").Append(dropped.ToString(CultureInfo.InvariantCulture))
-                .AppendLine(" more line(s) — budget reached, read on from the cursor");
+                .AppendLine(" more line(s): budget reached, read on from the cursor");
         }
 
         if (cursor is not null)

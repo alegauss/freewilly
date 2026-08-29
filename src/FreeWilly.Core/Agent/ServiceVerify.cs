@@ -218,7 +218,7 @@ public static class ServiceVerify
                 Id = Rows.Request,
                 Title = "request",
                 Verdict = Verdict.Fail,
-                Detail = $"{request.Target} — {request.Failure}",
+                Detail = $"{request.Target}: {request.Failure}",
                 Remedy = "The port accepts and the request did not finish, so it is the service "
                     + "rather than the mapping. Read its stderr.",
                 Blocking = true,
@@ -272,8 +272,8 @@ public static class ServiceVerify
             Verdict = healthy ? Verdict.Pass : starting ? Verdict.Warn : Verdict.Fail,
             Detail = health.FailingStreak > 0
                 ? $"{health.Status}, {health.FailingStreak.ToString(CultureInfo.InvariantCulture)} failing in a row"
-                    + (said is null ? "" : $" — last said: {said}")
-                : health.Status + (said is null ? "" : $" — last said: {said}"),
+                    + (said is null ? "" : $", last said: {said}")
+                : health.Status + (said is null ? "" : $", last said: {said}"),
             Remedy = healthy ? null : "Its own health check decided this; that is what it printed.",
             Blocking = !healthy && !starting,
         };

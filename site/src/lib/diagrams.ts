@@ -84,7 +84,7 @@ export const trayMenuDiagram = `
   <circle cx="248" cy="270" r="8" fill="none" stroke="#3c5666" stroke-width="2.5"/>
   <text x="300" y="275" fill="#7d95a5" font-family="Segoe UI Variable Text,Segoe UI,Inter,sans-serif" font-size="12">14:08</text>
   <rect x="96" y="220" width="160" height="22" rx="4" fill="#1b2f3c" stroke="#2a4655"/>
-  <text x="176" y="235" text-anchor="middle" fill="#c8dbe6" font-family="Segoe UI Variable Text,Segoe UI,Inter,sans-serif" font-size="11">FreeWilly — engine running</text>
+  <text x="176" y="235" text-anchor="middle" fill="#c8dbe6" font-family="Segoe UI Variable Text,Segoe UI,Inter,sans-serif" font-size="11">FreeWilly: engine running</text>
 </svg>`;
 
 export const windowDiagram = `
@@ -154,11 +154,11 @@ export const emptyStateDiagram = `
 // the column alignment and the per-cell status colours render exactly as the hand-written
 // original. The claims it carries (the build number, the remedy command) stay greppable
 // in this source. Rendered inside a .term <pre>.
-export const preflightTerminal = `FreeWilly preflight — what this machine can host
+export const preflightTerminal = `FreeWilly preflight: what this machine can host
 
   [<span class="ok">ok  </span>]  Windows build            Windows 10.0, build 26200
-  [<span class="ok">ok  </span>]  Hardware virtualization  enabled — a hypervisor is already running
-  [<span class="fail">FAIL</span>]  WSL2                     not installed — wsl.exe is not on this machine
+  [<span class="ok">ok  </span>]  Hardware virtualization  enabled: a hypervisor is already running
+  [<span class="fail">FAIL</span>]  WSL2                     not installed: wsl.exe is not on this machine
            <span class="rem">-> Run \`wsl --install --no-distribution\` in an administrator terminal, then
               reboot.</span>
   [<span class="ok">ok  </span>]  Container engine         nothing else owns the docker command or the docker_engine pipe

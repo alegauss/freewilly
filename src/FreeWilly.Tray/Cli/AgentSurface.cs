@@ -77,21 +77,21 @@ public static class AgentSurface
         new(AgentNamespace.Read, "context", "read context",
             "the whole machine in one budgeted payload; --as brief [--out path] for a project file"),
         new(AgentNamespace.Read, "doctor", "read doctor",
-            "<name> — why one container is not answering, as a verdict and a remedy"),
+            "<name> why one container is not answering, as a verdict and a remedy"),
         new(AgentNamespace.Read, "logs", "read logs",
             "<name> [--since t:..] [--level x] [--dedup] [--budget n] [--out path]"),
         new(AgentNamespace.Read, "ports", "read ports",
-            "[port] — every published port, and what holds it on Windows"),
+            "[port] every published port, and what holds it on Windows"),
         new(AgentNamespace.Read, "ps", "read ps",
             "every container as one line each: name, state, image, ports"),
         new(AgentNamespace.Read, "verify", "read verify",
-            "<name> [--request [:port]/path] [--wait] [--timeout 30s] — proof that it answers"),
+            "<name> [--request [:port]/path] [--wait] [--timeout 30s] proof that it answers"),
         new(AgentNamespace.Do, "compose", "do compose up",
-            "up [-f file]... — bring the project up, stamped so `do reclaim` can take it back"),
+            "up [-f file]... bring the project up, stamped so `do reclaim` can take it back"),
         new(AgentNamespace.Do, "engine", "do engine",
-            "start | stop — bring the engine up or take it down"),
+            "start | stop bring the engine up or take it down"),
         new(AgentNamespace.Do, "reclaim", "do reclaim",
-            "--session [id] [--volumes] [--confirm k:..] — remove exactly what this session made"),
+            "--session [id] [--volumes] [--confirm k:..] remove exactly what this session made"),
     ];
 
     /// <summary>The verb these arguments name, or null.</summary>
@@ -1378,7 +1378,7 @@ public static class AgentSurface
             if (projectFiles.Count == 0)
             {
                 return Refuse(
-                    $"no compose file in {directory} — looked for "
+                    $"no compose file in {directory}: looked for "
                     + string.Join(", ", ComposeUp.FileNames));
             }
         }
