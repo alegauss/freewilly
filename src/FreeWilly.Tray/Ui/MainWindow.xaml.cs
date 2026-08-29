@@ -33,8 +33,7 @@ internal partial class MainWindow : Window
     private readonly Action _startEngine;
     private readonly WindowRecall _recall;
     private readonly IBuildHistory _builds;
-    private readonly IEngineJournal _journal;
-    private readonly IMachineReport _machine;
+    private readonly EngineSeams _engineSeams;
 
     private ImagesPage? _images;
     private VolumesPage? _volumes;
@@ -57,29 +56,22 @@ internal partial class MainWindow : Window
     /// Where build records are read from (DD126). The pinned Buildx by default; <c>--fixture</c>
     /// passes one needing no daemon, which is what makes that page capturable (L6).
     /// </param>
-    /// <param name="journal">
-    /// Where the engine's journal is read from (DD165). The file beside the install by default;
-    /// <c>--fixture</c> passes one that is the same on every machine, for the same reason
-    /// <paramref name="builds"/> takes one — the live file describes whatever this laptop's engine
-    /// did that afternoon, which is not reviewable and not safe to put in a README.
-    /// </param>
-    /// <param name="machine">
-    /// What state WSL, the distribution and the engine are in (DD197). Read off this machine by
-    /// default; <c>--fixture</c> passes one that is the same everywhere, for the reason
-    /// <paramref name="journal"/> takes one.
+    /// <param name="engine">
+    /// Everything the Engine destination reads and can start (DD165, DD197, DD199). This machine's
+    /// by default; <c>--fixture</c> passes seams that are the same everywhere and refuse to act, for
+    /// the same reason <paramref name="builds"/> takes one — the live ones describe whatever this
+    /// laptop did that afternoon, which is not reviewable and not safe to put in a README.
     /// </param>
     internal MainWindow(
         IEngineClient api, Func<EngineState> engineState, Action startEngine,
-        IBuildHistory? builds = null, IEngineJournal? journal = null,
-        IMachineReport? machine = null)
+        IBuildHistory? builds = null, EngineSeams? engine = null)
     {
         InitializeComponent();
         _api = api;
         _engineState = engineState;
         _startEngine = startEngine;
         _builds = builds ?? new BuildHistory();
-        _journal = journal ?? new EngineJournalFile();
-        _machine = machine ?? LiveMachineReport.OnThisMachine();
+        _engineSeams = engine ?? Cli.FilesystemWork.OnThisMachine();
 
         Containers = new ContainersPage(api, engineState, startEngine);
         DestinationHost.Children.Add(Containers);
@@ -186,7 +178,7 @@ internal partial class MainWindow : Window
                 // No refresh call beside it, unlike every other destination: the page reads its own
                 // file on a timer it starts when it becomes visible, because what it shows changes
                 // while somebody is looking at it and nothing here would know to ask again (DD165).
-                _engine ??= Add(new EnginePage(_journal, _machine));
+                _engine ??= Add(new EnginePage(_engineSeams));
                 page = _engine;
                 break;
             case "About":

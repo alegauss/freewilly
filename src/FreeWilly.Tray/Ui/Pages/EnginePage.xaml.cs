@@ -37,6 +37,8 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     private readonly JournalView _view = new();
     private readonly DispatcherTimer _timer;
 
+    private readonly IFilesystemWork _work;
+
     /// <summary>What the readings said last, for the copy button.</summary>
     private MachineHealth? _readings;
 
@@ -52,25 +54,22 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     private readonly bool _ready;
 
     /// <summary>Construct the page.</summary>
-    /// <param name="journal">
-    /// Where the journal is read from. The fixture is what makes this page capturable (L6) — the
-    /// live one is a file describing whatever this machine's engine did that afternoon.
+    /// <param name="seams">
+    /// The journal, the readings and the filesystem work, which is what makes this page capturable
+    /// (L6): the live ones describe whatever this machine did that afternoon, and the last of them
+    /// terminates a distribution.
     /// </param>
-    /// <param name="machine">
-    /// What state WSL, the distribution and the engine are in (DD197). A seam for the reason the
-    /// journal is one: a capture taken against the real machine is a picture of whatever that
-    /// laptop's disk looked like that afternoon.
-    /// </param>
-    internal EnginePage(IEngineJournal journal, IMachineReport machine)
+    internal EnginePage(EngineSeams seams)
     {
-        ArgumentNullException.ThrowIfNull(journal);
-        ArgumentNullException.ThrowIfNull(machine);
+        ArgumentNullException.ThrowIfNull(seams);
         InitializeComponent();
-        _journal = journal;
-        _machine = machine;
+        _journal = seams.Journal;
+        _machine = seams.Machine;
+        _work = seams.Work;
+        Show(RepairPrompt.Idle, steps: null);
 
         Lines.ItemsSource = _view.Lines;
-        Where.Text = journal.Path;
+        Where.Text = _journal.Path;
         MachineHeading.Text = Reading;
         _ready = true;
 
@@ -217,6 +216,113 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
             // because it is the line the eye is already on.
             Digest.Text = "Windows would not hand over the clipboard. Try that again.";
         }
+    }
+
+    /// <summary>Read the filesystem and change nothing (DD199).</summary>
+    /// <param name="sender">Unused.</param>
+    /// <param name="e">Unused.</param>
+    /// <remarks>
+    /// No confirmation, and that asymmetry is the design's: reading cannot make a filesystem worse.
+    /// What the button owed instead was saying beforehand that the engine stops for it, which is
+    /// what <see cref="RepairPrompt.Idle"/> is on screen for before this is ever pressed.
+    /// </remarks>
+    private async void CheckTheFilesystem(object sender, RoutedEventArgs e) =>
+        await Run(wrote: false).ConfigureAwait(true);
+
+    /// <summary>Mend what the check found, once somebody has said so (DD199).</summary>
+    /// <param name="sender">Unused.</param>
+    /// <param name="e">Unused.</param>
+    /// <remarks>
+    /// The one place this window writes to the filesystem holding every image and volume on the
+    /// machine, so it is the one place it asks. A modal here rather than a second click on a
+    /// differently worded button: what is being consented to takes a paragraph to state, and a
+    /// button caption is not a paragraph.
+    /// </remarks>
+    private async void RepairTheFilesystem(object sender, RoutedEventArgs e)
+    {
+        var answer = System.Windows.MessageBox.Show(
+            RepairPrompt.Confirmation,
+            "Repair the filesystem",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning,
+            System.Windows.MessageBoxResult.No);
+
+        if (answer is System.Windows.MessageBoxResult.Yes)
+        {
+            await Run(wrote: true).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>Run one of the two, off the thread that draws the result.</summary>
+    /// <param name="wrote">Whether this is the repair.</param>
+    /// <returns>The work.</returns>
+    /// <remarks>
+    /// Both buttons go dead for the duration, because both take the engine down and a second run
+    /// started on top of the first would be two processes terminating one distribution. The steps
+    /// are collected rather than streamed: they arrive off the UI thread, and a page that marshalled
+    /// each one would be doing dispatcher work in the middle of a minutes-long <c>e2fsck</c>.
+    /// </remarks>
+    internal async Task Run(bool wrote)
+    {
+        Check.IsEnabled = false;
+        Repair.IsEnabled = false;
+        Show(RepairPrompt.Working, steps: null);
+
+        var steps = new System.Collections.Concurrent.ConcurrentQueue<RepairStep>();
+        RepairOutcome outcome;
+        try
+        {
+            outcome = await Task.Run(() => wrote
+                ? _work.Fix(steps.Enqueue)
+                : _work.Check(steps.Enqueue)).ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            outcome = new RepairOutcome(
+                [new RepairStep("run the check", false, exception.Message)]);
+        }
+
+        Show(RepairPrompt.Of(outcome, wrote), Transcript(outcome, steps));
+        Check.IsEnabled = true;
+        Repair.IsEnabled = true;
+    }
+
+    /// <summary>Everything the run said, as one block.</summary>
+    /// <param name="outcome">What it did.</param>
+    /// <param name="steps">The steps as they landed.</param>
+    /// <returns>The transcript.</returns>
+    private static string Transcript(
+        RepairOutcome outcome, System.Collections.Concurrent.ConcurrentQueue<RepairStep> steps)
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (var step in steps)
+        {
+            text.Append(step.Ok ? "[ok  ]  " : "[FAIL]  ")
+                .Append(step.What.PadRight(22)).Append("  ").Append(step.Detail).Append('\n');
+        }
+
+        if (outcome.Findings is { Length: > 0 } said)
+        {
+            text.Append('\n').Append(said);
+        }
+
+        return text.ToString();
+    }
+
+    /// <summary>Draw one prompt, and the transcript under it where there is one.</summary>
+    /// <param name="prompt">What to say.</param>
+    /// <param name="steps">What the run printed, or null before there was a run.</param>
+    private void Show(RepairPrompt prompt, string? steps)
+    {
+        FoundHeadline.Text = prompt.Headline;
+        FoundDetail.Text = prompt.Detail;
+        FoundSteps.Text = steps ?? "";
+        FoundSteps.Visibility = string.IsNullOrEmpty(steps)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+        Found.Visibility = Visibility.Visible;
+        Repair.Visibility = prompt.OfferRepair ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Hand the readings to whoever is being asked about this machine (DD197).</summary>

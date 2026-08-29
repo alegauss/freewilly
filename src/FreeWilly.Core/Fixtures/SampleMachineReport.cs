@@ -66,3 +66,29 @@ public sealed class SampleMachineReport : IMachineReport
     public Task<MachineHealth> ReadAsync(CancellationToken cancellation = default) =>
         Task.FromResult(Health);
 }
+
+/// <summary>
+/// Filesystem work a captured window is not allowed to do (DD199).
+/// </summary>
+/// <remarks>
+/// The capture renders the controls and must never be able to run what they start: this one
+/// terminates a distribution and imports another. Refusing rather than answering something plausible
+/// is deliberate — a fixture that returned a clean check would make the button look exercised in a
+/// picture where nothing was.
+/// </remarks>
+public sealed class SampleFilesystemWork : IFilesystemWork
+{
+    /// <inheritdoc/>
+    public RepairOutcome Check(Action<RepairStep> report) => Refuse();
+
+    /// <inheritdoc/>
+    public RepairOutcome Fix(Action<RepairStep> report) => Refuse();
+
+    private static RepairOutcome Refuse() => new(
+    [
+        new RepairStep(
+            "note the disk",
+            false,
+            "this window is drawing a fixture, so there is no machine here to check"),
+    ]);
+}

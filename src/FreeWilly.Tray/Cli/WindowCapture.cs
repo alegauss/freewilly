@@ -86,16 +86,19 @@ internal static class WindowCapture
         FreeWilly.Core.Builds.IBuildHistory? builds =
             fixture ? new FreeWilly.Core.Fixtures.SampleBuilds() : null;
 
-        // And the engine page reads a file, which is the same problem once more (DD165, L6): the
-        // live journal is whatever this machine's engine did that afternoon, under a path naming
-        // the account it was taken on. Null is the file beside the install.
-        IEngineJournal? journal = fixture ? new FreeWilly.Core.Fixtures.SampleJournal() : null;
-
-        // And the readings beside it are the same problem a third time (DD197, L6). Those describe a
-        // virtual machine: a capture taken against the real one shows this laptop's disk, its free
-        // space and its distribution's error count, none of which belongs in a README. The fixture
-        // also answers without yielding, so the panel is drawn rather than caught mid-read.
-        IMachineReport? machine = fixture ? new FreeWilly.Core.Fixtures.SampleMachineReport() : null;
+        // And the engine page is the same problem three times over (DD165, DD197, DD199, L6). The
+        // live journal is whatever this machine's engine did that afternoon under a path naming the
+        // account it was taken on; the readings are this laptop's disk, free space and error count;
+        // and the buttons beside them start something that terminates a distribution. The fixture's
+        // journal and readings are the same everywhere and its work refuses — a capture is rendered
+        // off-screen where nothing can click, and the seam is what makes that true by construction
+        // rather than by the window happening not to be reachable. Null is the live set.
+        EngineSeams? engine = fixture
+            ? new EngineSeams(
+                new FreeWilly.Core.Fixtures.SampleJournal(),
+                new FreeWilly.Core.Fixtures.SampleMachineReport(),
+                new FreeWilly.Core.Fixtures.SampleFilesystemWork())
+            : null;
 
         // Before the window exists, because the water starts drifting the moment it is told the
         // engine is up and this verb's fixture says exactly that (DD69, DD70). A picture that caught a
@@ -105,7 +108,7 @@ internal static class WindowCapture
 
         var window = new Ui.MainWindow(
             api, () => fixture ? EngineState.Running : EngineState.Stopped, () => { },
-            builds, journal, machine)
+            builds, engine)
         {
             WindowStartupLocation = System.Windows.WindowStartupLocation.Manual,
             // Off the desktop entirely. Not merely unfocused: there is no screen region for anything

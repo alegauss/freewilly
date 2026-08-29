@@ -51,6 +51,7 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" /><!-- what a check found (DD199) -->
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Margin="0,0,0,6">
@@ -59,8 +60,19 @@
           <!-- The point of the panel is handing what it says to somebody else, so its own copy is
                beside it rather than folded into the journal's: the two answer different questions
                and a reader asked for one does not want the other. -->
-          <Button x:Name="CopyMachine" Content="Copy" Click="CopyTheMachine"
-                  HorizontalAlignment="Right" Padding="12,2" FontSize="12" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <!-- The control belongs here because the engine is down for the duration and this is
+                 the page where that state is already on screen (DD199). Check reads and Repair
+                 writes, so only the second asks first — and Repair stays hidden until a check has
+                 found something for it to do, which is the design's rule that nobody approves a
+                 write before seeing what it is for. -->
+            <Button x:Name="Repair" Content="Repair" Click="RepairTheFilesystem"
+                    Visibility="Collapsed" Padding="12,2" Margin="0,0,8,0" FontSize="12" />
+            <Button x:Name="Check" Content="Check filesystem" Click="CheckTheFilesystem"
+                    Padding="12,2" Margin="0,0,8,0" FontSize="12" />
+            <Button x:Name="CopyMachine" Content="Copy" Click="CopyTheMachine"
+                    Padding="12,2" FontSize="12" />
+          </StackPanel>
         </Grid>
 
         <!-- One column per group, because five short lists side by side is a shape the eye reads in
@@ -102,6 +114,21 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
+        <!-- What the check found, kept out of the way until there is any. Selectable and monospace
+             for the reason the journal is: the next thing done with an e2fsck transcript is pasting
+             it somewhere. -->
+        <StackPanel Grid.Row="2" x:Name="Found" Visibility="Collapsed" Margin="0,8,0,0">
+          <TextBlock x:Name="FoundHeadline" FontSize="12"
+                     Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+          <TextBlock x:Name="FoundDetail" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap"
+                     Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+          <TextBox x:Name="FoundSteps" Margin="0,6,0,0" MaxHeight="150"
+                   IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                   Padding="0" FontSize="11" TextWrapping="NoWrap"
+                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                   FontFamily="Cascadia Mono, Consolas, Courier New"
+                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+        </StackPanel>
       </Grid>
     </Border>
 
