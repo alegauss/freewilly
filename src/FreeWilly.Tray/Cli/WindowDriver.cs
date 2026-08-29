@@ -178,11 +178,15 @@ internal static class WindowDriver
 
         // Its own top-level window rather than anything in this window's tree, which is why it is
         // looked for under the desktop and matched by class.
+        // The complaint says what was observed and stops there. It used to add "so the page took
+        // the engine down without asking", which the first real run of this verb disproved: no
+        // confirmation appeared and the engine was still serving afterwards. A driver that guesses
+        // at a consequence it did not watch for is the thing this whole verb exists to replace.
         var dialog = Await(
             () => Dialog(window.Current.ProcessId),
             ControlBudget,
-            "the confirmation the check is supposed to ask in never appeared, so the page took the "
-            + "engine down without asking");
+            "the Check filesystem button was invoked and no confirmation appeared. Whether the "
+            + "engine was touched is not something this watched, so it is not being claimed");
 
         Say("dialog", dialog.Current.Name);
 

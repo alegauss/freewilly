@@ -10,8 +10,6 @@
 
 ## Block C — The window (claude-tray's elements)
 
-- 📋 **DD222** (deps: —) **the driving verb's check half has never been run, because the tray holding the slot was an older build** — One recorded run of the driver against a current window, so the half that presses through a modal and waits out a real check is known to work rather than assumed. → §DD222
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks

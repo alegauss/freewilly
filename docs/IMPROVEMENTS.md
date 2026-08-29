@@ -30,29 +30,6 @@ flag is disabled rather than gone, and may come back.
 
 ## Block C — The window (claude-tray's elements)
 
-### §DD222 The driver's own second half is still unexercised
-
-DD214 built the driver and ran half of it. Against the tray running on the machine it
-was written on, it found the window, selected the Engine destination, found Check
-filesystem, and refused because that window has no Compact button: the tray was from a
-build older than DD211. That refusal is the finding the whole verb exists to produce,
-and it is not the same as having driven the thing.
-
-What has never run is `--drive-window --check`. That is the half with the parts most
-likely to be wrong, and every one of them is a guess until somebody watches it: whether
-a WPF `MessageBox` really exposes its buttons under the Win32 control ids, whether
-inode-level waiting on the panel's headline survives a run that takes minutes, whether
-the buttons come back enabled where the driver looks for them.
-
-The reason it did not run is worth writing down, because it will be the reason again.
-The verb drives whatever tray holds `FreeWilly.tray`, and quitting a stale one takes the
-engine down with it since DD128. So a clean run wants a machine where the tray is
-already the current build, or a deliberate quit and relaunch, and neither is something
-to do to somebody in the middle of their afternoon.
-
-One recorded run, with what it printed kept, is the whole of this. It is not a test and
-must not become one: the path it drives stops Docker.
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks

@@ -125,6 +125,7 @@
 - ✅ **DD194** **A fixture capture of the builds page draws its times in the operator's zone, so two machines make two pictures** — The builds fixture anchors a wall clock stamped with the drawing machine's own offset, so a capture shows 09:29 in every zone rather than the operator's.
 - ✅ **DD197** **no single surface says what state WSL, the distribution and the engine are in** — The Engine page carries the five readings the diagnosis took by hand, off one call the start check shares, with a copy button beside them.
 - ✅ **DD214** **every test of the window reads the window's own source, so nothing catches a control that is wired wrong** — A --drive-window verb works the real window through UI Automation and prints what it says; --check drives the filesystem check, and the dialog is pressed by control id rather than caption.
+- ✅ **DD222** **the driving verb's check half has never been run, because the tray holding the slot was an older build** — Both halves ran against a current window: the read-only one walked the whole page, and the check half found no confirmation appears at all, which is the window's defect and not the driver's.
 
 ## Block D — Container operations (what a user came to do)
 

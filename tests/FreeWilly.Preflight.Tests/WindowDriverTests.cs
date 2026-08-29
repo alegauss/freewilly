@@ -10,10 +10,24 @@ namespace FreeWilly.Preflight.Tests;
 /// <para><b>The drive itself is not asserted here, and that is the whole point of the task.</b> It
 /// needs a real window on a real desktop, and the half behind <c>--check</c> stops Docker and
 /// terminates a distribution — which is why it is a verb somebody runs rather than a test that runs
-/// itself. It was verified by running it: against a tray left over from an older build it found the
-/// window, selected the Engine destination, found Check filesystem, and refused because that window
-/// has no Compact button. The source has one. That gap is exactly the class of defect every other
-/// assertion this project makes about the window cannot see.</para>
+/// itself. Against a tray left over from an older build it found the window, selected the Engine
+/// destination, found Check filesystem, and refused because that window has no Compact button. The
+/// source has one. That gap is exactly the class of defect every other assertion this project makes
+/// about the window cannot see.</para>
+///
+/// <para><b>Both halves were run against a current window on 29 August 2026 (DD222), and the second
+/// one did not get past the first click.</b> The read-only half walked the whole page: the window,
+/// the destination, both buttons enabled, the panel, the machine verdict, and Repair correctly not
+/// offered. The <c>--check</c> half invoked the button and no confirmation ever appeared. Neither
+/// did it for a real keypress, nor for a synthesized mouse click at the button's own clickable
+/// point, nor on the installed build, and no dialog window existed anywhere on the desktop
+/// afterwards. The engine was still serving and the buttons were still enabled, so the handler had
+/// not gone on to do anything either.</para>
+///
+/// <para>So the driver reaches the button and the button answers nothing, which is a defect in the
+/// window rather than in the driver and is filed as its own task. What was wrong here was the
+/// complaint: it asserted the page had taken the engine down without asking, which is a consequence
+/// this verb never watched for and which was not true.</para>
 ///
 /// <para>What is asserted here is the part that is pure: which surface the verb reaches, that its
 /// one flag survives the routing, and that it is not filed among the verbs that start an engine.</para>
@@ -99,6 +113,21 @@ public sealed class WindowDriverTests
 
         Assert.Contains("x:Name=\"NavEngine\"", shell, StringComparison.Ordinal);
         Assert.Contains("\"NavEngine\"", driver, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_driver_never_claims_a_consequence_it_did_not_watch_for()
+    {
+        // DD222. The complaint for a missing confirmation used to end "so the page took the engine
+        // down without asking", and the first real run disproved it: no dialog appeared and the
+        // engine was still serving afterwards. A driver built to replace guesses about the window
+        // must not ship one of its own.
+        var driver = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/WindowDriver.cs"));
+
+        Assert.DoesNotContain(
+            "took the engine down without asking", driver, StringComparison.Ordinal);
+        Assert.Contains("is not being claimed", driver, StringComparison.Ordinal);
     }
 
     [Fact]
