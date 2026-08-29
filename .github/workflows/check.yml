@@ -9,11 +9,10 @@
 # on, which is exactly the failure a local build cannot see. So the last three steps run the
 # published single-file executable rather than only building it.
 #
-# roadkeep lint no longer runs in CI at all: the workflow that carried it was removed, and it was
-# not moved in here. The governed files are still governed — the write-time hooks refuse a hand
-# edit against the vendored engine — but that is a guard on the machine doing the writing, so
-# drift arriving by any other route now reaches `main` unremarked. Stated rather than left to be
-# discovered by whoever notices the tick is green over a file nobody checked.
+# roadkeep lint is not here either, and this time it is somewhere: `roadkeep install` writes
+# .github/workflows/roadkeep.yml, which calls the action roadkeep publishes. The write-time hooks
+# refuse a hand edit on the machine doing the writing; that workflow is the half that catches
+# drift arriving by any other route, which for a while reached `main` unremarked.
 #
 # What this cannot check is the engine install. A hosted runner has no nested virtualization, so
 # `--provision` has nowhere to import a WSL2 distribution; that path stays a manual check against
