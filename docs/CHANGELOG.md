@@ -68,6 +68,7 @@
 - ✅ **DD212** **the readings panel still says the distribution is not running after the check has started the engine again** — The readings follow the engine state change the window is already told about, so the panel stops disagreeing with the strip above it.
 - ✅ **DD211** **the virtual disk keeps every gigabyte an image or a build cache ever used, and nothing on the page hands it back** — The Engine page has a Compact button: it drops the build cache, trims the filesystem and hands the freed blocks back to Windows with wsl --manage --set-sparse, reporting both sizes.
 - ✅ **DD213** **a check run from the terminal is announced as an outage, because only the window tells the tray** — A stop a verb asks for reaches the tray through a signal of its own, so no balloon calls it an outage, and the verb leaves the engine where the caller asked and names the command that starts it.
+- ✅ **DD215** **the repair has never run against a dirty filesystem, so the one path that writes is unexercised** — A --fsck-drill verb makes a scratch ext4 image, breaks it on purpose and walks the write path: the check found errors, the panel offered Repair, e2fsck mended it and the disk came back clean.
 
 ## Block B — The daemon client (talk to the engine)
 

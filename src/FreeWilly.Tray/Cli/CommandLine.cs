@@ -165,6 +165,7 @@ public static class CommandLine
             "--stop",
             "--status",
             "--fsck",
+            "--fsck-drill",
             "--api",
             "--watch",
             "--autostart",
@@ -311,6 +312,8 @@ public static class CommandLine
           --stop           stop the engine and terminate the distribution
           --status         what the engine is doing, by asking it
           --fsck           check the distribution's filesystem; --repair to mend what it finds
+          --fsck-drill     rehearse the repair on a scratch disk dirtied on purpose, touching
+                           nothing on this machine
           --api            version and containers, read through the Engine API
           --watch          print /events as they happen, until Ctrl+C
           --autostart      on | off | status  - off unless you turn it on

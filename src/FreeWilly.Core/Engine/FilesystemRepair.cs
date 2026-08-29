@@ -43,6 +43,67 @@ public sealed record RepairOutcome(IReadOnlyList<RepairStep> Steps)
 }
 
 /// <summary>
+/// What one <c>e2fsck</c> run said, read off its exit code (DD199).
+/// </summary>
+/// <param name="Step">The step, as the transcript prints it.</param>
+/// <param name="Findings">Everything the tool wrote, kept rather than summarised.</param>
+/// <param name="Clean">Whether the filesystem needed nothing done to it.</param>
+/// <remarks>
+/// Its own type since DD215, and not for tidiness. The drill runs the same tool against a disk
+/// dirtied on purpose, and a second copy of this reading is how the drill comes to agree with an
+/// exit code the product no longer reads that way — which would make the one rehearsal of the write
+/// path a rehearsal of something else.
+/// </remarks>
+public sealed record FsckReading(RepairStep Step, string Findings, bool Clean)
+{
+    /// <summary>Read one run.</summary>
+    /// <param name="ran">What <c>e2fsck</c> did.</param>
+    /// <param name="write">Whether it was allowed to mend what it found.</param>
+    /// <returns>The reading.</returns>
+    /// <remarks>
+    /// Exit codes are the answer rather than the text. 0 is clean, 1 is errors corrected, 2 is
+    /// corrected and a reboot wanted, and 4 is errors left uncorrected — which is what <c>-n</c>
+    /// returns on a dirty filesystem, and is a finding rather than a failure.
+    /// </remarks>
+    public static FsckReading Of(WslResult ran, bool write)
+    {
+        ArgumentNullException.ThrowIfNull(ran);
+
+        var said = ran.Output.Trim();
+        var clean = ran.ExitCode == 0;
+        var corrected = ran.ExitCode is 1 or 2;
+        var found = ran.ExitCode == 4;
+        var what = write ? "repair" : "check";
+
+        if (clean)
+        {
+            return new FsckReading(
+                new RepairStep(what, true, "the filesystem is clean"), said, true);
+        }
+
+        if (write && corrected)
+        {
+            return new FsckReading(
+                new RepairStep(what, true, "errors were found and corrected"), said, false);
+        }
+
+        if (!write && (found || corrected))
+        {
+            return new FsckReading(
+                new RepairStep(what, true, "the filesystem has errors and a repair would mend them"),
+                said,
+                false);
+        }
+
+        return new FsckReading(
+            new RepairStep(
+                what, false, $"e2fsck exited {ran.ExitCode?.ToString() ?? "without a code"}"),
+            said,
+            false);
+    }
+}
+
+/// <summary>
 /// Checks and repairs the owned distribution's filesystem, from a rescue distribution (DD199).
 /// </summary>
 /// <remarks>
@@ -316,45 +377,15 @@ public sealed class FilesystemRepair
     /// leaves behind and a check that trusts the flag reports nothing on the disk that needs it
     /// most. <c>-n</c> answers no to every question and touches nothing; <c>-y</c> answers yes.
     ///
-    /// <para>Exit codes are the answer rather than the text. 0 is clean, 1 is errors corrected, 2 is
-    /// corrected and a reboot wanted, and 4 is errors left uncorrected — which is what <c>-n</c>
-    /// returns on a dirty filesystem, and is a finding rather than a failure.</para>
+    /// <para>What the run meant is <see cref="FsckReading"/>'s since DD215, so the drill that
+    /// rehearses the write path on a disk dirtied on purpose reads an exit code the same way this
+    /// does.</para>
     /// </remarks>
-    private (RepairStep Step, string Findings, bool Clean) Fsck(string device, bool write)
-    {
-        var ran = _wsl.Run(
+    private FsckReading Fsck(string device, bool write) => FsckReading.Of(
+        _wsl.Run(
             WslBudget.Work, "-d", RescueName, "-u", "root", "--exec",
-            "/bin/sh", "-c", $"e2fsck -f{(write ? 'y' : 'n')} '{device}'");
-
-        var said = ran.Output.Trim();
-        var clean = ran.ExitCode == 0;
-        var corrected = ran.ExitCode is 1 or 2;
-        var found = ran.ExitCode == 4;
-        var what = write ? "repair" : "check";
-
-        if (clean)
-        {
-            return (new RepairStep(what, true, "the filesystem is clean"), said, true);
-        }
-
-        if (write && corrected)
-        {
-            return (new RepairStep(what, true, "errors were found and corrected"), said, false);
-        }
-
-        if (!write && (found || corrected))
-        {
-            return (
-                new RepairStep(what, true, "the filesystem has errors and a repair would mend them"),
-                said,
-                false);
-        }
-
-        return (
-            new RepairStep(what, false, $"e2fsck exited {ran.ExitCode?.ToString() ?? "without a code"}"),
-            said,
-            false);
-    }
+            "/bin/sh", "-c", $"e2fsck -f{(write ? 'y' : 'n')} '{device}'"),
+        write);
 
     /// <summary>Terminate the rescue, then unregister it (DD209).</summary>
     /// <returns>Whether it is gone.</returns>

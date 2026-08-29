@@ -61,6 +61,7 @@ internal static class EngineCommand
             "--run" => RunEngine(),
             "--stop" => Stop(),
             "--fsck" => Fsck(args.Length > 1 ? args[1] : ""),
+            "--fsck-drill" => Drill(),
             "--autostart" => AutostartMode(args.Length > 1 ? args[1] : "status"),
             "-h" or "--help" => Help(Ok),
             _ => Complain($"unknown argument {mode}"),
@@ -751,6 +752,111 @@ internal static class EngineCommand
         });
 
         return Ok;
+    }
+
+    /// <summary>
+    /// Rehearse the write path on a disk dirtied on purpose (DD215).
+    /// </summary>
+    /// <returns>The exit code.</returns>
+    /// <remarks>
+    /// <para>Its own verb rather than a flag on <c>--fsck</c>, because it is the opposite thing:
+    /// <c>--fsck</c> reads the filesystem holding every image on this machine, and this reads a
+    /// scratch image inside a distribution it imports and unregisters. Confusing the two is the one
+    /// mistake that would matter, so they are not spellings of each other.</para>
+    ///
+    /// <para><b>It prints what the window would say, and not only what the tool did.</b> One of the
+    /// three questions the drill exists to answer is whether the findings shown above the Repair
+    /// button are legible enough to approve a write on, and that is a question about a paragraph
+    /// rather than about an exit code. So the panel's own sentences are rendered here, from the same
+    /// <see cref="RepairPrompt"/> the page renders them from.</para>
+    /// </remarks>
+    private static int Drill()
+    {
+        var paths = new EnginePaths();
+        using var fetcher = new HttpArtefactFetcher();
+        var acquired = new ArtefactStore(fetcher, paths.Downloads)
+            .AcquireAsync(EngineManifest.Current.Rootfs).GetAwaiter().GetResult();
+
+        if (acquired.Path is not { } rootfs)
+        {
+            Console.Error.WriteLine(
+                "  the drill runs in a distribution imported from the Alpine rootfs this install "
+                + $"pins, and it is not available: {acquired.Failure}");
+            return Failed;
+        }
+
+        Console.WriteLine(
+            "  Nothing on this machine is touched. The disk is a scratch image inside a");
+        Console.WriteLine(
+            $"  distribution called {RepairDrill.DrillName}, unregistered when this finishes.");
+        Console.WriteLine();
+
+        var outcome = new RepairDrill(new Wsl(), paths)
+            .Run(rootfs, step => Console.WriteLine(Line(step)));
+
+        Show("what the check found", outcome.Found, wrote: false);
+        Show("what the repair did", outcome.Mended, wrote: true);
+        Show("what the second check found", outcome.After, wrote: false);
+
+        Console.WriteLine();
+        if (outcome.Rehearsed)
+        {
+            Console.WriteLine("  The write path ran against a dirty filesystem and mended it.");
+            return Ok;
+        }
+
+        // Named rather than left as a bare failure, because the failure that matters most looks
+        // like a success: a drill whose dirtying did not take reports a clean disk three times.
+        Console.Error.WriteLine(outcome switch
+        {
+            { Succeeded: false } => $"  stopped at: {outcome.Failure?.Detail}",
+            { Found.Clean: true } =>
+                "  the scratch disk came back clean, so the damage never landed and nothing here "
+                + "rehearsed the write path",
+            { After.Clean: false } =>
+                "  the repair ran and the disk is still not clean, which is the outcome this drill "
+                + "exists to be able to see",
+            _ => "  the drill did not reach all three readings",
+        });
+
+        return Failed;
+    }
+
+    /// <summary>One of the drill's three readings, with the panel's own words under it.</summary>
+    /// <param name="what">Which reading.</param>
+    /// <param name="reading">What e2fsck said, or null where it never ran.</param>
+    /// <param name="wrote">Whether that reading was the repair.</param>
+    private static void Show(string what, FsckReading? reading, bool wrote)
+    {
+        if (reading is null)
+        {
+            return;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"  ---- {what} ----");
+        if (reading.Findings.Length > 0)
+        {
+            Console.WriteLine(reading.Findings);
+        }
+
+        // The page's sentences, from the page's own type. This is the half a fake exit code cannot
+        // answer: whether what somebody reads before approving a write says enough to decide on.
+        var prompt = RepairPrompt.Of(
+            new RepairOutcome([reading.Step])
+            {
+                Findings = reading.Findings,
+                Clean = reading.Clean,
+            },
+            wrote);
+
+        Console.WriteLine();
+        Console.WriteLine($"  the window would say: {prompt.Headline}");
+        Console.WriteLine($"  {prompt.Detail}");
+        if (prompt.OfferRepair)
+        {
+            Console.WriteLine("  and it would offer the Repair button here");
+        }
     }
 
     /// <summary>One repair step, in the column shape every other verb prints.</summary>

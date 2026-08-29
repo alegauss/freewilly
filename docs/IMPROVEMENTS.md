@@ -2,24 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD215 The write path is exercised on a disk made dirty on purpose
-
-Everything ever measured has been a clean disk. The check runs `e2fsck -fn`, which
-answers no to every question and writes nothing. The repair runs `-fy`, which answers
-yes, and some of those answers discard a damaged inode rather than mending it. That is
-the path the confirmation warns about, it is the one that can lose somebody's images and
-volumes, and it has never once run against a filesystem with errors on it.
-
-The fakes cover the exit codes, and only those: 1 and 2 read as corrected, 4 as errors
-left alone. What a queued integer cannot cover is what e2fsck really prints when it
-finds something, whether the findings shown above the button are legible enough to
-approve a write on, or whether the repaired ending tells the truth after a run that
-actually changed the disk.
-
-A disk can be dirtied on purpose. A scratch ext4 image, corrupted deliberately and run
-through the same sequence, answers all three questions once and costs nothing. It does
-not have to be this machine's engine, and it should not be.
-
 ### §DD216 The rescue carries its tools rather than fetching them
 
 The rescue is imported fresh for every check and then fetches e2fsprogs with apk, so
