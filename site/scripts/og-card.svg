@@ -28,10 +28,12 @@
        line ran 80px past x=1110 and out of the card -->
   <text x="92" y="502" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#9db3c1">Upstream Moby in a WSL2 distro it owns, on the pipe your tools already use.</text>
 
-  <!-- status badge: the same three facts the hero badge states, in the same order -->
-  <rect x="90" y="540" width="368" height="46" rx="23" fill="#11212c" stroke="#22404f"/>
+  <!-- Status badge: the same three facts the hero badge states, in the same order. The pill has
+       no width of its own — og-image.mjs measures the text and fits it, because a width typed
+       here is a width measured against whichever font the machine that typed it happened to have. -->
+  <rect x="90" y="540" width="{{chip-width}}" height="46" rx="23" fill="#11212c" stroke="#22404f"/>
   <circle cx="118" cy="563" r="6" fill="#67C3F2"/>
-  <text x="136" y="571" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#9db3c1">Windows 10 / 11 · Per-user install · Apache-2.0</text>
+  <text id="chip" x="136" y="571" font-family="DejaVu Sans, sans-serif" font-size="20" fill="#9db3c1">Windows 10 / 11 · Per-user install · Apache-2.0</text>
 
   <text x="1110" y="571" text-anchor="end" font-family="DejaVu Sans Mono, monospace" font-size="20" fill="#7d95a5">alegauss.github.io/freewilly</text>
 </svg>
