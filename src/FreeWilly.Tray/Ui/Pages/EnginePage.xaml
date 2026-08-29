@@ -16,6 +16,7 @@
   <Grid Margin="10,10,10,10">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" /><!-- what it adds up to, and the two controls -->
+      <RowDefinition Height="Auto" /><!-- what state the machine under the engine is in (DD197) -->
       <RowDefinition Height="Auto" /><!-- where the file is -->
       <RowDefinition Height="*" />   <!-- the journal itself -->
     </Grid.RowDefinitions>
@@ -37,15 +38,82 @@
       </StackPanel>
     </Grid>
 
+    <!-- The six readings diagnosing the 29 August 2026 failure took by hand (DD197). Above the
+         journal because they are the state and the journal is the history, and somebody opening this
+         page because the engine will not start wants the state first. Read once when the page is
+         shown rather than on the journal's timer: every one of these is a wsl.exe child or a pipe
+         request, and DD137's rule is that nothing asks the engine a question on a clock. -->
+    <Border Grid.Row="1" x:Name="MachinePane" Margin="0,0,0,8" CornerRadius="6" Padding="10,8"
+            Background="{DynamicResource LayerFillColorDefaultBrush}"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,6">
+          <TextBlock x:Name="MachineHeading" FontSize="12" VerticalAlignment="Center"
+                     Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+          <!-- The point of the panel is handing what it says to somebody else, so its own copy is
+               beside it rather than folded into the journal's: the two answer different questions
+               and a reader asked for one does not want the other. -->
+          <Button x:Name="CopyMachine" Content="Copy" Click="CopyTheMachine"
+                  HorizontalAlignment="Right" Padding="12,2" FontSize="12" />
+        </Grid>
+
+        <!-- One column per group, because five short lists side by side is a shape the eye reads in
+             one pass and a single column of eighteen rows is not. A WrapPanel and not a UniformGrid:
+             the groups are nothing like the same width — the mount options are fifty characters and
+             the error counts are one — so equal columns truncate the longest and leave the shortest
+             mostly empty. Wrapping is also what a narrow window needs, since these fold onto a
+             second line rather than running off the edge. -->
+        <ItemsControl Grid.Row="1" x:Name="Machine">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Margin="0,0,32,6">
+                <TextBlock Text="{Binding Title}" FontSize="11" Margin="0,0,0,3"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                <ItemsControl ItemsSource="{Binding Readings}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <!-- The name in tertiary and the value in primary, the same split the journal
+                           uses for its stamp and its sentence, so the page reads as one thing. The
+                           name column is wide enough for the longest of them and carries its own
+                           gap: at 86 the words ran into their values with nothing between. -->
+                      <StackPanel Orientation="Horizontal" Margin="0,0,0,1">
+                        <TextBlock Text="{Binding Name}" FontSize="11" Width="104"
+                                   Margin="0,0,10,0" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        <TextBlock Text="{Binding Value}" FontSize="11"
+                                   FontFamily="Cascadia Mono, Consolas, Courier New"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Grid>
+    </Border>
+
     <!-- Selectable, and that is the point of it being here rather than in a tooltip: somebody
          attaching this to a bug report needs the path in their clipboard, not read out to them. -->
-    <TextBox Grid.Row="1" x:Name="Where" Margin="0,0,0,8"
+    <TextBox Grid.Row="2" x:Name="Where" Margin="0,0,0,8"
              IsReadOnly="True" BorderThickness="0" Background="Transparent"
              Padding="0" FontSize="12"
              FontFamily="Cascadia Mono, Consolas, Courier New"
              Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
 
-    <Border Grid.Row="2" x:Name="LogPane" CornerRadius="6" Padding="2"
+    <Border Grid.Row="3" x:Name="LogPane" CornerRadius="6" Padding="2"
             Background="{DynamicResource LayerFillColorDefaultBrush}"
             BorderThickness="1"
             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
@@ -80,7 +148,7 @@
     <!-- Designed, like the log window's. A machine whose engine has never been troubled leaves no
          file at all — DD137 made that deliberate — and a blank box says neither that nor "this
          could not be read", which are different answers to be looking at. -->
-    <StackPanel Grid.Row="2" x:Name="Empty" VerticalAlignment="Center"
+    <StackPanel Grid.Row="3" x:Name="Empty" VerticalAlignment="Center"
                 HorizontalAlignment="Center" Visibility="Collapsed">
       <TextBlock x:Name="EmptyHeadline" FontSize="16" HorizontalAlignment="Center"
                  Foreground="{DynamicResource TextFillColorPrimaryBrush}" />

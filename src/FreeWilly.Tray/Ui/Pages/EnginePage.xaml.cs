@@ -33,8 +33,12 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     private static readonly TimeSpan ReadEvery = TimeSpan.FromSeconds(1);
 
     private readonly IEngineJournal _journal;
+    private readonly IMachineReport _machine;
     private readonly JournalView _view = new();
     private readonly DispatcherTimer _timer;
+
+    /// <summary>What the readings said last, for the copy button.</summary>
+    private IReadOnlyList<MachineGroup> _readings = [];
 
     /// <summary>
     /// Whether the tree is built. Nothing may draw before it is.
@@ -52,14 +56,22 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// Where the journal is read from. The fixture is what makes this page capturable (L6) — the
     /// live one is a file describing whatever this machine's engine did that afternoon.
     /// </param>
-    internal EnginePage(IEngineJournal journal)
+    /// <param name="machine">
+    /// What state WSL, the distribution and the engine are in (DD197). A seam for the reason the
+    /// journal is one: a capture taken against the real machine is a picture of whatever that
+    /// laptop's disk looked like that afternoon.
+    /// </param>
+    internal EnginePage(IEngineJournal journal, IMachineReport machine)
     {
         ArgumentNullException.ThrowIfNull(journal);
+        ArgumentNullException.ThrowIfNull(machine);
         InitializeComponent();
         _journal = journal;
+        _machine = machine;
 
         Lines.ItemsSource = _view.Lines;
         Where.Text = journal.Path;
+        MachineHeading.Text = Reading;
         _ready = true;
 
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = ReadEvery };
@@ -73,6 +85,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
             if (IsVisible)
             {
                 Reread();
+                _ = RereadTheMachine();
                 _timer.Start();
             }
             else
@@ -82,6 +95,43 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         };
 
         Reread();
+        _ = RereadTheMachine();
+    }
+
+    /// <summary>What the heading says while the readings are being taken.</summary>
+    /// <remarks>
+    /// Said rather than left blank, because taking them is several <c>wsl.exe</c> children and a
+    /// pipe request: an empty panel for two seconds reads as a panel with nothing to report, which
+    /// is the opposite of what it means.
+    /// </remarks>
+    internal const string Reading = "Reading the machine…";
+
+    /// <summary>
+    /// Take the readings, off the thread that draws them (DD197).
+    /// </summary>
+    /// <returns>The work.</returns>
+    /// <remarks>
+    /// Internal so the capture and a test can await one read rather than racing the page's own. The
+    /// fixture completes without yielding, so a capture is drawn from the readings rather than from
+    /// the placeholder.
+    /// </remarks>
+    internal async Task RereadTheMachine()
+    {
+        try
+        {
+            _readings = await _machine.ReadAsync().ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // A panel describing a machine that is misbehaving is the last place an exception should
+            // escape from. The page is still worth having with the journal alone.
+            _readings = [];
+        }
+
+        Machine.ItemsSource = _readings;
+        MachineHeading.Text = _readings.Count == 0
+            ? "Nothing could be read about this machine"
+            : "What this machine is doing, under the engine";
     }
 
     /// <summary>Read the journal and redraw where it has moved.</summary>
@@ -164,6 +214,26 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
             // click and did nothing, and it is not worth a dialog. The digest is where it is said
             // because it is the line the eye is already on.
             Digest.Text = "Windows would not hand over the clipboard. Try that again.";
+        }
+    }
+
+    /// <summary>Hand the readings to whoever is being asked about this machine (DD197).</summary>
+    /// <param name="sender">Unused.</param>
+    /// <param name="e">Unused.</param>
+    /// <remarks>
+    /// The panel's own copy and not the journal's, because they answer different questions: this is
+    /// the state and that is the history, and a reader asked for one does not want the other pasted
+    /// underneath it.
+    /// </remarks>
+    private void CopyTheMachine(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Windows.Clipboard.SetText(MachineReport.AsText(_readings));
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            MachineHeading.Text = "Windows would not hand over the clipboard. Try that again.";
         }
     }
 }

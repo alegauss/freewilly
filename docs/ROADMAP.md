@@ -12,8 +12,6 @@
 
 ## Block C — The window (claude-tray's elements)
 
-- 📋 **DD197** (deps: DD191 ✅) **no single surface says what state WSL, the distribution and the engine are in** — Diagnosing the 29 August failure took wsl.exe, dmesg, blkid, the registry and a disk query, and every reading it needed is one the product could have shown on the Engine page. → §DD197
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks
@@ -22,7 +20,7 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-- 📋 **DD198** (deps: DD197) **the agent surface has no reading for the health of WSL, the distribution or the disk** — read doctor answers for one container and nothing answers for the machine under it, so an agent asked why the engine will not start has to shell out to wsl.exe and parse it. → §DD198
+- 📋 **DD198** (deps: DD197 ✅) **the agent surface has no reading for the health of WSL, the distribution or the disk** — read doctor answers for one container and nothing answers for the machine under it, so an agent asked why the engine will not start has to shell out to wsl.exe and parse it. → §DD198
 
 ## Block H — The public surface (the site a reader and an agent both read)
 

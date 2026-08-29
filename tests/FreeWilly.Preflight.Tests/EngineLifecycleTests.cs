@@ -575,7 +575,7 @@ public sealed class EngineLifecycleTests
         wsl.Answer(0, "freewilly\r\n").Answer(
             0,
             "device=/dev/sdd\noptions=rw,relatime,errors=remount-ro\nerrors=3\n"
-            + "where=ext4_validate_block_bitmap\n");
+            + "last=ext4_validate_block_bitmap\n");
 
         var engine = new EngineLifecycle(
             wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
@@ -625,7 +625,7 @@ public sealed class EngineLifecycleTests
         // The state DD190's failure arrives in. `ro` stands alone in the options where it is real.
         var wsl = new FakeWsl();
         wsl.Answer(0, "freewilly\r\n").Answer(
-            0, "device=/dev/sdd\noptions=ro,relatime,errors=remount-ro\nerrors=0\nwhere=unknown\n");
+            0, "device=/dev/sdd\noptions=ro,relatime,errors=remount-ro\nerrors=0\nlast=unknown\n");
 
         var engine = new EngineLifecycle(
             wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);

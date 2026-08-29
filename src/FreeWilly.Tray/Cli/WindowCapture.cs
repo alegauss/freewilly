@@ -91,6 +91,12 @@ internal static class WindowCapture
         // the account it was taken on. Null is the file beside the install.
         IEngineJournal? journal = fixture ? new FreeWilly.Core.Fixtures.SampleJournal() : null;
 
+        // And the readings beside it are the same problem a third time (DD197, L6). Those describe a
+        // virtual machine: a capture taken against the real one shows this laptop's disk, its free
+        // space and its distribution's error count, none of which belongs in a README. The fixture
+        // also answers without yielding, so the panel is drawn rather than caught mid-read.
+        IMachineReport? machine = fixture ? new FreeWilly.Core.Fixtures.SampleMachineReport() : null;
+
         // Before the window exists, because the water starts drifting the moment it is told the
         // engine is up and this verb's fixture says exactly that (DD69, DD70). A picture that caught a
         // random phase would make every capture differ from the last, which is the one property
@@ -99,7 +105,7 @@ internal static class WindowCapture
 
         var window = new Ui.MainWindow(
             api, () => fixture ? EngineState.Running : EngineState.Stopped, () => { },
-            builds, journal)
+            builds, journal, machine)
         {
             WindowStartupLocation = System.Windows.WindowStartupLocation.Manual,
             // Off the desktop entirely. Not merely unfocused: there is no screen region for anything

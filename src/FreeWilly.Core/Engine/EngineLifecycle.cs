@@ -476,26 +476,40 @@ public sealed class EngineLifecycle : IAsyncDisposable
     }
 
     /// <summary>
-    /// What the distribution's own kernel log says about its filesystem, if it complained (DD191).
+    /// What the root filesystem says about itself at a start, if it complains (DD191, DD200).
     /// </summary>
-    /// <returns>The reading and its repair, or <see langword="null"/> where the mount was clean.</returns>
+    /// <returns>The reading and its repair, or <see langword="null"/> where it is well.</returns>
     /// <remarks>
     /// <para>The 29 August 2026 failure was announced a boot early and nothing was listening. WSL
-    /// wrote "Filesystem error recorded from previous mount: IO failure" and "running e2fsck is
-    /// recommended" while mounting this distribution, the mount then succeeded, and the start was
-    /// reported healthy. Seconds later ext4 aborted its journal and remounted the root read-only.
-    /// </para>
+    /// said the filesystem needed checking while mounting this distribution, the mount then
+    /// succeeded, and the start was reported healthy. Seconds later ext4 aborted its journal and
+    /// remounted the root read-only.</para>
     ///
-    /// <para><b>Not a refusal.</b> A start that succeeded on a filesystem WSL says needs checking is
+    /// <para><b>Not a refusal.</b> A start that succeeded on a filesystem that needs checking is
     /// still a start, and the engine on it is worth having. What was missing is anybody saying
     /// so.</para>
     ///
-    /// <para>WSL2 shares one kernel across every distribution in the virtual machine, so the ring
-    /// buffer holds the mount messages whichever distribution is asked. The quote is the kernel's
-    /// own lines, for the reason DD190 keeps the launcher's: a reading nobody can check is worth
-    /// less than the message it replaced.</para>
+    /// <para>The gate lives in <see cref="ReadState"/> and is deliberately not repeated here: it was
+    /// taken twice for one call once, which cost nothing on a real machine and made every test that
+    /// queued two answers read the second one into the wrong question.</para>
     /// </remarks>
-    public WslFailure? CheckFilesystem()
+    public WslFailure? CheckFilesystem() =>
+        ReadState() is { } state && WhatItSaysAboutItself(state) is { } complaint
+            ? WslFailure.OfDirtyFilesystem(complaint, Distribution, _basePath)
+            : null;
+
+    /// <summary>
+    /// Take the one reading the start check and the Engine page share (DD197).
+    /// </summary>
+    /// <returns>What the root filesystem says, or <see langword="null"/> where it would not say.</returns>
+    /// <remarks>
+    /// Public because the page needs the same six answers this check turns into a verdict, and two
+    /// readings are how a page comes to disagree with the journal printed beside it. The gate is
+    /// here rather than at the caller: an <c>--exec</c> against a distribution that is not running
+    /// would start it, and a page that boots a virtual machine to describe it has changed what it
+    /// was describing.
+    /// </remarks>
+    public DistributionState? ReadState()
     {
         if (!DistributionIsRunning())
         {
@@ -503,11 +517,9 @@ public sealed class EngineLifecycle : IAsyncDisposable
         }
 
         var read = _wsl.Run(
-            "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", StateScript);
+            "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", DistributionState.Script);
 
-        return read.Succeeded && WhatItSaysAboutItself(read.Output) is { } complaint
-            ? WslFailure.OfDirtyFilesystem(complaint, Distribution, _basePath)
-            : null;
+        return read.Succeeded ? DistributionState.Of(read.Output) : null;
     }
 
     /// <summary>
@@ -523,17 +535,12 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// <para><c>/sys/fs/ext4</c> has a directory per device, so the counter read here belongs to
     /// this filesystem and to no other. That is the half DD191 got wrong.</para>
     /// </remarks>
-    internal const string StateScript =
-        "d=$(" + Minirootfs.RootDevice + "); b=${d##*/}; s=/sys/fs/ext4/$b; "
-        + "echo device=$d; "
-        + "echo options=$(awk '$2==\"/\"{print $4;exit}' /proc/mounts); "
-        + "echo errors=$(cat $s/errors_count 2>/dev/null || echo unknown); "
-        + "echo where=$(cat $s/last_error_func 2>/dev/null || echo unknown)";
+    internal const string StateScript = DistributionState.Script;
 
     /// <summary>
     /// What the root filesystem reports about itself, or <see langword="null"/> where it is well.
     /// </summary>
-    /// <param name="said">What <see cref="StateScript"/> printed.</param>
+    /// <param name="state">What the root filesystem reported.</param>
     /// <returns>The complaint, in one clause.</returns>
     /// <remarks>
     /// <para><b>The kernel log is not read here any more, and DD200 is why.</b> DD191 matched four
@@ -549,36 +556,19 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// recorded, and where. Both are cleared by the repair that fixes them, which is what makes
     /// this a state rather than an account of one.</para>
     /// </remarks>
-    private string? WhatItSaysAboutItself(string said)
+    private string? WhatItSaysAboutItself(DistributionState state)
     {
-        var fields = said
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(line => line.Split('=', 2))
-            .Where(pair => pair.Length == 2)
-            .ToDictionary(pair => pair[0], pair => pair[1], StringComparer.Ordinal);
-
-        // Split rather than searched, because the options string carries `errors=remount-ro` on
-        // every healthy mount: a filesystem that has never had a fault says the word this is looking
-        // for, and the difference is that `ro` stands alone.
-        if (fields.TryGetValue("options", out var options)
-            && options.Split(',').Contains("ro", StringComparer.Ordinal))
+        if (!state.Writable)
         {
             return $"{Distribution}'s root is mounted read-only, which is what the kernel does to a "
                 + "filesystem it has hit an error on, and the engine is running on it meanwhile";
         }
 
-        if (fields.TryGetValue("errors", out var errors)
-            && int.TryParse(
-                errors, System.Globalization.CultureInfo.InvariantCulture, out var count)
-            && count > 0)
+        if (state.Errors is > 0)
         {
-            // Present but empty is the ordinary reading of last_error_func, so the fallback has to
-            // catch that as well as a missing file: `cat` on it succeeds and prints nothing.
-            var where = fields.GetValueOrDefault("where", "") is { Length: > 0 } named
-                ? named
-                : "an unnamed function";
-            return $"{Distribution}'s filesystem has {count} error(s) recorded against it, the last "
-                + $"in {where}, and the engine is running on it meanwhile";
+            return $"{Distribution}'s filesystem has {state.Errors} error(s) recorded against it, "
+                + $"the last in {state.LastError ?? "an unnamed function"}, and the engine is "
+                + "running on it meanwhile";
         }
 
         return null;

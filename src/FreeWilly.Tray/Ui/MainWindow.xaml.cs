@@ -34,6 +34,7 @@ internal partial class MainWindow : Window
     private readonly WindowRecall _recall;
     private readonly IBuildHistory _builds;
     private readonly IEngineJournal _journal;
+    private readonly IMachineReport _machine;
 
     private ImagesPage? _images;
     private VolumesPage? _volumes;
@@ -62,9 +63,15 @@ internal partial class MainWindow : Window
     /// <paramref name="builds"/> takes one — the live file describes whatever this laptop's engine
     /// did that afternoon, which is not reviewable and not safe to put in a README.
     /// </param>
+    /// <param name="machine">
+    /// What state WSL, the distribution and the engine are in (DD197). Read off this machine by
+    /// default; <c>--fixture</c> passes one that is the same everywhere, for the reason
+    /// <paramref name="journal"/> takes one.
+    /// </param>
     internal MainWindow(
         IEngineClient api, Func<EngineState> engineState, Action startEngine,
-        IBuildHistory? builds = null, IEngineJournal? journal = null)
+        IBuildHistory? builds = null, IEngineJournal? journal = null,
+        IMachineReport? machine = null)
     {
         InitializeComponent();
         _api = api;
@@ -72,6 +79,7 @@ internal partial class MainWindow : Window
         _startEngine = startEngine;
         _builds = builds ?? new BuildHistory();
         _journal = journal ?? new EngineJournalFile();
+        _machine = machine ?? LiveMachineReport.OnThisMachine();
 
         Containers = new ContainersPage(api, engineState, startEngine);
         DestinationHost.Children.Add(Containers);
@@ -178,7 +186,7 @@ internal partial class MainWindow : Window
                 // No refresh call beside it, unlike every other destination: the page reads its own
                 // file on a timer it starts when it becomes visible, because what it shows changes
                 // while somebody is looking at it and nothing here would know to ask again (DD165).
-                _engine ??= Add(new EnginePage(_journal));
+                _engine ??= Add(new EnginePage(_journal, _machine));
                 page = _engine;
                 break;
             case "About":

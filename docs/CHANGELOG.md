@@ -107,6 +107,7 @@
 - ✅ **DD176** **About sets the daemon's newest API version beside the pinned one, so a working pin reads as a mismatch** — The row leads with the pinned version and then states the range the daemon serves, one spelling for all three numbers.
 - ✅ **DD193** **A build's start is printed in the daemon's UTC, so one begun at 09:49 on this machine shows on the page as 12:49** — The column and the detail pane convert a start to this machine's zone through one shared call, so the 09:49 build the page showed as 12:49 reads 09:49.
 - ✅ **DD194** **A fixture capture of the builds page draws its times in the operator's zone, so two machines make two pictures** — The builds fixture anchors a wall clock stamped with the drawing machine's own offset, so a capture shows 09:29 in every zone rather than the operator's.
+- ✅ **DD197** **no single surface says what state WSL, the distribution and the engine are in** — The Engine page carries the five readings the diagnosis took by hand, off one call the start check shares, with a copy button beside them.
 
 ## Block D — Container operations (what a user came to do)
 

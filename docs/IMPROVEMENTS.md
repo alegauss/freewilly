@@ -76,32 +76,6 @@ reader inherits both.
 
 ## Block C — The window (claude-tray's elements)
 
-### §DD197 Six readings a user should not have to take by hand
-
-Diagnosing the 29 August 2026 failure meant reading six sources by hand: `wsl --list
---verbose` for the state of the distribution, `dmesg` out of a second distribution for
-the ext4 errors, `blkid` for the device, the Lxss registry key for the path of the vhdx,
-a PowerShell query for free space on the Windows volume, and the journal for what the
-host had seen. Every one of those is a reading FreeWilly is better placed to take than a
-user is.
-
-The Engine page DD165 added is where they belong, because it already carries the journal
-and is already the page somebody opens when the engine will not start. What it should
-say:
-
-- the WSL version and kernel, and whether the distribution is registered and running
-- the root device, its mount options, and whether it is still writable
-- the ext4 error counters, and the function that recorded the first one
-- the size of the vhdx on the Windows volume beside the space used inside the distribution,
-  because those two numbers together are what a question about a full disk actually needs
-- the engine: whether the pipe answers, the API version, and the relay figures DD180 exposes
-
-And a copy button, because the point of the page is handing what it says to somebody
-else.
-
-Out of scope: the remedy. This page reports, and DD190 owns what to do about what it
-reports.
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks
