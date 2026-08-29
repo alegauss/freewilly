@@ -52,19 +52,51 @@ public sealed record WslFailure(string Meaning, IReadOnlyList<string> Remedy)
             return null;
         }
 
-        var disk = Path.Combine(basePath, "ext4.vhdx");
         return new WslFailure(
             $"that is EIO rather than a missing user, so {distribution}'s filesystem could not be "
             + "read: its root has remounted read-only, which is what an unclean shutdown leaves",
-            [
-                $"{distribution} cannot check its own root, so the disk is checked from elsewhere:",
-                $"  wsl --terminate {distribution}",
-                $"  wsl --mount --vhd \"{disk}\" --bare",
-                "  wsl -d <another distribution> -u root --exec lsblk",
-                "  wsl -d <another distribution> -u root --exec e2fsck -fy /dev/sdX",
-                $"  wsl --unmount \"{disk}\"",
-                "lsblk names the disk the mount attached; e2fsck goes against that one.",
-            ]);
+            Repair(distribution, basePath));
+    }
+
+    /// <summary>
+    /// The same disk, noticed a boot earlier: what the distribution's own kernel log said (DD191).
+    /// </summary>
+    /// <param name="said">The kernel lines that complained.</param>
+    /// <param name="distribution">The distribution they were about.</param>
+    /// <param name="basePath">Where WSL registered it.</param>
+    /// <returns>The reading, carrying the same remedy.</returns>
+    /// <remarks>
+    /// One repair, two ways of arriving at it. <see cref="Of"/> is the failure being found by the
+    /// start that dies on it, and this is the warning WSL wrote while mounting the same filesystem a
+    /// boot earlier, which nothing was listening for. They differ in when they are noticed and in
+    /// nothing else, so they must not differ in what they tell the user to do.
+    /// </remarks>
+    public static WslFailure OfDirtyFilesystem(string said, string distribution, string basePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(said);
+        ArgumentException.ThrowIfNullOrWhiteSpace(distribution);
+        ArgumentException.ThrowIfNullOrWhiteSpace(basePath);
+
+        return new WslFailure(said, Repair(distribution, basePath));
+    }
+
+    /// <summary>The commands that repair the distribution's disk.</summary>
+    /// <param name="distribution">Which distribution.</param>
+    /// <param name="basePath">Where WSL registered it.</param>
+    /// <returns>The lines, ready to be printed.</returns>
+    private static IReadOnlyList<string> Repair(string distribution, string basePath)
+    {
+        var disk = Path.Combine(basePath, "ext4.vhdx");
+        return
+        [
+            $"{distribution} cannot check its own root, so the disk is checked from elsewhere:",
+            $"  wsl --terminate {distribution}",
+            $"  wsl --mount --vhd \"{disk}\" --bare",
+            "  wsl -d <another distribution> -u root --exec lsblk",
+            "  wsl -d <another distribution> -u root --exec e2fsck -fy /dev/sdX",
+            $"  wsl --unmount \"{disk}\"",
+            "lsblk names the disk the mount attached; e2fsck goes against that one.",
+        ];
     }
 
     /// <summary>Whether these words are the signature of a root that cannot be read.</summary>

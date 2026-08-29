@@ -27,6 +27,15 @@ internal static class EngineCommand
     /// </remarks>
     internal static readonly TimeSpan SessionEndingBudget = TimeSpan.FromSeconds(4);
 
+    /// <summary>How often a running host asks whether the distribution's root is still writable.</summary>
+    /// <remarks>
+    /// Long, deliberately (DD191). The probe is a <c>wsl.exe</c> child, and this loop's own rule
+    /// since DD134 is that a subprocess on every poll is the load that times out the ping beside it.
+    /// A filesystem does not go read-only twice, so what this interval buys is only how late the
+    /// news is, and five minutes is inside the session that broke rather than in the next one.
+    /// </remarks>
+    internal static readonly TimeSpan FilesystemWatch = TimeSpan.FromMinutes(5);
+
     /// <summary>Run an engine verb.</summary>
     /// <param name="args">The verb and, for <c>--autostart</c>, its value.</param>
     /// <returns>The process exit code.</returns>
@@ -81,6 +90,23 @@ internal static class EngineCommand
             {
                 Note(journal, $"  {"",-8}  {line}");
             }
+        }
+    }
+
+    /// <summary>Write out a filesystem reading and the repair it carries (DD191).</summary>
+    /// <param name="journal">Where the host writes.</param>
+    /// <param name="failure">What was found.</param>
+    /// <remarks>
+    /// Its own column word, because this is neither a state the engine is in nor something the host
+    /// did: the engine is running and the disk under it is not well, and a reader scanning the file
+    /// for why a machine went wrong overnight is looking for exactly that distinction.
+    /// </remarks>
+    private static void NoteFilesystem(EngineHostLog? journal, WslFailure failure)
+    {
+        Note(journal, $"  {"fs",-8}  {failure.Meaning}");
+        foreach (var line in failure.Remedy)
+        {
+            Note(journal, $"  {"",-8}  {line}");
         }
     }
 
@@ -259,6 +285,15 @@ internal static class EngineCommand
                 return Failed;
             }
 
+            // Asked once the engine is up and before anything is served, which is the moment the
+            // 29 August 2026 start had the answer and nobody looked (DD191). WSL had already said
+            // the filesystem needed checking; the mount succeeded, so the start was reported healthy
+            // and the read-only remount arrived seconds later.
+            if (lifecycle.CheckFilesystem() is { } dirty)
+            {
+                NoteFilesystem(journal, dirty);
+            }
+
             Console.WriteLine();
             Note(journal, "Serving the engine. Ctrl+C stops it.");
 
@@ -338,6 +373,13 @@ internal static class EngineCommand
         // When the engine was last answering, so a revival can say how long it was away (DD182).
         var quietSince = DateTimeOffset.UtcNow;
 
+        // When the root was last known writable, and whether it has already been reported (DD191).
+        // Said once, like every other crossing in this loop: a filesystem that went read-only stays
+        // read-only, and repeating it every five minutes would report a state into a file that only
+        // keeps events.
+        var wroteLast = DateTimeOffset.UtcNow;
+        var complained = false;
+
         using var ending = CancellationTokenSource.CreateLinkedTokenSource(
             stopping.Token, asked.Token);
 
@@ -385,6 +427,21 @@ internal static class EngineCommand
                 {
                     Note(journal, $"  relay     stopped accepting: {ended}");
                     mourned = true;
+                }
+
+                // DD191. On a long interval and never on the poll, which is the rule DD134 and DD175
+                // established for this loop: a subprocess every two seconds is the load that times
+                // out the ping beside it. Five minutes is cheap enough to be free and short enough
+                // that a disk which went read-only is named while the session it broke is still
+                // open, rather than being found by the next start.
+                if (!complained && DateTimeOffset.UtcNow - wroteLast >= FilesystemWatch)
+                {
+                    wroteLast = DateTimeOffset.UtcNow;
+                    if (lifecycle.CheckRootIsWritable() is { } gone)
+                    {
+                        NoteFilesystem(journal, gone);
+                        complained = true;
+                    }
                 }
 
                 var serving = watch.KeepServing(now) && !(justResumed && !now.Usable);

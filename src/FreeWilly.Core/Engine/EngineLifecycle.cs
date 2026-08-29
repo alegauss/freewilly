@@ -421,8 +421,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
     private async Task<string?> AskTheDaemonToStopAsync(
         TimeSpan grace, CancellationToken cancellation)
     {
-        var running = _wsl.Run("--list", "--running", "--quiet");
-        if (!running.Succeeded || !NamesTheDistribution(running.Output))
+        if (!DistributionIsRunning())
         {
             return null;
         }
@@ -462,6 +461,125 @@ public sealed class EngineLifecycle : IAsyncDisposable
     private bool NamesTheDistribution(string output) => output
         .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
         .Any(line => line.Trim().Equals(Distribution, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Whether the owned distribution is up right now.</summary>
+    /// <returns><see langword="true"/> where WSL lists it as running.</returns>
+    /// <remarks>
+    /// The gate every <c>--exec</c> in this file goes through, and it is not about cost. Asking
+    /// <c>--exec</c> of a distribution that is not running <em>starts</em> it, so a probe without
+    /// this boots the virtual machine it was only meant to look at.
+    /// </remarks>
+    private bool DistributionIsRunning()
+    {
+        var running = _wsl.Run("--list", "--running", "--quiet");
+        return running.Succeeded && NamesTheDistribution(running.Output);
+    }
+
+    /// <summary>
+    /// What the distribution's own kernel log says about its filesystem, if it complained (DD191).
+    /// </summary>
+    /// <returns>The reading and its repair, or <see langword="null"/> where the mount was clean.</returns>
+    /// <remarks>
+    /// <para>The 29 August 2026 failure was announced a boot early and nothing was listening. WSL
+    /// wrote "Filesystem error recorded from previous mount: IO failure" and "running e2fsck is
+    /// recommended" while mounting this distribution, the mount then succeeded, and the start was
+    /// reported healthy. Seconds later ext4 aborted its journal and remounted the root read-only.
+    /// </para>
+    ///
+    /// <para><b>Not a refusal.</b> A start that succeeded on a filesystem WSL says needs checking is
+    /// still a start, and the engine on it is worth having. What was missing is anybody saying
+    /// so.</para>
+    ///
+    /// <para>WSL2 shares one kernel across every distribution in the virtual machine, so the ring
+    /// buffer holds the mount messages whichever distribution is asked. The quote is the kernel's
+    /// own lines, for the reason DD190 keeps the launcher's: a reading nobody can check is worth
+    /// less than the message it replaced.</para>
+    /// </remarks>
+    public WslFailure? CheckFilesystem()
+    {
+        if (!DistributionIsRunning())
+        {
+            return null;
+        }
+
+        var kernel = _wsl.Run(
+            "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", "dmesg");
+        if (!kernel.Succeeded)
+        {
+            return null;
+        }
+
+        var complaints = kernel.Output
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(Complains)
+            .Distinct(StringComparer.Ordinal)
+            .Take(KeptComplaints)
+            .ToList();
+
+        return complaints.Count == 0
+            ? null
+            : WslFailure.OfDirtyFilesystem(
+                $"{Distribution} mounted with a filesystem the kernel complained about, and the "
+                + $"engine is running on it meanwhile: {string.Join("; ", complaints)}",
+                Distribution,
+                _basePath);
+    }
+
+    /// <summary>
+    /// Whether the root is still writable, which is the failure a running engine walks into (DD191).
+    /// </summary>
+    /// <returns>The reading and its repair, or <see langword="null"/> where the write landed.</returns>
+    /// <remarks>
+    /// The mount check above is a boot-time question and this is the one that catches a filesystem
+    /// going read-only under a session that was working a minute earlier — which is exactly what
+    /// happened, seconds after a mount this tool had called healthy. A write is the only honest test
+    /// of it: <c>ext4</c> remounted read-only answers every read perfectly well.
+    ///
+    /// <para><c>/var/lib</c> because it is on the root filesystem rather than on a tmpfs, which is
+    /// what <c>/run</c> and <c>/tmp</c> are and what would make this pass on a broken disk. Created
+    /// and removed in one command, so a probe that ran a thousand times leaves nothing.</para>
+    /// </remarks>
+    public WslFailure? CheckRootIsWritable()
+    {
+        if (!DistributionIsRunning())
+        {
+            return null;
+        }
+
+        var wrote = _wsl.Run(
+            "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c",
+            "touch /var/lib/.freewilly-writable && rm -f /var/lib/.freewilly-writable");
+
+        return wrote.Succeeded
+            ? null
+            : WslFailure.OfDirtyFilesystem(
+                $"{Distribution}'s root is no longer writable, so its filesystem has been remounted "
+                + "read-only under a running engine",
+                Distribution,
+                _basePath);
+    }
+
+    /// <summary>How many distinct kernel complaints are quoted.</summary>
+    /// <remarks>
+    /// A dirty filesystem repeats itself, and the journal is a column of stamped lines rather than a
+    /// place to paste a ring buffer into. Three is enough to see which failure it is.
+    /// </remarks>
+    private const int KeptComplaints = 3;
+
+    /// <summary>Whether one kernel line is the filesystem complaining about itself.</summary>
+    /// <param name="line">The line.</param>
+    /// <returns><see langword="true"/> where it is.</returns>
+    /// <remarks>
+    /// The four spellings the 29 August incident produced, in the order they arrived: the warning on
+    /// the mount, its recommendation, the error itself, and the remount that followed. Matched on
+    /// the phrases rather than on a whole line, because the kernel wraps them in a timestamp and a
+    /// device name that differ on every machine.
+    /// </remarks>
+    private static bool Complains(string line) =>
+        line.Contains("Filesystem error recorded from previous mount", StringComparison.OrdinalIgnoreCase)
+        || line.Contains("running e2fsck is recommended", StringComparison.OrdinalIgnoreCase)
+        || line.Contains("EXT4-fs error", StringComparison.OrdinalIgnoreCase)
+        || line.Contains("Remounting filesystem read-only", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// What is actually there, asked of the machine rather than inferred from a handle (DD175).

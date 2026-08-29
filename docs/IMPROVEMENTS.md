@@ -2,26 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD191 DD191: the warning that arrived a boot early
-
-The 29 August failure was announced a boot early and nothing was listening. WSL wrote
-"Filesystem error recorded from previous mount: IO failure" and "running e2fsck is
-recommended" while mounting the distribution, and the mount then succeeded, so FreeWilly
-reported a healthy start. Seconds later ext4 hit a bad block bitmap checksum in group
-348, aborted its journal and remounted the root read-only, and from there every read of
-/etc/passwd returned EIO.
-
-Two probes would have caught it and both are cheap. At start, the dmesg of the
-distribution says whether the filesystem mounted with errors. During a run, a write
-inside the distribution says whether the root is still writable, which is what catches a
-filesystem that goes read-only under a session that was working a minute earlier.
-
-Where the answer goes is the second half of the task. A start that succeeded on a
-filesystem WSL says needs checking is still a start, so this is not a refusal. It is a
-line in the journal and a state the window can carry, saying that the distribution needs
-a check and that the engine is running on it meanwhile. The remedy itself belongs to
-DD190.
-
 ### §DD192 DD192: two encodings, one buffer
 
 WslDaemonProcess drains stdout and stderr into one List of bytes, and Sentence hands the

@@ -549,6 +549,109 @@ public sealed class EngineLifecycleTests
         Assert.DoesNotContain("--shutdown", remedy, StringComparison.Ordinal);
     }
 
+    // ---- the warning that arrives a boot early (DD191) -----------------------------------------
+
+    /// <summary>What WSL wrote while mounting the distribution on 29 August 2026.</summary>
+    /// <remarks>
+    /// Kept verbatim, timestamps and device name included, because the match has to survive the
+    /// wrapping the kernel puts around its own phrases and a fixture that had been tidied would
+    /// prove the matcher works against tidy input.
+    /// </remarks>
+    private const string DirtyMount =
+        "[    0.412000] EXT4-fs (sdc): Filesystem error recorded from previous mount: IO failure\n"
+        + "[    0.412001] EXT4-fs (sdc): warning: mounting fs with errors, running e2fsck is recommended\n"
+        + "[    0.500000] EXT4-fs (sdc): mounted filesystem with ordered data mode.\n";
+
+    [Fact]
+    public void A_mount_the_kernel_complained_about_is_read_and_carries_its_repair()
+    {
+        // The failure was announced a boot early and nothing was listening: the mount succeeded, so
+        // the start was reported healthy, and ext4 aborted its journal seconds later.
+        var wsl = new FakeWsl();
+        wsl.Answer(0, "freewilly\r\n").Answer(0, DirtyMount);
+        var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        var found = engine.CheckFilesystem();
+
+        Assert.NotNull(found);
+
+        // The kernel's own words, because a reading nobody can check is worth less than the message
+        // it replaced.
+        Assert.Contains("running e2fsck is recommended", found.Meaning, StringComparison.Ordinal);
+
+        // Not a refusal. The engine on it is still worth having and the sentence has to say so.
+        Assert.Contains("running on it meanwhile", found.Meaning, StringComparison.Ordinal);
+        Assert.Contains("e2fsck", string.Join("\n", found.Remedy), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_clean_mount_says_nothing_at_all()
+    {
+        // The common case, and it has to cost one line in no file. A start that reported a healthy
+        // filesystem every time would be the poll this journal refuses to be.
+        var wsl = new FakeWsl();
+        wsl.Answer(0, "freewilly\r\n")
+            .Answer(0, "[    0.500000] EXT4-fs (sdc): mounted filesystem with ordered data mode.\n");
+        var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        Assert.Null(engine.CheckFilesystem());
+    }
+
+    [Fact]
+    public void A_distribution_that_is_not_running_is_not_booted_to_be_asked_about()
+    {
+        // `wsl -d` starts a stopped distribution. A health probe that boots the virtual machine it
+        // was only meant to look at has changed the thing it was reporting on.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "Ubuntu\r\n", null);
+        var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        Assert.Null(engine.CheckFilesystem());
+        Assert.Null(engine.CheckRootIsWritable());
+        Assert.DoesNotContain(wsl.Invocations, argv => argv.Length > 0 && argv[0] == "-d");
+    }
+
+    [Fact]
+    public void A_root_that_has_gone_read_only_under_a_running_engine_is_named()
+    {
+        // The probe the mount check cannot be: ext4 remounted read-only answers every read
+        // perfectly well, so only a write tells the two apart.
+        var wsl = new FakeWsl();
+        wsl.Answer(0, "freewilly\r\n").Answer(1, "touch: /var/lib/.freewilly-writable: Read-only file system");
+        var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        var found = engine.CheckRootIsWritable();
+
+        Assert.NotNull(found);
+        Assert.Contains("no longer writable", found.Meaning, StringComparison.Ordinal);
+
+        // On the root filesystem and not on a tmpfs, which is what /run and /tmp are and what would
+        // make this pass on a broken disk.
+        Assert.Contains(
+            wsl.Invocations,
+            argv => argv.Any(word => word.Contains("/var/lib/", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void A_writable_root_leaves_nothing_behind_and_says_nothing()
+    {
+        var wsl = new FakeWsl();
+        wsl.Answer(0, "freewilly\r\n").Answer(0);
+        var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        Assert.Null(engine.CheckRootIsWritable());
+
+        // Created and removed in the one command, so a probe that ran a thousand times leaves no
+        // file in somebody's distribution.
+        var probe = wsl.Invocations.Last();
+        Assert.Contains(probe, word => word.Contains("rm -f", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void The_error_code_spelling_of_the_same_failure_is_recognised_too()
     {
