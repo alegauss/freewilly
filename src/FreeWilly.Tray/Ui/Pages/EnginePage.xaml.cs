@@ -38,7 +38,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     private readonly DispatcherTimer _timer;
 
     private readonly IFilesystemWork _work;
-    private readonly Action _startEngine;
+    private readonly IEngineInterlude _interlude;
 
     /// <summary>What the readings said last, for the copy button.</summary>
     private MachineHealth? _readings;
@@ -56,23 +56,18 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
 
     /// <summary>Construct the page.</summary>
     /// <param name="seams">
-    /// The journal, the readings and the filesystem work, which is what makes this page capturable
-    /// (L6): the live ones describe whatever this machine did that afternoon, and the last of them
-    /// terminates a distribution.
+    /// The journal, the readings, the filesystem work and the interlude around it, which is what
+    /// makes this page capturable (L6): the live ones describe whatever this machine did that
+    /// afternoon, and one of them terminates a distribution.
     /// </param>
-    /// <param name="startEngine">
-    /// What the tray's Start engine does (DD205). The same action the Containers empty state uses,
-    /// because a second way to start the engine would be a second thing to keep right.
-    /// </param>
-    internal EnginePage(EngineSeams seams, Action startEngine)
+    internal EnginePage(EngineSeams seams)
     {
         ArgumentNullException.ThrowIfNull(seams);
-        ArgumentNullException.ThrowIfNull(startEngine);
-        _startEngine = startEngine;
         InitializeComponent();
         _journal = seams.Journal;
         _machine = seams.Machine;
         _work = seams.Work;
+        _interlude = seams.Interlude;
         Show(RepairPrompt.Idle, steps: null);
 
         Lines.ItemsSource = _view.Lines;
@@ -225,16 +220,29 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         }
     }
 
-    /// <summary>Read the filesystem and change nothing (DD199).</summary>
+    /// <summary>Read the filesystem and change nothing (DD199, DD210).</summary>
     /// <param name="sender">Unused.</param>
     /// <param name="e">Unused.</param>
     /// <remarks>
-    /// No confirmation, and that asymmetry is the design's: reading cannot make a filesystem worse.
-    /// What the button owed instead was saying beforehand that the engine stops for it, which is
-    /// what <see cref="RepairPrompt.Idle"/> is on screen for before this is ever pressed.
+    /// It asks first, and what it asks about is not what the repair asks about. Reading cannot make
+    /// a filesystem worse, so nothing here needs consent to touch the disk; what needs consent is
+    /// stopping the engine and every container on it, which a check costs whatever it finds. That
+    /// was written in the panel beside the button and discovered by pressing it anyway.
     /// </remarks>
-    private async void CheckTheFilesystem(object sender, RoutedEventArgs e) =>
-        await Run(wrote: false).ConfigureAwait(true);
+    private async void CheckTheFilesystem(object sender, RoutedEventArgs e)
+    {
+        var answer = System.Windows.MessageBox.Show(
+            RepairPrompt.CheckConfirmation,
+            "Check the filesystem",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Question,
+            System.Windows.MessageBoxResult.No);
+
+        if (answer is System.Windows.MessageBoxResult.Yes)
+        {
+            await Run(wrote: false).ConfigureAwait(true);
+        }
+    }
 
     /// <summary>Mend what the check found, once somebody has said so (DD199).</summary>
     /// <param name="sender">Unused.</param>
@@ -264,15 +272,23 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// <param name="wrote">Whether this is the repair.</param>
     /// <returns>The work.</returns>
     /// <remarks>
-    /// Both buttons go dead for the duration, because both take the engine down and a second run
-    /// started on top of the first would be two processes terminating one distribution. The steps
-    /// are collected rather than streamed: they arrive off the UI thread, and a page that marshalled
-    /// each one would be doing dispatcher work in the middle of a minutes-long <c>e2fsck</c>.
+    /// <para>Both buttons go dead for the duration, because both take the engine down and a second
+    /// run started on top of the first would be two processes terminating one distribution. The
+    /// steps are collected rather than streamed: they arrive off the UI thread, and a page that
+    /// marshalled each one would be doing dispatcher work in the middle of a minutes-long
+    /// <c>e2fsck</c>.</para>
+    ///
+    /// <para><b>The interlude brackets the whole of it (DD210).</b> Said before the work starts and
+    /// not after the engine has gone, because the tray decides what an engine that stopped answering
+    /// means at the moment it notices, and a claim arriving afterwards is a balloon already on its
+    /// way. The start at the other end is this page finishing its own work: it took the engine down
+    /// without being asked to leave it down.</para>
     /// </remarks>
     internal async Task Run(bool wrote)
     {
         Check.IsEnabled = false;
         Repair.IsEnabled = false;
+        _interlude.Expected();
         Show(RepairPrompt.Working, steps: null);
 
         var steps = new System.Collections.Concurrent.ConcurrentQueue<RepairStep>();
@@ -289,7 +305,14 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
                 [new RepairStep("run the check", false, exception.Message)]);
         }
 
-        Show(RepairPrompt.Of(outcome, wrote), Transcript(outcome, steps));
+        var prompt = RepairPrompt.Of(outcome, wrote);
+        if (prompt.StartsAgain)
+        {
+            _interlude.StartAgain();
+            prompt = prompt.AndStarting(TrayState.StartBudget);
+        }
+
+        Show(prompt, Transcript(outcome, steps));
         Check.IsEnabled = true;
         Repair.IsEnabled = true;
     }
@@ -330,21 +353,6 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
 
         Found.Visibility = Visibility.Visible;
         Repair.Visibility = prompt.OfferRepair ? Visibility.Visible : Visibility.Collapsed;
-        StartEngine.Visibility = prompt.OfferStart ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    /// <summary>Start the engine this page stopped (DD205).</summary>
-    /// <param name="sender">Unused.</param>
-    /// <param name="e">Unused.</param>
-    /// <remarks>
-    /// The tray's own start, not a second one: it is the thing that knows a start cannot land on a
-    /// machine with no distribution registered (DD120) and that owns the state the icon shows. This
-    /// page asks for it and says so.
-    /// </remarks>
-    private void StartTheEngine(object sender, RoutedEventArgs e)
-    {
-        _startEngine();
-        Show(RepairPrompt.Starting(TrayState.StartBudget), FoundSteps.Text);
     }
 
     /// <summary>Hand the readings to whoever is being asked about this machine (DD197).</summary>

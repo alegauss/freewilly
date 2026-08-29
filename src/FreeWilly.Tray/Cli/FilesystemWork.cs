@@ -79,7 +79,7 @@ internal sealed class FilesystemWork : IFilesystemWork
             .StopAsync(EngineLifecycle.PatientGrace).GetAwaiter().GetResult();
 
         report(new RepairStep(
-            "stop the engine",
+            FilesystemRepair.StopStep,
             true,
             heard
                 ? "told the host to stop, so it will not put the engine back under the check"

@@ -4,6 +4,8 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD211** (deps: DD210 ✅) **the virtual disk keeps every gigabyte an image or a build cache ever used, and nothing on the page hands it back** — The Engine page grows a Compact button beside Repair: it trims what the filesystem freed, then hands the blocks back to Windows with wsl --manage --set-sparse. → §DD211
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

@@ -26,6 +26,20 @@ public sealed record RepairOutcome(IReadOnlyList<RepairStep> Steps)
 
     /// <summary>Whether the filesystem needed nothing done to it.</summary>
     public bool Clean { get; init; }
+
+    /// <summary>
+    /// Whether the engine went down for this before it stopped (DD210).
+    /// </summary>
+    /// <remarks>
+    /// Read off the steps rather than tracked, because the steps are already the record of what
+    /// happened and a second one would be a second thing to keep true. It matters only on the
+    /// failing path, and there it is the difference between two sentences a page must not confuse: a
+    /// run that stopped at the registered guard left the engine exactly as it found it, and a run
+    /// that stopped at e2fsck left it down. Telling somebody their engine was deliberately left down
+    /// when it is in fact still serving is the kind of wrong that sends them looking for a fault.
+    /// </remarks>
+    public bool EngineWentDown => Steps.Any(
+        step => step.What is FilesystemRepair.StopStep or FilesystemRepair.TerminateStep);
 }
 
 /// <summary>
@@ -63,6 +77,20 @@ public sealed class FilesystemRepair
     /// left it there and that removing it costs nothing.
     /// </remarks>
     public const string RescueName = "freewilly-rescue";
+
+    /// <summary>
+    /// The step the caller reports for stopping the engine the ordinary way (DD210).
+    /// </summary>
+    /// <remarks>
+    /// Named here rather than where it is written, because the two places that care are not the same
+    /// assembly: the wiring reports it and <see cref="RepairOutcome.EngineWentDown"/> reads it back.
+    /// A literal at each end is a page that quietly stops noticing the engine went down the day
+    /// somebody rewords a step.
+    /// </remarks>
+    public const string StopStep = "stop the engine";
+
+    /// <summary>The step this class reports for terminating the distribution.</summary>
+    public const string TerminateStep = "take the engine down";
 
     private readonly IWsl _wsl;
     private readonly EnginePaths _paths;
@@ -252,11 +280,11 @@ public sealed class FilesystemRepair
         var down = _wsl.Run(WslBudget.Work, "--terminate", _paths.DistributionName);
         return down.Succeeded
             ? new RepairStep(
-                "take the engine down",
+                TerminateStep,
                 true,
                 $"{_paths.DistributionName} terminated, so its root is unmounted")
             : new RepairStep(
-                "take the engine down",
+                TerminateStep,
                 false,
                 $"terminating {_paths.DistributionName} failed: {Said(down)}");
     }

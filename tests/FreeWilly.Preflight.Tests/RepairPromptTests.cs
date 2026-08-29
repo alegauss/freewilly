@@ -88,45 +88,110 @@ public sealed class RepairPromptTests
     }
 
     [Fact]
-    public void A_run_that_finished_offers_to_start_the_engine_it_left_down()
+    public void A_run_that_finished_starts_the_engine_it_left_down()
     {
-        // DD205. Checking needs the root unmounted, so this page is the one that stopped the engine
-        // and the alternative is the Containers empty state or the tray icon. All three endings
-        // offer it: clean, repaired, and errors somebody has not decided about yet.
-        Assert.True(RepairPrompt.Of(Outcome(ok: true, clean: true), wrote: false).OfferStart);
-        Assert.True(RepairPrompt.Of(Outcome(ok: true, clean: false), wrote: true).OfferStart);
-        Assert.True(RepairPrompt.Of(Outcome(ok: true, clean: false), wrote: false).OfferStart);
+        // DD205, and automatic since DD210. Checking needs the root unmounted, so this page is the
+        // one that stopped the engine, and it was never asked to leave it stopped. All three endings
+        // start it: clean, repaired, and errors somebody has not decided about yet.
+        Assert.True(RepairPrompt.Of(Outcome(ok: true, clean: true), wrote: false).StartsAgain);
+        Assert.True(RepairPrompt.Of(Outcome(ok: true, clean: false), wrote: true).StartsAgain);
+        Assert.True(RepairPrompt.Of(Outcome(ok: true, clean: false), wrote: false).StartsAgain);
     }
 
     [Fact]
-    public void A_run_that_did_not_finish_never_offers_to_start_the_engine()
+    public void A_run_that_did_not_finish_never_starts_the_engine()
     {
-        // The one exclusion the design names. An engine started on a filesystem the check could not
-        // finish reading is the state DD190 was filed about.
+        // The one exclusion the design names, and DD210 does not reopen it. An engine started on a
+        // filesystem the check could not finish reading is the state DD190 was filed about.
         foreach (var wrote in new[] { false, true })
         {
-            Assert.False(RepairPrompt.Of(Outcome(ok: false, clean: false), wrote).OfferStart);
+            Assert.False(RepairPrompt.Of(Outcome(ok: false, clean: false), wrote).StartsAgain);
         }
     }
 
     [Fact]
-    public void Nothing_is_offered_before_a_run_or_during_one()
+    public void Nothing_starts_before_a_run_or_during_one()
     {
-        // The engine is up before a check and going down during one, so an offer to start it is
-        // either premature or a race with the thing that is stopping it.
-        Assert.False(RepairPrompt.Idle.OfferStart);
-        Assert.False(RepairPrompt.Working.OfferStart);
+        // The engine is up before a check and going down during one, so a start here is either
+        // premature or a race with the thing that is stopping it.
+        Assert.False(RepairPrompt.Idle.StartsAgain);
+        Assert.False(RepairPrompt.Working.StartsAgain);
     }
 
     [Fact]
-    public void A_start_that_was_asked_for_names_how_long_it_takes()
+    public void The_start_is_named_beside_what_the_run_found_and_not_instead_of_it()
     {
-        // The panel beside this says the engine is not answering until the start lands, and a button
-        // that looked like it had done nothing is how somebody presses it twice.
-        var prompt = RepairPrompt.Starting(TimeSpan.FromSeconds(75));
+        // DD210. The findings are what somebody pressed the button for, and the panel that used to
+        // replace them with "Starting the engine" was answering a question by discarding the answer.
+        // The wait is named because a start is not instant and every other surface says the engine
+        // is not answering until it lands.
+        var ending = RepairPrompt.Of(Outcome(ok: true, clean: true), wrote: false);
+        var starting = ending.AndStarting(TimeSpan.FromSeconds(75));
 
-        Assert.Contains("75 seconds", prompt.Detail, StringComparison.Ordinal);
-        Assert.False(prompt.OfferStart);
+        Assert.Equal(ending.Headline, starting.Headline);
+        Assert.Contains("Nothing needed mending", starting.Detail, StringComparison.Ordinal);
+        Assert.Contains("75 seconds", starting.Detail, StringComparison.Ordinal);
+
+        // And it does not ask for a second start on top of the one it just described.
+        Assert.False(starting.StartsAgain);
+    }
+
+    [Fact]
+    public void A_check_asks_before_it_interrupts_anything()
+    {
+        // DD210, and it is not the confirmation DD199 refused. That asymmetry was about the
+        // filesystem: reading cannot make one worse. What is consented to here is the interruption,
+        // which a check costs whatever it finds, so the dialog names the containers and the ending
+        // rather than asking whether somebody is sure.
+        Assert.Contains("every container", RepairPrompt.CheckConfirmation, StringComparison.Ordinal);
+        Assert.Contains(
+            "started again", RepairPrompt.CheckConfirmation, StringComparison.Ordinal);
+
+        // The panel says the same before anything is pressed, because a dialog is not where somebody
+        // should first learn what the button costs.
+        Assert.Contains("come back", RepairPrompt.Idle.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_failed_run_says_whether_the_engine_is_down_rather_than_leaving_it_to_be_guessed()
+    {
+        // DD210. Two failures that read identically otherwise: one stopped at the registered guard
+        // with the engine still serving, one stopped at e2fsck with the distribution terminated.
+        // Telling somebody their engine was deliberately left down while it is in fact still up is
+        // how they go looking for a second fault.
+        var early = new RepairOutcome(
+            [new RepairStep("find the distribution", false, "stopped here")]);
+        var late = new RepairOutcome(
+        [
+            new RepairStep(FilesystemRepair.StopStep, true, "told the host to stop"),
+            new RepairStep("check", false, "stopped here"),
+        ]);
+
+        Assert.False(early.EngineWentDown);
+        Assert.True(late.EngineWentDown);
+
+        Assert.Contains(
+            "Nothing was stopped",
+            RepairPrompt.Of(early, wrote: false).Detail,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "left down on purpose",
+            RepairPrompt.Of(late, wrote: false).Detail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_terminate_inside_the_rescue_sequence_also_counts_as_the_engine_going_down()
+    {
+        // The two ways it goes down are reported by two different assemblies under two names, and a
+        // run that failed between them still left it stopped.
+        var terminated = new RepairOutcome(
+        [
+            new RepairStep(FilesystemRepair.TerminateStep, true, "freewilly terminated"),
+            new RepairStep("find the disk", false, "stopped here"),
+        ]);
+
+        Assert.True(terminated.EngineWentDown);
     }
 
     [Fact]
@@ -164,6 +229,42 @@ public sealed class RepairPromptTests
         Assert.True(
             told < stopped,
             "the host is told after the teardown has begun, which is the window the revival fits in");
+    }
+
+    [Fact]
+    public void The_page_says_the_stop_is_coming_before_it_starts_the_work()
+    {
+        // DD210, source-asserted for the reason DD207's neighbour is: the page is WPF and the run it
+        // brackets terminates a distribution, so there is no instance to drive. The order is the
+        // whole of it. The tray decides what an engine that stopped answering means at the moment it
+        // notices, so a claim arriving after the teardown is a balloon already on its way.
+        var page = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Ui/Pages/EnginePage.xaml.cs"));
+
+        var told = page.IndexOf("_interlude.Expected()", StringComparison.Ordinal);
+        var worked = page.IndexOf("Task.Run(", StringComparison.Ordinal);
+
+        Assert.True(told >= 0, "the page takes the engine down without telling the tray, so the "
+            + "stop it asked for is announced as a failure");
+        Assert.True(told < worked, "the tray is told after the work has begun, which is the window "
+            + "the announcement fits in");
+
+        // And the check asks first. The repair already did; this is the one that interrupted a
+        // machine full of running containers without a word.
+        Assert.Contains("RepairPrompt.CheckConfirmation", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_page_no_longer_carries_a_button_to_undo_its_own_interruption()
+    {
+        // DD210 removed it rather than hiding it. A Start engine button here was the page charging a
+        // click for its own bookkeeping: it stopped the engine to do the check and was never asked
+        // to leave it stopped. The tray menu still has one for somebody who disagrees.
+        var markup = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Ui/Pages/EnginePage.xaml"));
+
+        Assert.DoesNotContain("x:Name=\"StartEngine\"", markup, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"Check\"", markup, StringComparison.Ordinal);
     }
 
     /// <summary>Where the repository is, from a test binary under bin/.</summary>

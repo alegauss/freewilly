@@ -30,7 +30,6 @@ internal partial class MainWindow : Window
 {
     private readonly IEngineClient _api;
     private readonly Func<EngineState> _engineState;
-    private readonly Action _startEngine;
     private readonly WindowRecall _recall;
     private readonly IBuildHistory _builds;
     private readonly EngineSeams _engineSeams;
@@ -51,7 +50,11 @@ internal partial class MainWindow : Window
     /// <summary>Construct the window.</summary>
     /// <param name="api">The Engine API client.</param>
     /// <param name="engineState">What the engine is doing, asked at render time.</param>
-    /// <param name="startEngine">What the empty state's button does.</param>
+    /// <param name="startEngine">
+    /// What the Containers empty state's button does. The Engine destination has its own way in
+    /// since DD210, through <paramref name="engine"/>, because a start it makes is one half of an
+    /// interruption it also has to announce the beginning of.
+    /// </param>
     /// <param name="builds">
     /// Where build records are read from (DD126). The pinned Buildx by default; <c>--fixture</c>
     /// passes one needing no daemon, which is what makes that page capturable (L6).
@@ -69,7 +72,6 @@ internal partial class MainWindow : Window
         InitializeComponent();
         _api = api;
         _engineState = engineState;
-        _startEngine = startEngine;
         _builds = builds ?? new BuildHistory();
         _engineSeams = engine ?? EngineDestination.OnThisMachine();
 
@@ -178,7 +180,7 @@ internal partial class MainWindow : Window
                 // No refresh call beside it, unlike every other destination: the page reads its own
                 // file on a timer it starts when it becomes visible, because what it shows changes
                 // while somebody is looking at it and nothing here would know to ask again (DD165).
-                _engine ??= Add(new EnginePage(_engineSeams, _startEngine));
+                _engine ??= Add(new EnginePage(_engineSeams));
                 page = _engine;
                 break;
             case "About":

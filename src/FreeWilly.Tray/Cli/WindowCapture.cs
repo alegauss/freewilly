@@ -97,7 +97,8 @@ internal static class WindowCapture
             ? new EngineSeams(
                 new FreeWilly.Core.Fixtures.SampleJournal(),
                 new FreeWilly.Core.Fixtures.SampleMachineReport(),
-                new FreeWilly.Core.Fixtures.SampleFilesystemWork())
+                new FreeWilly.Core.Fixtures.SampleFilesystemWork(),
+                new NoInterlude())
             : null;
 
         // Before the window exists, because the water starts drifting the moment it is told the

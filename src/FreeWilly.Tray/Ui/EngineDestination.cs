@@ -18,9 +18,16 @@ namespace FreeWilly.Tray.Ui;
 internal static class EngineDestination
 {
     /// <summary>The seams, against the machine this is running on.</summary>
+    /// <param name="interlude">
+    /// How the page tells the tray it is taking the engine down, and how it puts it back (DD210).
+    /// The tray's own, where there is a tray: an engine that stopped answering is announced as a
+    /// failure unless somebody asked for it, and the check is somebody asking. A window opened with
+    /// no tray behind it has nothing to tell and nothing to start.
+    /// </param>
     /// <returns>The seams.</returns>
-    internal static EngineSeams OnThisMachine() => new(
+    internal static EngineSeams OnThisMachine(IEngineInterlude? interlude = null) => new(
         new EngineJournalFile(),
         LiveMachineReport.OnThisMachine(),
-        Cli.FilesystemWork.OnThisMachine());
+        Cli.FilesystemWork.OnThisMachine(),
+        interlude ?? new NoInterlude());
 }

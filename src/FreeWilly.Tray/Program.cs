@@ -399,7 +399,16 @@ internal sealed class TrayApplication : ApplicationContext
         // process has none. How that is made is Ui.Theme's business and not this one's (DD34).
         Ui.Theme.Apply();
 
-        _open = new Ui.MainWindow(_api, () => _shown, StartEngine);
+        // The Engine page is handed the tray's own stop and start rather than a start alone (DD210).
+        // A filesystem check takes the engine down through the path `--stop` uses, which this
+        // process sees only as an engine that went away — so it waited out the blip and announced a
+        // failure about a stop the user had just pressed a button for.
+        _open = new Ui.MainWindow(
+            _api,
+            () => _shown,
+            StartEngine,
+            engine: Ui.EngineDestination.OnThisMachine(
+                new TrayInterlude(ExpectTheEngineDown, StartEngine)));
         _open.Closed += (_, _) => _open = null;
         _open.Show();
         _ = _open.RefreshAsync();
@@ -534,6 +543,29 @@ internal sealed class TrayApplication : ApplicationContext
 
     /// <summary>Whether the balloon currently on screen is the one announcing a release (DD172).</summary>
     private bool _balloonOffersUpdate;
+
+    /// <summary>
+    /// The engine is going down because the Engine page asked, not because it failed (DD210).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="StopEngine"/> without the stop, because the caller does the stopping: a filesystem
+    /// check takes the engine down through the same route <c>--stop</c> takes and then holds the
+    /// distribution terminated for as long as <c>e2fsck</c> runs. All this owes is the half
+    /// <see cref="StopEngine"/> does beyond stopping, which is the half that decides what the
+    /// disappearance means.
+    ///
+    /// <para>The icon is left to the event stream. It goes grey when the engine actually stops
+    /// answering, which is true and is the same way every other stop reaches it; asserting it here
+    /// would be this process claiming an outcome a second before it has one.</para>
+    /// </remarks>
+    private void ExpectTheEngineDown()
+    {
+        _journal.Say($"{"tray",-8}  a filesystem check asked for the engine to stop");
+        _stopAsked = true;
+        _startRequested = false;
+        StopWatchingTheStart();
+        StopWaitingOutTheBlip();
+    }
 
     private void StopEngine()
     {
