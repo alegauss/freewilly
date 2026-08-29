@@ -8,7 +8,8 @@
 - 📋 **DD190** (deps: —) **a distribution whose root went read-only fails with getpwnam and a pointer to a log inside it** — The 29 August start died on getpwnam(root) failed 5, which is an EIO and not a missing user, and the tray answered it by naming a log the unreadable filesystem was holding. → §DD190
 - 📋 **DD191** (deps: DD190) **nothing asks whether the distribution filesystem is clean, so a dirty one is found by the start that fails** — WSL said the filesystem needed e2fsck on the mount before the fatal one, and FreeWilly read neither that nor the read-only remount that followed. → §DD191
 - 📋 **DD192** (deps: —) **stdout and stderr share one buffer, so a journal line decodes half of what wsl.exe said as noise** — DD162 drains both streams into one list and Decode picks a single encoding, so a UTF-16 stdout beside a UTF-8 stderr wrote WSL_E_USER_NOT_FOUND into the journal as mojibake. → §DD192
-- 📋 **DD195** (deps: —) **the distribution ships without e2fsprogs, so nothing on it can check or repair its own filesystem** — Provisioning installs the engine and nothing else, and apk cannot run on a root that already went read-only, so the tool has to be there before it is wanted. → §DD195
+- 📋 **DD196** (deps: —) **the distribution ships without e2fsprogs, so nothing on it can check or repair its own filesystem** — Provisioning installs the engine and nothing else, and apk cannot run on a root that already went read-only, so the tool has to be there before it is wanted. → §DD196
+- 📋 **DD199** (deps: DD196, DD190) **nothing repairs a corrupt distribution filesystem, and the check cannot run against a mounted root** — The 29 August repair took a terminate, a second distribution to run e2fsck from and a read of the disk it left attached, a sequence no user should have to reconstruct. → §DD199
 
 ## Block B — The daemon client (talk to the engine)
 
@@ -16,6 +17,7 @@
 
 - 📋 **DD193** (deps: —) **A build's start is printed in the daemon's UTC, so one begun at 09:49 on this machine shows on the page as 12:49** — Both the WHEN column and the detail pane render the timestamp in its own offset, and buildx reports UTC, so every time on the page is hours from the clock beside it. → §DD193
 - 📋 **DD194** (deps: DD193) **A fixture capture of the builds page draws its times in the operator's zone, so two machines make two pictures** — DD38 buys a capture that is the same picture everywhere, and a start rendered in the local zone is one field the README's screenshots draw differently per machine. → §DD194
+- 📋 **DD197** (deps: DD191) **no single surface says what state WSL, the distribution and the engine are in** — Diagnosing the 29 August failure took wsl.exe, dmesg, blkid, the registry and a disk query, and every reading it needed is one the product could have shown on the Engine page. → §DD197
 
 ## Block D — Container operations (what a user came to do)
 
@@ -24,6 +26,8 @@
 ## Block F — Installer and distribution (free, Apache 2.0)
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
+
+- 📋 **DD198** (deps: DD197) **the agent surface has no reading for the health of WSL, the distribution or the disk** — read doctor answers for one container and nothing answers for the machine under it, so an agent asked why the engine will not start has to shell out to wsl.exe and parse it. → §DD198
 
 ## Block H — The public surface (the site a reader and an agent both read)
 

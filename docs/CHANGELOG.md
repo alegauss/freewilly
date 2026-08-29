@@ -50,6 +50,7 @@
 - ✅ **DD183** **The balloon fires the instant the engine stops answering, so a blip the host heals in ten seconds interrupts the user** — The balloon is armed at the crossing and fires only if the engine is still gone fifteen seconds later, so a blip the host heals costs the user nothing and a real outage still speaks.
 - ✅ **DD187** **the engine host is never told the session is ending, so nothing tears it down at a shutdown** — The host now takes SessionEnding, cancels the token Ctrl+C cancels and holds Windows until the terminate and its journal line are both written.
 - ✅ **DD188** **the tray answers a session ending by spawning a stop process Windows kills before it reaches the distribution** — The tray now answers a session ending in-process: it tells the live host, waits out the same budget, and takes the distribution down where the host cannot.
+- 🗑 **DD195** **the distribution ships without e2fsprogs, so nothing on it can check or repair its own filesystem** — superseded by DD196: Filed with a section heading naming DD193, an unrelated task, and roadkeep has no verb that amends a heading in place.
 
 ## Block B — The daemon client (talk to the engine)
 

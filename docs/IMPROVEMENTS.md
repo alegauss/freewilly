@@ -83,7 +83,7 @@ captured from a real failed launch, so the change is in the draining and in what
 Sentence receives. Worth reading at the same time: ProcessOutput reads the same pair of
 streams and may carry the same defect.
 
-### §DD195 DD193: the tool that has to arrive before the failure
+### §DD196 The tool that has to arrive before the failure
 
 Provisioning installs the engine into the distribution and stops there. `command -v
 e2fsck` inside freewilly answers nothing, and so does `dumpe2fs`, so on 29 August 2026
@@ -103,6 +103,29 @@ entry is a shape this project already has.
 Detection does not wait on this. /sys/fs/ext4/<device>/errors_count and the mount
 options in /proc/mounts both answer with no package installed at all, which is what
 DD191 reads. This task is about the remedy DD190 names having something to run.
+
+### §DD199 The repair behind one button, and what it is allowed to write
+
+Repairing the filesystem on 29 August 2026 took four steps nobody should have to
+reconstruct: terminate the distribution so its root is unmounted, notice that WSL leaves
+the disk attached to the shared utility VM afterwards, run `e2fsck -fy` against it from
+a second distribution that happened to be holding that VM open, and read the result. It
+fixed bitmap damage in three block groups and lost no file, which is the ordinary
+outcome after an unclean shutdown and the reason a button for it is defensible.
+
+Two mechanisms can carry it and the task has to choose between them. A rescue
+distribution imported from the Alpine rootfs the manifest already pins needs no
+elevation and no new download, but it rests on WSL leaving the disk attached after a
+terminate, which is observed behaviour rather than a documented contract. `wsl --mount
+--vhd --bare` is documented and deterministic and costs a UAC prompt. Measure the first
+before committing to it. The e2fsck binary comes from DD196 either way, since no
+distribution here carries one today.
+
+Three things the design settles regardless of the mechanism. A read-only check runs
+freely and a repair asks first, because a repair writes to the filesystem holding every
+image and volume the user has. The user sees what the check found before being asked to
+approve anything. And the engine is down for the duration, so the control belongs where
+that state is already on screen.
 
 ## Block B — The daemon client (talk to the engine)
 
@@ -154,6 +177,32 @@ Nothing compares those captures byte for byte today, and the README carries them
 illustrations rather than as evidence, so the choice is open. Whoever takes this line
 decides it and says so here, because the reason will not be recoverable from the diff.
 
+### §DD197 Six readings a user should not have to take by hand
+
+Diagnosing the 29 August 2026 failure meant reading six sources by hand: `wsl --list
+--verbose` for the state of the distribution, `dmesg` out of a second distribution for
+the ext4 errors, `blkid` for the device, the Lxss registry key for the path of the vhdx,
+a PowerShell query for free space on the Windows volume, and the journal for what the
+host had seen. Every one of those is a reading FreeWilly is better placed to take than a
+user is.
+
+The Engine page DD165 added is where they belong, because it already carries the journal
+and is already the page somebody opens when the engine will not start. What it should
+say:
+
+- the WSL version and kernel, and whether the distribution is registered and running
+- the root device, its mount options, and whether it is still writable
+- the ext4 error counters, and the function that recorded the first one
+- the size of the vhdx on the Windows volume beside the space used inside the distribution,
+  because those two numbers together are what a question about a full disk actually needs
+- the engine: whether the pipe answers, the API version, and the relay figures DD180 exposes
+
+And a copy button, because the point of the page is handing what it says to somebody
+else.
+
+Out of scope: the remedy. This page reports, and DD190 owns what to do about what it
+reports.
+
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks
@@ -161,5 +210,25 @@ decides it and says so here, because the reason will not be recoverable from the
 ## Block F — Installer and distribution (free, Apache 2.0)
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
+
+### §DD198 The diagnosis an agent can ask for in one call
+
+`read doctor` answers for one container that is not responding. Nothing answers for the
+machine underneath it, so an agent asked why the engine will not start has the same six
+tools a human has, and has to shell out to `wsl.exe` and parse console output that
+arrives in UTF-16 in the language Windows is set to. That is what happened on 29 August
+2026.
+
+The reading is the one DD197 renders, and the two surfaces should share one
+implementation rather than each asking the machine in its own spelling. `read health`
+fits the namespace the agent surface already declares: reads mutate nothing, which is
+what lets a single allowlist line cover all of them, and a diagnosis an agent can ask
+for in one call is the difference between a session that answers the question and one
+that spends its budget rediscovering how to ask.
+
+Budget is what shapes the payload. The surface charges tokens, so what comes back is the
+verdict and the readings that support it, never a dmesg dump. A journal tail belongs
+behind a flag rather than in the default answer; the error counters, the mount options
+and the two disk numbers are small enough to carry every time.
 
 ## Block H — The public surface (the site a reader and an agent both read)
