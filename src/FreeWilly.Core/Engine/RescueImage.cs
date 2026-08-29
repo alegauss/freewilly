@@ -104,6 +104,10 @@ public sealed class RescueImage
 
         Directory.CreateDirectory(root);
 
+        // Before anything is imported, because a name that is still registered refuses the import
+        // and takes the run with it (DD228).
+        var cleared = TakeBackALeftover(name);
+
         if (IsPrepared)
         {
             var kept = ImportFrom(name, root, PreparedPath);
@@ -113,7 +117,8 @@ public sealed class RescueImage
                     new RepairStep(
                         $"bring up the {what}",
                         true,
-                        $"{name} imported from the image kept here, which carries e2fsck already"),
+                        $"{name} imported from the image kept here, which carries e2fsck already"
+                        + cleared),
                     FromPrepared: true);
             }
 
@@ -126,10 +131,43 @@ public sealed class RescueImage
         var fresh = ImportFrom(name, root, rootfsPath);
         return new RescueBringUp(
             fresh.Succeeded
-                ? new RepairStep($"bring up the {what}", true, $"{name} imported into {root}")
+                ? new RepairStep(
+                    $"bring up the {what}", true, $"{name} imported into {root}{cleared}")
                 : new RepairStep(
                     $"bring up the {what}", false, $"importing {name} failed: {Said(fresh)}"),
             FromPrepared: false);
+    }
+
+    /// <summary>
+    /// Take back a temporary distribution an interrupted run left registered (DD228).
+    /// </summary>
+    /// <param name="name">The name this class owns.</param>
+    /// <returns>A clause naming what was cleared, or an empty string where there was nothing.</returns>
+    /// <remarks>
+    /// <para><b>Reproduced by killing a drill part-way through.</b> The teardown is a
+    /// <c>finally</c>, which covers every ending the process reaches and none of the ones it does
+    /// not: a machine that lost power, a closed terminal, a pipeline that stopped reading. What was
+    /// left was a registered distribution and 76 MB of virtual disk, and the next run stopped on its
+    /// first step with <c>ERROR_ALREADY_EXISTS</c>.</para>
+    ///
+    /// <para><b>Recovering is not forcing.</b> These names belong to this tool, they hold nothing a
+    /// user created, and the disk under them is scratch. Removing one before importing returns the
+    /// machine to the state the previous run promised to leave, which differs in kind from
+    /// overwriting something somebody else made. Nothing here would ever name the engine's own
+    /// distribution: the callers pass their own constants and a test holds them to it.</para>
+    ///
+    /// <para>Terminated before it is unregistered, for the reason DD209 cost a machine: WSL accepts
+    /// an unregister of a running distribution, moves it to state 4 and blocks the service on
+    /// something that never stops. The unregister's own result is the detection — it succeeds where
+    /// there was something to take back and fails where the name was free, and neither is an error.
+    /// </para>
+    /// </remarks>
+    private string TakeBackALeftover(string name)
+    {
+        _wsl.Run(WslBudget.Work, "--terminate", name);
+        return _wsl.Run(WslBudget.Work, "--unregister", name).Succeeded
+            ? $", after taking back the {name} an interrupted run left registered"
+            : "";
     }
 
     /// <summary>Make sure the tools are in there, fetching them only where they are not.</summary>

@@ -34,6 +34,9 @@ public sealed class RepairDrillTests
     /// <param name="afterExit">What the second <c>e2fsck -fn</c> exits with.</param>
     private static FakeWsl Machine(int checkExit = 4, int repairExit = 1, int afterExit = 0) =>
         new FakeWsl()
+            // DD228 opens every import by taking the name back, and here it was free.
+            .Answer(0)                      // --terminate any leftover of the drill's name
+            .Answer(1, "no distribution with that name")
             .Answer(0)                      // --import the drill
             .Answer(0, "/sbin/e2fsck\n/sbin/debugfs")
             .Answer(0)                      // dd + mke2fs + a clean first read
@@ -164,6 +167,8 @@ public sealed class RepairDrillTests
         // distribution is accepted, moves it to state 4 and blocks the WSL service on something
         // that never stops. Every distribution on the machine queues behind that.
         var wsl = new FakeWsl()
+            .Answer(0)                                  // --terminate any leftover
+            .Answer(1, "no distribution with that name") // --unregister it: none
             .Answer(0)                                  // --import
             .Answer(1, "apk: could not reach a mirror"); // the tools never arrived
 

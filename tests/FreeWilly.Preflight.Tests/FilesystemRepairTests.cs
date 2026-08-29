@@ -71,10 +71,20 @@ public sealed class FilesystemRepairTests
         + "/dev/sda: TYPE=\"ext4\"\n"
         + "/dev/sdb: TYPE=\"ext4\"\n";
 
+    /// <summary>What the name being free answers, for the two calls DD228 opens an import with.</summary>
+    /// <remarks>
+    /// A terminate and an unregister of the rescue's own name, before anything is imported: a name
+    /// left registered by an interrupted run refuses the import and takes the run with it. The
+    /// unregister failing is the ordinary answer, and it is what says there was no wreck.
+    /// </remarks>
+    private const string NameWasFree = "there is no distribution with that name";
+
     private static FakeWsl Machine(int fsckExit, string fsckSaid = "")
     {
         var wsl = new FakeWsl();
         wsl.Answer(0, $"/dev/sdd: UUID=\"{Uuid}\" TYPE=\"ext4\"\n") // the engine's root filesystem
+            .Answer(0)                 // --terminate any leftover of the rescue's own name
+            .Answer(1, NameWasFree)    // --unregister it: there was none
             .Answer(0)                 // --import the rescue
             .Answer(0, "/sbin/e2fsck") // apk add && command -v
             .Answer(0)                 // --terminate the engine's distribution
@@ -96,8 +106,12 @@ public sealed class FilesystemRepairTests
 
         repair.Check(@"C:\downloads\rootfs.tar.gz");
 
+        // The engine's own terminate, named rather than taken as the first one: since DD228 every
+        // import opens by terminating the rescue's name in case an interrupted run left it, and that
+        // one is not the interruption this hold exists to survive.
         var terminate = wsl.Invocations.FindIndex(
-            argv => argv.Length > 0 && argv[0] == "--terminate");
+            argv => argv.Length > 1 && argv[0] == "--terminate"
+                && argv[1] == EnginePaths.CurrentDistribution);
 
         Assert.Equal(FilesystemRepair.RescueName, hold.Distribution);
         Assert.True(terminate >= 0, "the engine's distribution was never terminated");
@@ -261,6 +275,8 @@ public sealed class FilesystemRepairTests
         // after telling them it would not.
         var wsl = new FakeWsl();
         wsl.Answer(0, $"/dev/sdd: UUID=\"{Uuid}\" TYPE=\"ext4\"\n") // the engine's root
+            .Answer(0)                 // --terminate any leftover of the rescue's name
+            .Answer(1, NameWasFree)    // --unregister it: there was none
             .Answer(0)                 // --import
             .Answer(0, "/sbin/e2fsck") // apk add
             .Answer(1, "there is no distribution named freewilly"); // --terminate fails
@@ -315,6 +331,8 @@ public sealed class FilesystemRepairTests
         // the safe teardown rather than the short one.
         var wsl = new FakeWsl();
         wsl.Answer(0, $"/dev/sdd: UUID=\"{Uuid}\" TYPE=\"ext4\"\n") // the engine's root
+            .Answer(0)                 // --terminate any leftover of the rescue's name
+            .Answer(1, NameWasFree)    // --unregister it: there was none
             .Answer(0)                 // --import
             .Answer(0, "/sbin/e2fsck") // apk add
             .Answer(1, "there is no distribution named freewilly"); // --terminate the engine fails
@@ -354,6 +372,8 @@ public sealed class FilesystemRepairTests
         // has to be reported as itself rather than as e2fsck failing on some other device.
         var wsl = new FakeWsl();
         wsl.Answer(0, $"/dev/sdd: UUID=\"{Uuid}\" TYPE=\"ext4\"\n")
+            .Answer(0)                 // --terminate any leftover of the rescue's name
+            .Answer(1, NameWasFree)    // --unregister it: there was none
             .Answer(0)
             .Answer(0, "/sbin/e2fsck")
             .Answer(0)

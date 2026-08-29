@@ -76,6 +76,7 @@
 - ✅ **DD224** **the Compact button cannot succeed: WSL refuses --set-sparse outright and names the flag DD211 will not pass** — A hand-back Windows refuses is recognised by the flag it points at, not its translated prose, and the page says Windows has turned this off rather than inviting a second interruption.
 - ✅ **DD225** **the compaction measures the disk's length, which a sparse file keeps, so a hand-back that worked reports no bytes** — The compaction and the panel read what the volume is charging for through GetCompressedFileSize, so a hand-back that worked reports the space a sparse file's length cannot show.
 - ✅ **DD226** **the Compact plan asks somebody to stop Docker for a hand-back this machine has already refused once** — A hand-back Windows refuses is written down beside the install, so the plan says so and asks whether to try anyway; a hand-back that works forgets it, because the flag is disabled and not removed.
+- ✅ **DD228** **a temporary distribution left by an interrupted run makes the next one refuse instead of taking it back** — Every import first terminates and unregisters the name it is about to take, so a run that meets a leftover of its own clears it and says so instead of stopping on ERROR_ALREADY_EXISTS.
 
 ## Block B — The daemon client (talk to the engine)
 

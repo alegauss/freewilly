@@ -85,6 +85,66 @@ public sealed class RescueImageTests
     }
 
     [Fact]
+    public void A_leftover_from_an_interrupted_run_is_taken_back_before_the_import()
+    {
+        // DD228, reproduced by killing a drill part-way through: the teardown is a finally, which
+        // covers every ending the process reaches and none of the ones it does not. What was left
+        // was a registered distribution and 76 MB of virtual disk, and the next run stopped on its
+        // first step with ERROR_ALREADY_EXISTS.
+        var wsl = new FakeWsl();
+        var image = new RescueImage(wsl, Paths());
+
+        var brought = image.Import(Name, Path.Combine(Paths().Root, "r"), Rootfs);
+
+        var terminated = wsl.Invocations.FindIndex(
+            argv => argv.Length > 1 && argv[0] == "--terminate" && argv[1] == Name);
+        var unregistered = wsl.Invocations.FindIndex(
+            argv => argv.Length > 1 && argv[0] == "--unregister" && argv[1] == Name);
+        var imported = wsl.Invocations.FindIndex(argv => argv.Length > 0 && argv[0] == "--import");
+
+        Assert.True(terminated >= 0 && unregistered >= 0, "nothing tried to take the name back");
+        Assert.True(terminated < unregistered, "a running distribution was unregistered (DD209)");
+        Assert.True(unregistered < imported, "the name was still taken when the import ran");
+
+        // And it says so, because one silently reused is a run reporting a clean import over a disk
+        // it did not make. The fake answers success, which is what a leftover having been there is.
+        Assert.Contains("an interrupted run left registered", brought.Step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_name_that_was_free_is_not_reported_as_a_wreck()
+    {
+        // The ordinary case, which is every run but the one after a crash. The unregister failing is
+        // the detection rather than an error: there was nothing of this tool's to take back.
+        var wsl = new FakeWsl()
+            .Answer(0)                                            // --terminate, no such thing
+            .Answer(1, "there is no distribution with that name")  // --unregister
+            .Answer(0);                                           // --import
+
+        var brought = new RescueImage(wsl, Paths()).Import(Name, Path.Combine(Paths().Root, "r"), Rootfs);
+
+        Assert.True(brought.Step.Ok, brought.Step.Detail);
+        Assert.DoesNotContain("interrupted run", brought.Step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Taking_a_name_back_never_names_the_engine_or_anything_a_user_made()
+    {
+        // The one line in this class that unregisters something, so the one that has to be pointed
+        // only at names this tool owns. Its callers pass their own constants, and every one of them
+        // is a distribution imported and removed by the same run.
+        foreach (var temporary in new[]
+        {
+            FilesystemRepair.RescueName, RepairDrill.DrillName, CompactionDrill.DrillName,
+        })
+        {
+            Assert.NotEqual(EnginePaths.CurrentDistribution, temporary);
+            Assert.StartsWith(
+                EnginePaths.CurrentDistribution + "-", temporary, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void A_prepared_image_is_imported_instead_of_the_rootfs()
     {
         var paths = Prepared(out var kept);
@@ -143,6 +203,8 @@ public sealed class RescueImageTests
         // exists to make possible: the pinned rootfs is still on disk and still works.
         var paths = Prepared(out var kept);
         var wsl = new FakeWsl()
+            .Answer(0)                                 // --terminate any leftover (DD228)
+            .Answer(1, "no distribution with that name")
             .Answer(1, "the tarball is not a tarball") // the prepared image
             .Answer(0);                                // the pinned rootfs
 
