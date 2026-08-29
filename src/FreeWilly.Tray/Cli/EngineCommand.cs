@@ -43,8 +43,8 @@ internal static class EngineCommand
     {
         var mode = args.Length == 0 ? "--help" : args[0];
 
-        // --autostart is the one mode that takes a value; everything else is a verb on its own.
-        var allowed = mode == "--autostart" ? 2 : 1;
+        // --autostart takes a value and --fsck takes a flag; everything else is a verb on its own.
+        var allowed = mode is "--autostart" or "--fsck" ? 2 : 1;
         if (args.Length > allowed)
         {
             return Complain($"unexpected argument {args[allowed]}");
@@ -60,6 +60,7 @@ internal static class EngineCommand
             "--watch" => Watch(),
             "--run" => RunEngine(),
             "--stop" => Stop(),
+            "--fsck" => Fsck(args.Length > 1 ? args[1] : ""),
             "--autostart" => AutostartMode(args.Length > 1 ? args[1] : "status"),
             "-h" or "--help" => Help(Ok),
             _ => Complain($"unknown argument {mode}"),
@@ -666,6 +667,97 @@ internal static class EngineCommand
         Report(status);
         return Ok;
     }
+
+    /// <summary>Check the distribution's filesystem, and mend it where asked to (DD199).</summary>
+    /// <param name="flag"><c>--repair</c> to write, anything else to read.</param>
+    /// <returns>The exit code.</returns>
+    /// <remarks>
+    /// <para>The asymmetry is the design's (DD199). Reading cannot make a filesystem worse, so the
+    /// check runs on the bare verb; the repair writes to the disk holding every image and volume the
+    /// user has, so it is a flag they have to type. Both take the engine down for the duration,
+    /// because a root cannot be checked while it is mounted.</para>
+    ///
+    /// <para>The check's own output is printed rather than summarised. What <c>e2fsck</c> found is
+    /// the thing somebody is deciding on, and a verdict without it is a button that says "trust
+    /// me".</para>
+    /// </remarks>
+    private static int Fsck(string flag)
+    {
+        var write = string.Equals(flag, "--repair", StringComparison.Ordinal);
+        if (flag.Length > 0 && !write)
+        {
+            return Complain($"unexpected argument {flag}: --fsck takes --repair or nothing");
+        }
+
+        var paths = new EnginePaths();
+        if (!paths.DistributionRegistered)
+        {
+            Console.Error.WriteLine(
+                $"{CommandLine.ExecutableName}: {paths.DistributionName} is not registered, so "
+                + "there is no filesystem to check.");
+            return Failed;
+        }
+
+        // The same rootfs the install used, through the same verified store: a cached copy is
+        // digest-checked and reused, and a missing one is fetched. The rescue is imported from a
+        // tarball this project already pins rather than from anything found on the machine.
+        using var fetcher = new HttpArtefactFetcher();
+        var acquired = new ArtefactStore(fetcher, paths.Downloads)
+            .AcquireAsync(EngineManifest.Current.Rootfs).GetAwaiter().GetResult();
+        if (acquired.Path is not { } rootfs)
+        {
+            Console.Error.WriteLine(
+                $"{CommandLine.ExecutableName}: the rescue distribution is imported from the Alpine "
+                + $"rootfs this install pins, and it is not available: {acquired.Failure}");
+            return Failed;
+        }
+
+        // Down first and by the ordinary route, so the containers get the stop signal DD189 gives
+        // them. What follows terminates the distribution anyway, and a repair that killed a database
+        // on its way to mending the disk under it would be a poor trade.
+        Console.WriteLine("  Stopping the engine, which stays down until this finishes.");
+        Report(NewLifecycle().StopAsync(EngineLifecycle.PatientGrace).GetAwaiter().GetResult());
+        Console.WriteLine();
+
+        var repair = new FilesystemRepair(new Wsl(), paths, VmHold.On);
+        var outcome = write
+            ? repair.Fix(rootfs, step => Console.WriteLine(Line(step)))
+            : repair.Check(rootfs, step => Console.WriteLine(Line(step)));
+
+        if (outcome.Findings is { Length: > 0 } said)
+        {
+            Console.WriteLine();
+            Console.WriteLine(said);
+        }
+
+        Console.WriteLine();
+        if (!outcome.Succeeded)
+        {
+            Console.WriteLine($"  {outcome.Failure?.Detail}");
+            foreach (var line in WslFailure
+                .OfDirtyFilesystem("by hand:", paths.DistributionName, paths.Distribution).Remedy)
+            {
+                Console.WriteLine($"  {line}");
+            }
+
+            return Failed;
+        }
+
+        Console.WriteLine(outcome switch
+        {
+            { Clean: true } => "  Nothing to mend. Start the engine when you are ready.",
+            { } when write => "  Repaired. Start the engine when you are ready.",
+            _ => $"  Run `{CommandLine.ExecutableName} --fsck --repair` to mend this.",
+        });
+
+        return Ok;
+    }
+
+    /// <summary>One repair step, in the column shape every other verb prints.</summary>
+    /// <param name="step">The step.</param>
+    /// <returns>The line.</returns>
+    private static string Line(RepairStep step) =>
+        $"  [{(step.Ok ? "ok  " : "FAIL")}]  {step.What,-22}  {step.Detail}";
 
     private static int AutostartMode(string mode)
     {

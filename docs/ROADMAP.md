@@ -4,7 +4,7 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD199** (deps: DD196 ✅, DD190 ✅) **nothing repairs a corrupt distribution filesystem, and the check cannot run against a mounted root** — The 29 August repair took a terminate, a second distribution to run e2fsck from and a read of the disk it left attached, a sequence nobody should have to rebuild. → §DD199
+- ⏳ **DD199** (deps: DD196 ✅, DD190 ✅) **nothing repairs a corrupt distribution filesystem, and the check cannot run against a mounted root** — the check and the repair are only reachable from a terminal, and the engine state they need is on the window's Engine page. → §DD199
 
 ## Block B — The daemon client (talk to the engine)
 

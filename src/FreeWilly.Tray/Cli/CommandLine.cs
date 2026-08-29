@@ -286,6 +286,7 @@ public static class CommandLine
           --run            start the engine and serve the pipe until Ctrl+C
           --stop           stop the engine and terminate the distribution
           --status         what the engine is doing, by asking it
+          --fsck           check the distribution's filesystem; --repair to mend what it finds
           --api            version and containers, read through the Engine API
           --watch          print /events as they happen, until Ctrl+C
           --autostart      on | off | status  - off unless you turn it on
