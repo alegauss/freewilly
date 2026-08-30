@@ -1,4 +1,4 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 
 /* ============================================================================
    Design tokens (S6). The palette is light-first on bare :root; the dark values
@@ -13,12 +13,12 @@
    ============================================================================ */
 
 :root {
-  /* brand — constant across themes */
+  /* brand â€” constant across themes */
   --azure: #2e9bd6;
   --azure-bright: #67c3f2;
   --azure-deep: #1c6ba4;
 
-  /* surfaces — light */
+  /* surfaces â€” light */
   --bg: #f5f9fc;
   --bg-2: #e9f1f7;
   --panel: #ffffff;
@@ -37,7 +37,7 @@
   --grad-2: var(--azure-deep);
   --grad-3: #124e77;
 
-  /* engine state, as *text* — the SVG icons keep the literal tray hex */
+  /* engine state, as *text* â€” the SVG icons keep the literal tray hex */
   --running: #1a7f37;
   --starting: #8a6100;
   --stopped: #556069;
@@ -49,7 +49,7 @@
   --glow-2: rgba(46, 155, 214, 0.05);
 
   /* the ocean, back layer to front. These are the three blues the mark is drawn in, read off
-     build/logo-source.png rather than picked to match it — the page's water is the logo's. */
+     build/logo-source.png rather than picked to match it â€” the page's water is the logo's. */
   --wave-1: #91cddd;
   --wave-2: #62b9cd;
   --wave-3: #3da7b7;
@@ -89,7 +89,7 @@
     --glow-2: rgba(46, 155, 214, 0.1);
 
     /* the same water at night: the mark's hues, taken down until they sit on #08131b
-       without glowing — a wave is scenery, and scenery that outshines the copy is a bug */
+       without glowing â€” a wave is scenery, and scenery that outshines the copy is a bug */
     --wave-1: #2f6d7c;
     --wave-2: #275c6b;
     --wave-3: #1e4b59;
@@ -278,7 +278,7 @@ nav .wrap {
   /* DD155. A two-word label is one item, not two: without this "The pipe" and "Claude
      Code" break across lines as soon as the row is tight, which sets the nav's height from
      the narrowest label rather than from its content. .btn has carried nowrap since the
-     start — the plain links were the half nobody had squeezed yet. */
+     start â€” the plain links were the half nobody had squeezed yet. */
   white-space: nowrap;
 }
 .nav-links a:not(.btn):hover {
@@ -320,7 +320,7 @@ nav .wrap {
    reach an anchor. Above it the gap tightens and "part of" drops first, so there is a band
    that keeps everything rather than dropping straight to the buttons.
 
-   These two numbers were chosen with margin rather than measured — this workspace has no
+   These two numbers were chosen with margin rather than measured â€” this workspace has no
    headless browser by design, so the honest thing is to say so. What is not a guess is the
    direction: nowrap above means a row that no longer fits overflows instead of growing a
    second line, which is why the labels give way early rather than late. */
@@ -332,6 +332,48 @@ nav .wrap {
 @media (max-width: 1180px) {
   .nav-links a:not(.btn) {
     display: none;
+  }
+}
+
+/* DD233. Nothing below 1180px shed anything more, and the row still did not fit a phone: at
+   390px the document measured 625px wide, with "View on GitHub" ending at x=571. That was the
+   whole of the horizontal scroll, on every page, because everything left in the row is
+   `flex: 0 0 auto` and nowrap and there was nothing else to give.
+
+   The note above says its two numbers were chosen with margin rather than measured, because
+   this workspace had no headless browser. It has one now: Edge speaks the DevTools protocol
+   with nothing to install, so the numbers below are what it reported at each width rather than
+   what looked safe.
+
+   Two things go, and neither is a way out of the page. The alegauss link is the cross-promotion
+   the note above already calls the most decorative part of the row. The repo button goes because
+   the page carries that same link nine more times, the download section included, while the
+   download is what a reader who arrived on a phone came for. What is left is the brand, the
+   download and the toggle. */
+@media (max-width: 600px) {
+  .nav-left .parent,
+  .nav-links .btn-ghost {
+    display: none;
+  }
+  .nav-links {
+    gap: 10px;
+  }
+  .nav-links .btn {
+    padding: 10px 15px;
+  }
+}
+
+/* The narrowest phone still sold is 320px, and the row above lands at 350 there: the brand is
+   two thirds of what is left and is the only thing with any give in it. Height rather than a
+   font size for the mark, because it is sized by height everywhere else and squaring it is what
+   the comment beside .brand img refuses. */
+@media (max-width: 380px) {
+  .brand {
+    font-size: 0.95rem;
+    gap: 9px;
+  }
+  .brand img {
+    height: 27px;
   }
 }
 
@@ -483,7 +525,7 @@ nav .wrap {
 }
 
 /* ============================================================================
-   The ocean — the mark is an orca cresting a wave, so the hero closes into water
+   The ocean â€” the mark is an orca cresting a wave, so the hero closes into water
    and the footer opens out of it. The geometry is in components/ui/Waves.tsx; the
    colour, the depth order and the speeds are here, because that is what is tuned.
 
@@ -503,7 +545,7 @@ nav .wrap {
   -webkit-mask-image: linear-gradient(to bottom, #000 0 72%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 0 72%, transparent 100%);
 }
-/* the outer element rises and falls, the inner one travels — see the note in Waves.tsx */
+/* the outer element rises and falls, the inner one travels â€” see the note in Waves.tsx */
 .wave-swell {
   position: absolute;
   inset: 0;
@@ -948,7 +990,7 @@ figcaption code {
 /* ---------- non-goals ---------- */
 .nots {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 16px;
 }
 .not {
@@ -1206,13 +1248,13 @@ footer .wrap {
 
 /* ---------- house ad (DD186) ----------
    The band contributes nothing of its own: all of the spacing is the slot's margin, so a
-   slot the loader collapses — an unreachable catalogue, a browser with no shadow DOM —
+   slot the loader collapses â€” an unreachable catalogue, a browser with no shadow DOM â€”
    takes the gap with it instead of leaving a blank strip above the footer.
 
    min-height is the loader's own reserved height for the in-content format. Declared here
    too because the loader only reserves once it runs, which is after hydration: without
    this the banner would arrive into a box of zero height and push the footer down the
-   page. Nothing else is styled — the banner is drawn inside a shadow root and this
+   page. Nothing else is styled â€” the banner is drawn inside a shadow root and this
    stylesheet cannot reach it, which is the point of the slot being one. */
 .ad {
   max-width: 780px;
@@ -1358,7 +1400,7 @@ footer .wrap {
   }
 }
 
-/* ---------- hero session transcript (DD44) — a dark island, like the terminals ---------- */
+/* ---------- hero session transcript (DD44) â€” a dark island, like the terminals ---------- */
 .session-eyebrow {
   margin-top: 44px;
   color: var(--accent);
@@ -1742,7 +1784,7 @@ footer .wrap {
 }
 .refuses {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: 14px;
 }
 .refuse {
@@ -1770,7 +1812,7 @@ footer .wrap {
 }
 
 /* ---------- /claude-code: the friction, side by side ---------- */
-/* Two columns that read as a before and an after, collapsing to one on a narrow screen —
+/* Two columns that read as a before and an after, collapsing to one on a narrow screen â€”
    where the labels, not the layout, carry which side is which. */
 .fr-baseline {
   display: flex;
@@ -2037,9 +2079,14 @@ footer .wrap {
 }
 
 /* ---------- /features depth pages (DD48) ---------- */
+/* min() rather than the bare 300px, because a minmax track that cannot shrink is a track that
+   overflows (DD233). Measured: at any viewport under 348px the cards held the document at 324,
+   which is 300 plus the gutter, and 320px is a phone that is still sold. The min() reads as
+   "300 unless the column has less than that", which is what auto-fit was already trying to
+   say. */
 .feature-index {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
   gap: 16px;
 }
 .feature-card {
