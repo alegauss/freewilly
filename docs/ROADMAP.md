@@ -4,6 +4,8 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD245** (deps: —) **the two compaction sequences carry the same five steps twice, and the copy already inherited a wrong verb once** — The read, the stop, the take-down and the second read are written once with the acting step as the difference, which is the shape DD204 gave the check and the repair. → §DD245
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
@@ -17,6 +19,8 @@
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
 ## Block H — The public surface (the site a reader and an agent both read)
+
+- 📋 **DD246** (deps: —) **the site says the compaction ends where Windows stops allowing it, which stopped being true, and names no verb for it** — The prose says what the product does: a route that needs administrator rights where the other is gone, and a terminal verb beside the check's. → §DD246
 
 ## Non-goals
 
