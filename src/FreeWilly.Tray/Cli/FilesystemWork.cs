@@ -45,6 +45,28 @@ internal sealed class FilesystemWork : IFilesystemWork
     public bool HandBackWasRefused => DiskCompaction.WasRefusedHere(new EnginePaths());
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A <c>wsl.exe</c> child, unlike the two above, and affordable because of where it is read: the
+    /// elevated plan is drawn once, after a compaction has already been refused, and the answer is
+    /// about to be put in front of somebody deciding whether to stop their other work.
+    /// </remarks>
+    public IReadOnlyList<string> OtherDistributionsRunning
+    {
+        get
+        {
+            var paths = new EnginePaths();
+            var listed = new Wsl().Run(WslBudget.Probe, "--list", "--running", "--quiet");
+
+            // A list that could not be taken is an empty one, not a failure. The plan already says
+            // all of WSL goes down; this only names who else that is, and a machine that would not
+            // answer must not be a reason the button stops working.
+            return listed.Succeeded
+                ? ElevatedCompaction.OthersRunning(listed.Output, paths.DistributionName)
+                : [];
+        }
+    }
+
+    /// <inheritdoc/>
     public RepairOutcome Check(Action<RepairStep> report) => Run(report, write: false);
 
     /// <inheritdoc/>

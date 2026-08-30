@@ -638,6 +638,26 @@ public sealed class RepairPromptTests
     }
 
     [Fact]
+    public void The_elevated_plan_says_all_of_WSL_stops_and_names_who_else_that_is()
+    {
+        // DD238. diskpart needs the disk exclusively and only `wsl --shutdown` gives it that, so
+        // this button reaches past the engine and stops work that has nothing to do with Docker.
+        // A cost of that size discovered afterwards is one nobody agreed to.
+        var alone = RepairPrompt.ElevatedConfirmation();
+        Assert.Contains("all of WSL is shut down first, not just Docker", alone,
+            StringComparison.Ordinal);
+
+        // Named, not counted: "two other distributions" is not something a reader can act on, and
+        // deciding whether to lose what is open in Ubuntu means being told it is Ubuntu.
+        var busy = RepairPrompt.ElevatedConfirmation(["Ubuntu", "Debian"]);
+        Assert.Contains("Ubuntu, Debian", busy, StringComparison.Ordinal);
+
+        // And silent where there is nothing to warn about, rather than a sentence about an empty
+        // list that every reader has to parse before discarding.
+        Assert.DoesNotContain("also stops other WSL distributions", alone, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_plan_for_a_machine_that_was_refused_points_at_the_route_that_is_left()
     {
         // DD226 told a refused machine it was likely to be refused again and stopped there, which

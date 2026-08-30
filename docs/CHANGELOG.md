@@ -80,6 +80,7 @@
 - ✅ **DD231** **the preflight calls this tool's own running engine an unidentified rival and tells the user to uninstall it first** — The pipe signal drops out where a host of this tool's holds the engine slot, so a running FreeWilly is no longer reported as an unidentified engine the user is told to uninstall.
 - ✅ **DD234** **the compaction drops the build cache under a twenty second budget, so the fuller the disk the surer that step fails** — EngineBudget names both kinds of call, the compaction's prune is asked as Housekeeping with ten minutes, and its ping keeps the twenty seconds telling a stopped engine from a busy one.
 - ✅ **DD237** **Windows has withdrawn the hand-back that needed no admin, so the Compact button now ends at a wall on every machine** — The refused ending now carries a button that runs diskpart under one runas, naming the four verbs first, and the tray itself stays unelevated.
+- ✅ **DD238** **diskpart cannot open the virtual disk because terminating the distribution leaves the WSL2 VM holding it** — The elevated compaction shuts WSL down, waits for Windows to release the disk, and the plan names every distribution that stops; diskpart returned 21.4 GB on the first run.
 
 ## Block B — The daemon client (talk to the engine)
 

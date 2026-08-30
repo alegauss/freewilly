@@ -64,6 +64,17 @@ public interface IFilesystemWork
     /// before anything is pressed.
     /// </remarks>
     bool HandBackWasRefused { get; }
+
+    /// <summary>
+    /// Which other WSL distributions are up, and would be stopped by an elevated compaction (DD238).
+    /// </summary>
+    /// <remarks>
+    /// Read by the elevated plan. diskpart needs the virtual disk exclusively and only
+    /// <c>wsl --shutdown</c> gives it that, so this one is not like the others on this page: it
+    /// reaches past the engine and stops work that has nothing to do with Docker. Naming it before
+    /// the UAC prompt is the difference between a cost somebody accepted and one they discovered.
+    /// </remarks>
+    IReadOnlyList<string> OtherDistributionsRunning { get; }
 }
 
 /// <summary>
@@ -237,17 +248,35 @@ public sealed record RepairPrompt(
     /// <para><b>It says what declining costs</b>, which is nothing. The prompt is refusable and the
     /// disk is exactly as it was afterwards; a dialog that left that unsaid would make the safe
     /// answer feel like the risky one.</para>
+    ///
+    /// <para><b>And it names the blast radius, which DD238 widened.</b> diskpart needs the file
+    /// exclusively, and only <c>wsl --shutdown</c> gives it that, so every distribution on the
+    /// machine goes down and not only this one. Somebody with work open in Ubuntu is entitled to
+    /// know that before the UAC prompt rather than after it.</para>
     /// </remarks>
-    public static string ElevatedConfirmation() =>
-        "Windows has turned off the way of doing this that needs no administrator rights, so the "
-        + "one route left asks for them.\n\n"
-        + "Windows will show a prompt. Approving it runs diskpart, which selects the virtual disk, "
-        + "attaches it read-only, compacts it and detaches it.\n\n"
-        + "That reclaims what the disk is holding and the filesystem has already finished with. It "
-        + "does not delete images, containers or volumes.\n\n"
-        + "Docker stops while it runs and starts again afterwards. Declining the prompt costs "
-        + "nothing: the disk is left exactly as it is now.\n\n"
-        + "Ask for administrator rights?";
+    /// <param name="alsoRunning">
+    /// Other WSL distributions that are up, which this will stop too. Empty where there are none.
+    /// </param>
+    /// <returns>The question, as the dialog asks it.</returns>
+    public static string ElevatedConfirmation(IReadOnlyList<string>? alsoRunning = null)
+    {
+        var others = alsoRunning is { Count: > 0 }
+            ? "This also stops other WSL distributions that are running right now: "
+              + string.Join(", ", alsoRunning) + ".\n\n"
+            : "";
+
+        return "Windows has turned off the way of doing this that needs no administrator rights, "
+            + "so the one route left asks for them.\n\n"
+            + "Windows will show a prompt. Approving it runs diskpart, which selects the virtual "
+            + "disk, attaches it read-only, compacts it and detaches it.\n\n"
+            + "That reclaims what the disk is holding and the filesystem has already finished with. "
+            + "It does not delete images, containers or volumes.\n\n"
+            + "To let diskpart open the disk, all of WSL is shut down first, not just Docker.\n\n"
+            + others
+            + "Docker starts again afterwards. Declining the prompt costs nothing: the disk is "
+            + "left exactly as it is now.\n\n"
+            + "Ask for administrator rights?";
+    }
 
     /// <summary>What the panel says while a compaction is running.</summary>
     public static readonly RepairPrompt Compacting = new(

@@ -23,13 +23,27 @@ namespace FreeWilly.Core.Engine;
 /// </remarks>
 public sealed class ElevatedCompaction
 {
-    /// <summary>The step that takes the distribution down so its disk is not in use.</summary>
+    /// <summary>The step that takes the disk out of use so diskpart can open it.</summary>
     /// <remarks>
-    /// <c>compact vdisk</c> refuses a disk something has open, and WSL holds this one for as long as
-    /// the distribution is up. The same terminate the unelevated sequence does, and needed here for
-    /// the same reason rather than inherited from a run that may have happened minutes ago.
+    /// <para><b>A shutdown and not a terminate, which DD238 cost a shipped run to learn.</b>
+    /// Terminating the distribution unmounts it and leaves the WSL2 utility VM holding the VHD:
+    /// measured with the engine stopped and nothing left to revive it, the file was still
+    /// unopenable and <c>vmmemWSL</c> was still running. After <c>wsl --shutdown</c> it opened at
+    /// once.</para>
+    ///
+    /// <para><c>--set-sparse</c> never needed this, because the process changing the file is WSL
+    /// itself. diskpart needs exclusive access, and only the VM going down gives it.</para>
     /// </remarks>
     public const string TakeItDownStep = "take the disk out of use";
+
+    /// <summary>How long Windows is given to actually let go of the file.</summary>
+    /// <remarks>
+    /// A ceiling on the failing case: the wait ends when the handle does, and on the machine this
+    /// was measured on that was immediate. It exists because a shutdown returning is not the same
+    /// event as the last handle closing, and the alternative to waiting is diskpart reporting the
+    /// race in its own translated words.
+    /// </remarks>
+    public static readonly TimeSpan ReleaseBudget = TimeSpan.FromSeconds(30);
 
     /// <summary>The step that runs diskpart.</summary>
     public const string CompactStep = "compact the virtual disk";
@@ -57,10 +71,34 @@ public sealed class ElevatedCompaction
             """;
     }
 
+    /// <summary>
+    /// The running distributions this shutdown would also stop, out of what WSL listed (DD238).
+    /// </summary>
+    /// <param name="listed">What <c>wsl --list --running --quiet</c> wrote.</param>
+    /// <param name="ours">This install's own distribution, which the dialog already accounts for.</param>
+    /// <returns>The other names, in the order WSL gave them.</returns>
+    /// <remarks>
+    /// <para>A pure function over the text, so the parsing is testable without a machine that
+    /// happens to have two distributions up. <c>--quiet</c> is what makes it one name per line with
+    /// no header to skip and nothing translated to match against.</para>
+    ///
+    /// <para>Blank lines are dropped rather than trusted. wsl.exe writes UTF-16LE and the decoder
+    /// this project settled on under DD191 hands back a trailing newline and, on some builds, a
+    /// leading byte-order mark — neither of which is a distribution.</para>
+    /// </remarks>
+    public static IReadOnlyList<string> OthersRunning(string? listed, string ours) =>
+        (listed ?? "")
+            .Split('\n')
+            .Select(line => line.Trim().Trim('﻿', '\r').Trim())
+            .Where(name => name.Length > 0
+                && !name.Equals(ours, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
     private readonly IWsl _wsl;
     private readonly EnginePaths _paths;
     private readonly IElevated _elevated;
     private readonly Func<RepairStep> _stopEngine;
+    private readonly TimeSpan _releaseBudget;
 
     /// <summary>Construct one.</summary>
     /// <param name="wsl">The WSL command.</param>
@@ -71,8 +109,16 @@ public sealed class ElevatedCompaction
     /// engine dying under a suspend and put it back mid-compaction (DD136, DD207). The same seam
     /// <see cref="DiskCompaction"/> takes, and for the same reason.
     /// </param>
+    /// <param name="releaseBudget">
+    /// How long Windows is given to let go of the virtual disk after WSL is shut down. Overridden
+    /// only by a test, which cannot wait <see cref="ReleaseBudget"/> to watch the failing path.
+    /// </param>
     public ElevatedCompaction(
-        IWsl wsl, EnginePaths paths, IElevated elevated, Func<RepairStep> stopEngine)
+        IWsl wsl,
+        EnginePaths paths,
+        IElevated elevated,
+        Func<RepairStep> stopEngine,
+        TimeSpan? releaseBudget = null)
     {
         ArgumentNullException.ThrowIfNull(wsl);
         ArgumentNullException.ThrowIfNull(paths);
@@ -82,6 +128,7 @@ public sealed class ElevatedCompaction
         _paths = paths;
         _elevated = elevated;
         _stopEngine = stopEngine;
+        _releaseBudget = releaseBudget ?? ReleaseBudget;
     }
 
     /// <summary>Where the virtual disk sits on the Windows volume.</summary>
@@ -143,17 +190,66 @@ public sealed class ElevatedCompaction
 
     private RepairStep TakeItDown()
     {
-        var down = _wsl.Run(WslBudget.Work, "--terminate", _paths.DistributionName);
-        return down.Succeeded
+        var down = _wsl.Run(WslBudget.Work, "--shutdown");
+        if (!down.Succeeded)
+        {
+            return new RepairStep(
+                TakeItDownStep,
+                false,
+                "WSL would not shut down, and diskpart will not compact a disk that is in use: "
+                + Said(down));
+        }
+
+        // Asked of the file rather than assumed from the command returning (DD238). The two are
+        // different events, and the gap between them used to surface as diskpart's own translated
+        // complaint about a file it does not name.
+        return Released(VirtualDiskPath, _releaseBudget)
             ? new RepairStep(
                 TakeItDownStep,
                 true,
-                $"{_paths.DistributionName} terminated, so diskpart can open its disk")
+                "WSL is shut down and Windows has released the disk, so diskpart can open it")
             : new RepairStep(
                 TakeItDownStep,
                 false,
-                $"terminating {_paths.DistributionName} failed, and diskpart will not compact a "
-                + $"disk that is in use: {Said(down)}");
+                $"WSL shut down, but Windows still had the virtual disk open "
+                + $"{_releaseBudget.TotalSeconds:0} seconds later, so nothing was compacted");
+    }
+
+    /// <summary>Wait until nothing holds <paramref name="path"/>, or the budget runs out.</summary>
+    /// <param name="path">The virtual disk.</param>
+    /// <param name="budget">How long to wait.</param>
+    /// <returns><see langword="true"/> where it can be opened with no sharing.</returns>
+    /// <remarks>
+    /// <see cref="FileShare.None"/> is the question diskpart is about to ask, asked the same way and
+    /// early enough to answer it in this tool's own words. A file that is not there at all counts as
+    /// released: there is nothing to wait for, and the step after this one is what says so.
+    /// </remarks>
+    private static bool Released(string path, TimeSpan budget)
+    {
+        var until = DateTime.UtcNow + budget;
+        while (true)
+        {
+            if (!File.Exists(path))
+            {
+                return true;
+            }
+
+            try
+            {
+                using var held = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException
+                or UnauthorizedAccessException)
+            {
+                if (DateTime.UtcNow >= until)
+                {
+                    return false;
+                }
+
+                Thread.Sleep(250);
+            }
+        }
     }
 
     /// <summary>Ask diskpart, elevated, and read back what it said.</summary>

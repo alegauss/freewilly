@@ -52,11 +52,11 @@ public sealed class ElevatedCompactionTests
         }
     }
 
-    /// <summary>A machine that answers the reading, the terminate and the reading after.</summary>
+    /// <summary>A machine that answers the reading, the shutdown and the reading after.</summary>
     private static FakeWsl Machine() =>
         new FakeWsl()
             .Answer(0, Reading(16_000_000)) // the reading before
-            .Answer(0)                      // --terminate
+            .Answer(0)                      // --shutdown
             .Answer(0, Reading(16_000_000)); // the reading after
 
     private static ElevatedCompaction Compaction(FakeWsl wsl, IElevated elevated) =>
@@ -64,32 +64,38 @@ public sealed class ElevatedCompactionTests
             wsl,
             Paths(),
             elevated,
-            () => new RepairStep(FilesystemRepair.StopStep, true, "the host was told"));
+            () => new RepairStep(FilesystemRepair.StopStep, true, "the host was told"),
+            releaseBudget: TimeSpan.FromMilliseconds(500));
 
     [Fact]
-    public void Diskpart_is_never_asked_until_the_distribution_has_been_terminated()
+    public void The_whole_of_WSL_is_shut_down_and_not_just_this_distribution()
     {
-        // compact vdisk refuses a disk something has open, and WSL holds this one for as long as
-        // the distribution is up. Asserted as an order rather than a presence, because the failure
-        // it prevents is a diskpart that runs and reclaims nothing.
+        // DD238, and it cost a shipped run to learn. Terminating the distribution unmounts it and
+        // leaves the WSL2 utility VM holding the VHD: measured with the engine stopped and nothing
+        // left to revive it, the file was still unopenable and vmmemWSL was still running. diskpart
+        // then refused with "the file is already in use by another process".
         var wsl = Machine();
         var elevated = new FakeElevation(new ElevatedRun(Ran: true, ExitCode: 0), wsl);
 
         Compaction(wsl, elevated).Run();
 
         Assert.Equal(1, elevated.Asked);
-        Assert.Contains(
-            elevated.WslCallsBefore, argv => argv is ["--terminate", ..]);
+        Assert.Contains(elevated.WslCallsBefore, argv => argv is ["--shutdown"]);
+
+        // And never the terminate that looked like it was enough. A run that did both would still
+        // work, which is exactly why the wrong one has to be asserted absent rather than left to a
+        // reader to notice.
+        Assert.DoesNotContain(wsl.Invocations, argv => argv is ["--terminate", ..]);
     }
 
     [Fact]
-    public void A_terminate_that_fails_stops_the_run_before_any_rights_are_asked_for()
+    public void A_shutdown_that_fails_stops_the_run_before_any_rights_are_asked_for()
     {
         // The one ordering that matters most. A UAC prompt raised for a command that cannot work is
         // this tool spending somebody's administrator rights on nothing.
         var wsl = new FakeWsl()
             .Answer(0, Reading(16_000_000))
-            .Answer(1, "", "the distribution is busy");
+            .Answer(1, "", "WSL would not shut down");
         var elevated = new FakeElevation(new ElevatedRun(Ran: true, ExitCode: 0));
 
         var outcome = Compaction(wsl, elevated).Run();
@@ -97,6 +103,48 @@ public sealed class ElevatedCompactionTests
         Assert.Equal(0, elevated.Asked);
         Assert.False(outcome.Succeeded);
         Assert.Equal(ElevatedCompaction.TakeItDownStep, outcome.Failure?.What);
+    }
+
+    [Fact]
+    public void A_disk_Windows_will_not_let_go_of_is_this_tool_s_sentence_and_not_diskparts()
+    {
+        // The gap between a shutdown returning and the last handle closing. Without the wait it
+        // surfaced as diskpart's own message, translated into whatever the reader's Windows speaks,
+        // about a file it does not name.
+        var paths = Paths();
+        Directory.CreateDirectory(paths.Distribution);
+        var vhdx = Path.Combine(paths.Distribution, "ext4.vhdx");
+        File.WriteAllText(vhdx, "not really a disk");
+
+        // Held open the way the WSL2 VM holds it, for the whole run.
+        using var holding = File.Open(vhdx, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        var elevated = new FakeElevation(new ElevatedRun(Ran: true, ExitCode: 0));
+        var outcome = new ElevatedCompaction(
+            Machine(),
+            paths,
+            elevated,
+            () => new RepairStep(FilesystemRepair.StopStep, true, "the host was told"),
+            releaseBudget: TimeSpan.FromMilliseconds(400)).Run();
+
+        Assert.Equal(0, elevated.Asked);
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(ElevatedCompaction.TakeItDownStep, outcome.Failure?.What);
+        Assert.Contains("still had the virtual disk open", outcome.Failure?.Detail!,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Ubuntu\nfreewilly\n", new[] { "Ubuntu" })]
+    [InlineData("freewilly\n", new string[0])]
+    [InlineData("﻿Ubuntu\r\nDebian\r\nfreewilly\r\n", new[] { "Ubuntu", "Debian" })]
+    [InlineData("", new string[0])]
+    public void The_other_running_distributions_are_read_out_of_what_wsl_listed(
+        string listed, string[] expected)
+    {
+        // The blank lines and the byte-order mark are not hypothetical: wsl.exe writes UTF-16LE and
+        // the decoder settled on under DD191 hands back both. Neither is a distribution.
+        Assert.Equal(expected, ElevatedCompaction.OthersRunning(listed, "freewilly"));
     }
 
     [Fact]

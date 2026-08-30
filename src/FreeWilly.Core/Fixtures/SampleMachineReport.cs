@@ -116,6 +116,13 @@ public sealed class SampleFilesystemWork : IFilesystemWork
     /// </remarks>
     public bool HandBackWasRefused => false;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Empty, so a capture draws the plan for a machine with nothing else running. The alternative
+    /// would put this desk's distribution names into a picture of the product.
+    /// </remarks>
+    public IReadOnlyList<string> OtherDistributionsRunning => [];
+
     private static RepairOutcome Refuse() => new(
     [
         new RepairStep(

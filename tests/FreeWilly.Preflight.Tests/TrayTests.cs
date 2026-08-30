@@ -540,22 +540,47 @@ public sealed class TrayTests
     {
         // `wsl --shutdown` would give the memory back a minute sooner and take somebody's Ubuntu
         // shell with it. Terminating our own distribution is the whole of what this install is
-        // entitled to do, and WSL powers the machine down itself once nothing else is using it.
+        // entitled to do on its own account, and WSL powers the machine down itself once nothing
+        // else is using it.
         //
         // The quoted spelling and not the bare word, because the reasoning above is written down in
         // Quit's own remarks — a test that searched for the prose would fail on the explanation of
         // why the thing it forbids is forbidden.
+        //
+        // ONE exemption, added by DD238 and deliberately spelled as a single file rather than
+        // relaxed into a rule. The elevated compaction cannot be done any other way: diskpart needs
+        // the virtual disk exclusively, and terminating the distribution leaves the WSL2 utility VM
+        // holding it — measured, with the engine stopped and nothing left to revive it. What makes
+        // that exemption acceptable is not the necessity, it is the consent: it happens behind a
+        // dialog that says all of WSL stops and names which other distributions are running, and
+        // only after a compaction has already been refused. Those two conditions are asserted
+        // below, so the exemption cannot quietly become an ordinary call.
+        var allowed = Path.Combine("src", "FreeWilly.Core", "Engine", "ElevatedCompaction.cs");
         var offenders = Directory
             .EnumerateFiles(Path.Combine(RepositoryRoot(), "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                 StringComparison.Ordinal))
+            .Where(file => !file.EndsWith(allowed, StringComparison.OrdinalIgnoreCase))
             .Where(file => File.ReadAllText(file).Contains("\"--shutdown\"", StringComparison.Ordinal))
             .ToList();
 
         Assert.True(
             offenders.Count == 0,
-            "something passes --shutdown to wsl, which takes every distribution on the machine down "
-            + $"and not just the one this install owns: {string.Join(", ", offenders)}");
+            "something outside the elevated compaction passes --shutdown to wsl, which takes every "
+            + "distribution on the machine down and not just the one this install owns: "
+            + string.Join(", ", offenders));
+
+        // The exemption's two conditions. Without these the allowance above would be a hole rather
+        // than a narrowing.
+        var plan = RepairPrompt.ElevatedConfirmation(["Ubuntu"]);
+        Assert.Contains("all of WSL is shut down first", plan, StringComparison.Ordinal);
+        Assert.Contains("Ubuntu", plan, StringComparison.Ordinal);
+
+        var unrefused = new CompactionOutcome(
+            [new RepairStep(DiskCompaction.HandBackStep, true, "freewilly is sparse")]);
+        Assert.False(
+            RepairPrompt.Of(unrefused).OfferElevated,
+            "the page offers the shutdown without a refusal having happened first");
     }
 
     // ---- the exits nobody thinks of as quitting (DD129) ---------------------------------------

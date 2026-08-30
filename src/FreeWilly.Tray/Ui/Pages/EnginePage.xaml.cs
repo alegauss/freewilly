@@ -335,7 +335,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     {
         var answer = System.Windows.MessageBox.Show(
             Window.GetWindow(this),
-            RepairPrompt.ElevatedConfirmation(),
+            RepairPrompt.ElevatedConfirmation(_work.OtherDistributionsRunning),
             "Compact as administrator",
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Warning,
