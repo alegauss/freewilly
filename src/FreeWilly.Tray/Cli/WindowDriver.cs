@@ -144,6 +144,15 @@ internal static class WindowDriver
         // The same guard one button along (DD237). This one is worth more than Repair's: a page
         // that offered administrator rights before a compaction had been refused would be a tool
         // asking for them because it can rather than because the machine has left it no other way.
+        //
+        // Look and not Find, and that is not a weaker check chosen by accident. A WPF element whose
+        // Visibility is Collapsed is not in the visual tree and raises no automation peer, so it is
+        // not absent-looking to UI Automation, it is absent. Find waits its budget and then fails,
+        // which is what a Find written here did on the first run of this verb after DD237.
+        //
+        // So this verb can say the button is not being offered and cannot say it exists. That half
+        // is asserted over the markup instead, in RepairPromptTests, which is where a control that
+        // had been deleted outright would be caught.
         if (Look(window, "Elevate") is { } elevate && !elevate.Current.IsOffscreen)
         {
             Console.Error.WriteLine(
