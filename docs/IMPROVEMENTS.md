@@ -2,26 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD242 One of the three has only ever had one surface
-
-DD204 made the check and the repair reachable from the verb and the window through one
-seam, and gave the reason: two copies of a five-step sequence are fine until one of them
-is edited. The compaction arrived in DD211 with a button and no verb, and has stayed
-that way through DD224, DD225, DD226, DD234, DD237 and DD238.
-
-The cost showed up while DD238 was being verified. There was no way to run the real
-compaction except to drive the window through UI Automation, press the button, and
-answer a message box by control id. `--compact-drill` exists but rehearses on a scratch
-distribution with the prune stubbed out, so it exercises the sequence and not the work.
-
-So the verb is not a convenience. It is how the thing gets run by anything that is not a
-person at a desk: a release check, an agent, somebody reporting a bug who can paste what
-it printed.
-
-The elevated half needs deciding rather than assuming. A terminal cannot be handed a UAC
-prompt silently, so it either asks for one and says the prompt is coming, or refuses and
-names the button. The unelevated half has no such question and is most of the value.
-
 ### §DD243 The step that takes minutes says nothing while it does
 
 DD239 made the steps appear as they land, which fixed the page that looked hung. What it

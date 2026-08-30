@@ -43,8 +43,9 @@ internal static class EngineCommand
     {
         var mode = args.Length == 0 ? "--help" : args[0];
 
-        // --autostart takes a value and --fsck takes a flag; everything else is a verb on its own.
-        var allowed = mode is "--autostart" or "--fsck" ? 2 : 1;
+        // --autostart takes a value, and --fsck and --compact each take a flag; everything else is a
+        // verb on its own.
+        var allowed = mode is "--autostart" or "--fsck" or "--compact" ? 2 : 1;
         if (args.Length > allowed)
         {
             return Complain($"unexpected argument {args[allowed]}");
@@ -62,6 +63,7 @@ internal static class EngineCommand
             "--stop" => Stop(),
             "--fsck" => Fsck(args.Length > 1 ? args[1] : ""),
             "--fsck-drill" => Drill(),
+            "--compact" => Compact(args.Length > 1 ? args[1] : ""),
             "--compact-drill" => CompactDrill(),
             "--autostart" => AutostartMode(args.Length > 1 ? args[1] : "status"),
             "-h" or "--help" => Help(Ok),
@@ -763,6 +765,76 @@ internal static class EngineCommand
         });
 
         return Ok;
+    }
+
+    /// <summary>Hand back what the virtual disk is holding and nothing wants (DD242).</summary>
+    /// <param name="flag"><c>--as-administrator</c>, or nothing.</param>
+    /// <returns>The exit code.</returns>
+    /// <remarks>
+    /// <para><b>Through the same object the window's button reaches</b>, which is DD204's rule
+    /// arriving at the third of the three. The check and the repair have had two surfaces since
+    /// then; the compaction shipped in DD211 with a button and no verb and stayed that way through
+    /// six tasks, so the only way to run the real thing was to drive the window.</para>
+    ///
+    /// <para><b>The elevated half is asked for and never assumed.</b> A console cannot be handed a
+    /// UAC prompt quietly, so the plain verb runs the route that needs no rights and, where Windows
+    /// has withdrawn it, names the flag rather than reaching for it. That is the same bargain the
+    /// page makes with its second button, spelled for a surface that has no buttons.</para>
+    ///
+    /// <para>It does not start the engine again, for the reason <see cref="Fsck"/> does not: a
+    /// command is a scripting surface, and the next line of the script decides what this machine
+    /// should be doing.</para>
+    /// </remarks>
+    private static int Compact(string flag)
+    {
+        var elevated = string.Equals(flag, "--as-administrator", StringComparison.Ordinal);
+        if (flag.Length > 0 && !elevated)
+        {
+            return Complain(
+                $"unexpected argument {flag}: --compact takes --as-administrator or nothing");
+        }
+
+        if (elevated)
+        {
+            // Said before the prompt rather than after it, because a prompt nobody was expecting is
+            // one they are deciding about under surprise. It also names what else goes down: this
+            // route shuts every distribution on the machine, not just this install's (DD238).
+            Console.WriteLine(
+                "  Windows will ask for administrator rights. All of WSL is shut down first, not "
+                + "just Docker.");
+            Console.WriteLine();
+        }
+
+        var work = FilesystemWork.OnThisMachine();
+        var outcome = elevated
+            ? work.CompactAsAdministrator(step => Console.WriteLine(Line(step)))
+            : work.Compact(step => Console.WriteLine(Line(step)));
+
+        Console.WriteLine();
+        if (outcome.Succeeded)
+        {
+            Console.WriteLine(outcome.HandedBack is { } bytes
+                ? $"  Windows got {MachineReport.Size(bytes)} back. "
+                  + $"`{CommandLine.ExecutableName} --run` starts the engine again."
+                : "  Nothing was being held that the filesystem had finished with. "
+                  + $"`{CommandLine.ExecutableName} --run` starts the engine again.");
+            return Ok;
+        }
+
+        Console.WriteLine($"  {outcome.Failure?.Detail}");
+
+        // The one ending with somewhere left to go (DD224, DD237). Named as a command rather than as
+        // an intention, which is DD205's rule: this is a console, and the next thing wanted is the
+        // line to type.
+        if (!elevated && DiskCompaction.WindowsWithdrewIt(outcome.Failure?.Detail))
+        {
+            Console.WriteLine();
+            Console.WriteLine(
+                $"  `{CommandLine.ExecutableName} --compact --as-administrator` takes the one route "
+                + "Windows leaves. It raises a prompt, and it shuts every WSL distribution down.");
+        }
+
+        return Failed;
     }
 
     /// <summary>

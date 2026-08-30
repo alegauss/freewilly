@@ -166,6 +166,7 @@ public static class CommandLine
             "--status",
             "--fsck",
             "--fsck-drill",
+            "--compact",
             "--compact-drill",
             "--api",
             "--watch",
@@ -317,6 +318,9 @@ public static class CommandLine
           --fsck           check the distribution's filesystem; --repair to mend what it finds
           --fsck-drill     rehearse the repair on a scratch disk dirtied on purpose, touching
                            nothing on this machine
+          --compact        hand back what the virtual disk is holding and nothing wants; with
+                           the --as-administrator flag it takes the route Windows leaves when
+                           it has turned the other one off, raising a prompt and stopping WSL
           --compact-drill  rehearse the compaction on a scratch disk grown and emptied on
                            purpose, touching nothing on this machine
           --api            version and containers, read through the Engine API

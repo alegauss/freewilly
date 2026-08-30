@@ -4,7 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD242** (deps: —) **there is no compaction verb, so the one piece of work on this page a terminal cannot start** — The compaction is reachable from the CLI as the check has been since DD204, through the same seam, so neither surface is the only way to run it. → §DD242
 - 💭 **DD243** (deps: —) **diskpart reports its progress to a log nobody reads, so the longest step of a compaction is one unchanging line** — The percentages diskpart is already writing are followed while it runs, so the step that takes minutes says how far in it is. → §DD243
 
 ## Block B — The daemon client (talk to the engine)

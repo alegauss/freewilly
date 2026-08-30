@@ -264,6 +264,28 @@ public sealed class CommandLineTests
         }
     }
 
+    [Fact]
+    public void The_compaction_is_reachable_from_a_terminal_like_the_check_is()
+    {
+        // DD242. DD204 gave the check and the repair two surfaces through one seam and said why:
+        // two copies of a sequence are fine until one is edited. The compaction arrived in DD211
+        // with a button and no verb and stayed that way through six tasks, so the only way to run
+        // the real thing was to drive the window through UI Automation and answer a message box.
+        Assert.Contains("--compact", CommandLine.EngineVerbs);
+        Assert.Equal(Surface.Engine, CommandLine.Of(["--compact"]).Surface);
+
+        // The flag reaches the verb rather than being eaten as an unexpected argument, which is the
+        // half that would leave the elevated route unreachable from here.
+        var elevated = CommandLine.Of(["--compact", "--as-administrator"]);
+        Assert.Equal(Surface.Engine, elevated.Surface);
+        Assert.Equal(["--compact", "--as-administrator"], elevated.Arguments);
+
+        // And it is not the drill, which rehearses on a scratch distribution with the prune stubbed
+        // out. Confusing the two is the one mistake here that would matter.
+        Assert.Contains("--compact-drill", CommandLine.EngineVerbs);
+        Assert.NotEqual("--compact", "--compact-drill");
+    }
+
     private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
