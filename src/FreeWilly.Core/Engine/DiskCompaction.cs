@@ -50,12 +50,39 @@ public sealed record CompactionOutcome(IReadOnlyList<RepairStep> Steps)
     /// record's subject having happened, and a reader of the outcome should not have to know which
     /// route the machine was able to take.</para>
     /// </remarks>
-    public bool Succeeded => Steps.Any(
-        step => step.Ok
-            && step.What is DiskCompaction.HandBackStep or ElevatedCompaction.CompactStep);
+    public bool Succeeded => Steps.Any(step => step.Ok && Decides(step.What));
 
-    /// <summary>The first step that failed, or <see langword="null"/>.</summary>
-    public RepairStep? Failure => Steps.FirstOrDefault(step => !step.Ok);
+    /// <summary>
+    /// The step that decided this run, where it failed, or <see langword="null"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The deciding step and not the first failing one (DD244).</b> Two of the steps here
+    /// are preparation, and <see cref="Succeeded"/> already ignores them for the reason written
+    /// over it: a run that could not reach the daemon and still handed back four gigabytes did the
+    /// thing the button is for. This has to ignore them in the same way, or the two disagree.</para>
+    ///
+    /// <para>What that disagreement cost: with the engine stopped the prune fails, so this returned
+    /// the prune, so <see cref="RepairPrompt.Of(CompactionOutcome)"/> asked
+    /// <see cref="DiskCompaction.WindowsWithdrewIt"/> about the wrong sentence and could not see the
+    /// refusal. The headline went back to the one DD224 removed, and the elevated route DD237 added
+    /// was not offered on a machine that had nothing else left.</para>
+    ///
+    /// <para>A preparation step that failed is still returned where nothing decisive did, because a
+    /// run that stopped before it ever reached the hand-back has no other account of itself.</para>
+    /// </remarks>
+    public RepairStep? Failure =>
+        Steps.FirstOrDefault(step => !step.Ok && Decides(step.What))
+        ?? Steps.FirstOrDefault(step => !step.Ok);
+
+    /// <summary>Whether a step's outcome is the run's outcome (DD244).</summary>
+    /// <param name="what">The step's name.</param>
+    /// <returns><see langword="true"/> for the steps that hand the blocks back.</returns>
+    /// <remarks>
+    /// The same two names <see cref="Succeeded"/> reads, kept beside it so the pair cannot be edited
+    /// apart. Everything else in either sequence is preparation or bookkeeping.
+    /// </remarks>
+    private static bool Decides(string what) =>
+        what is DiskCompaction.HandBackStep or ElevatedCompaction.CompactStep;
 
     /// <summary>
     /// How many bytes the volume gave back, or <see langword="null"/> where it cannot be said.

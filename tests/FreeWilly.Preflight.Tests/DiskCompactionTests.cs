@@ -281,6 +281,67 @@ public sealed class DiskCompactionTests
             "a hand-back that worked left the machine still marked as refusing them");
     }
 
+    [Fact]
+    public void A_failed_prune_does_not_become_the_outcome_of_a_refused_hand_back()
+    {
+        // DD244, found by running the verb with the engine stopped. The prune fails because there
+        // is no daemon to answer, and Failure used to return the first step that did not pass — so
+        // both surfaces reported the prune and neither could see the refusal underneath it.
+        //
+        // What that cost: RepairPrompt.Of asks WindowsWithdrewIt about Failure.Detail, so the
+        // headline went back to the one DD224 removed and the elevated route DD237 added was not
+        // offered on a machine that had nothing else left.
+        var outcome = new CompactionOutcome(
+        [
+            new RepairStep(DiskCompaction.PruneStep, false, "the engine is not answering"),
+            new RepairStep(DiskCompaction.TrimStep, true, "12 GiB trimmed"),
+            new RepairStep(FilesystemRepair.StopStep, true, "told the host to stop"),
+            new RepairStep(
+                DiskCompaction.HandBackStep,
+                false,
+                $"Windows has turned this off and offers {DiskCompaction.UnsafeFlag} instead"),
+        ]);
+
+        Assert.Equal(DiskCompaction.HandBackStep, outcome.Failure?.What);
+        Assert.True(DiskCompaction.WindowsWithdrewIt(outcome.Failure?.Detail));
+        Assert.True(RepairPrompt.Of(outcome).OfferElevated);
+        Assert.Equal("Windows has turned this off", RepairPrompt.Of(outcome).Headline);
+    }
+
+    [Fact]
+    public void A_run_that_stopped_before_the_hand_back_still_says_where_it_stopped()
+    {
+        // The other half, and the reason this is not simply "read the hand-back". A run that never
+        // reached the deciding step has no other account of itself, and reporting nothing at all
+        // would be worse than reporting the preparation that stopped it.
+        var outcome = new CompactionOutcome(
+        [
+            new RepairStep(DiskCompaction.PruneStep, true, "nothing to drop"),
+            new RepairStep(FilesystemRepair.StopStep, true, "told the host to stop"),
+            new RepairStep(
+                FilesystemRepair.TerminateStep, false, "terminating freewilly failed"),
+        ]);
+
+        Assert.False(outcome.Succeeded);
+        Assert.Equal(FilesystemRepair.TerminateStep, outcome.Failure?.What);
+    }
+
+    [Fact]
+    public void The_elevated_route_decides_a_run_the_same_way_the_hand_back_does()
+    {
+        // Two names, one meaning, and they are read through one predicate so the pair cannot be
+        // edited apart. A reader of the outcome should not have to know which route the machine
+        // was able to take.
+        var refused = new CompactionOutcome(
+        [
+            new RepairStep(DiskCompaction.PruneStep, false, "the engine is not answering"),
+            new RepairStep(ElevatedCompaction.CompactStep, false, "diskpart exited 1"),
+        ]);
+
+        Assert.Equal(ElevatedCompaction.CompactStep, refused.Failure?.What);
+        Assert.False(refused.Succeeded);
+    }
+
     private static RepairStep Prune() =>
         new(DiskCompaction.PruneStep, true, "nothing to drop");
 
