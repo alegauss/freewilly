@@ -2,29 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD239 A run with nothing to show is a run that looks stuck
-
-Reported on the first successful elevated compaction, 30 August 2026. diskpart took
-about two and a half minutes, and for all of it the page said "Compacting the disk" and
-nothing else. The run worked and returned 21.4 GB; the person watching had no way to
-tell that from a hang, and said so.
-
-The information already exists and arrives on time. `Compacting` passes `steps.Enqueue`
-to the run, so every step lands in the queue the moment it happens. What the page does
-with them is call `Show` once, after the run has returned. The transcript is complete
-and correct and nobody sees a line of it until there is nothing left to wait for.
-
-This did not matter while a compaction was four seconds. DD237 put diskpart in the
-middle of it, and diskpart on a 58 GB disk is minutes. `Check filesystem` has the same
-shape and the same latent problem, measured at seventeen minutes on its first real run.
-
-diskpart also reports its own progress as a percentage, which goes to a log file nobody
-is reading while it matters. Whether that is worth surfacing is a second question; the
-first is that the steps this tool already holds should be on screen as they land.
-
-What must not change is what the ending says. The transcript drawn during a run is the
-one drawn after it, so a reader who looks away and back is not shown two accounts.
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

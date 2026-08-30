@@ -451,6 +451,70 @@ public sealed class RepairPromptTests
     }
 
     [Fact]
+    public void Both_runs_draw_their_steps_while_they_are_still_running()
+    {
+        // DD239, reported on the first successful elevated compaction: diskpart took two and a half
+        // minutes and the page said "Compacting the disk" for all of it. The run worked; the person
+        // watching had no way to tell that from a hang.
+        //
+        // Asserted as a placement, because that is what the defect was. The steps already arrived on
+        // time and the page already had them: what it did was hold them until the run returned.
+        var page = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Ui/Pages/EnginePage.xaml.cs"));
+
+        Assert.Contains(
+            "private DispatcherTimer DrawAsTheyLand(", page, StringComparison.Ordinal);
+
+        foreach (var run in new[] { "internal async Task Compacting(", "internal async Task Run(" })
+        {
+            var at = page.IndexOf(run, StringComparison.Ordinal);
+            Assert.True(at > 0, $"{run} is gone, so this guard reads nothing");
+
+            var body = page[at..];
+            var started = body.IndexOf("DrawAsTheyLand(", StringComparison.Ordinal);
+            var awaited = body.IndexOf("await Task.Run(", StringComparison.Ordinal);
+            var stopped = body.IndexOf("ticker.Stop();", StringComparison.Ordinal);
+
+            Assert.True(started >= 0, $"{run} does not draw its steps as they land");
+            Assert.True(
+                started < awaited,
+                $"{run} starts drawing after the work it is drawing, so the first steps are missed");
+            Assert.True(
+                stopped > awaited,
+                $"{run} never stops the ticker, so it redraws a working panel over the outcome");
+        }
+
+        // In a finally on both, because the thrown ending is the one where a ticker left running
+        // would paint over the exception the reader needs.
+        Assert.Equal(
+            2,
+            page.Split("            ticker.Stop();", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public void Nothing_marshals_a_step_off_the_thread_the_run_is_on()
+    {
+        // The objection DD239 had to answer rather than ignore, and it was written down where the
+        // old behaviour was: a page that marshalled each step would be doing dispatcher work in the
+        // middle of a minutes-long e2fsck. So the queue is read by the UI thread on a timer, and
+        // the run goes on enqueueing exactly as it did.
+        var page = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Ui/Pages/EnginePage.xaml.cs"));
+
+        var drawing = page.IndexOf(
+            "private DispatcherTimer DrawAsTheyLand(", StringComparison.Ordinal);
+        var body = page[drawing..];
+
+        Assert.Contains("ticker.Tick +=", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Dispatcher.Invoke", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Dispatcher.BeginInvoke", page, StringComparison.Ordinal);
+
+        // And a tick that found nothing new draws nothing, so a four-minute step costs a comparison
+        // every half second and no layout.
+        Assert.Contains("if (landed == drawn)", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_readings_follow_the_engine_rather_than_only_the_page_being_opened()
     {
         // DD212, and the picture that filed it: the strip said Engine running while the panel under

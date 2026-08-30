@@ -32,6 +32,14 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// </remarks>
     private static readonly TimeSpan ReadEvery = TimeSpan.FromSeconds(1);
 
+    /// <summary>How often a run in flight redraws what has landed so far (DD239).</summary>
+    /// <remarks>
+    /// Half a second, which is under the interval at which a stationary page starts reading as a
+    /// stopped one and far above the rate any of these runs produces steps at. The longest of them
+    /// emits six in as many minutes, so this mostly finds nothing new and does nothing.
+    /// </remarks>
+    private static readonly TimeSpan StepsEvery = TimeSpan.FromMilliseconds(500);
+
     private readonly IEngineJournal _journal;
     private readonly IMachineReport _machine;
     private readonly JournalView _view = new();
@@ -366,6 +374,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         Show(RepairPrompt.Compacting, steps: null);
 
         var steps = new System.Collections.Concurrent.ConcurrentQueue<RepairStep>();
+        var ticker = DrawAsTheyLand(steps, RepairPrompt.Compacting);
         CompactionOutcome outcome;
         try
         {
@@ -380,6 +389,12 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         {
             outcome = new CompactionOutcome(
                 [new RepairStep("compact the disk", false, exception.Message)]);
+        }
+        finally
+        {
+            // Stopped on every ending, the thrown one included: a ticker left running would go on
+            // redrawing a working panel over the outcome this is about to show.
+            ticker.Stop();
         }
 
         var prompt = RepairPrompt.Of(outcome);
@@ -417,9 +432,9 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// <remarks>
     /// <para>Both buttons go dead for the duration, because both take the engine down and a second
     /// run started on top of the first would be two processes terminating one distribution. The
-    /// steps are collected rather than streamed: they arrive off the UI thread, and a page that
-    /// marshalled each one would be doing dispatcher work in the middle of a minutes-long
-    /// <c>e2fsck</c>.</para>
+    /// steps are drawn as they land since DD239, and the objection that used to stand here still
+    /// does: nothing is marshalled off the run's thread, because
+    /// <see cref="DrawAsTheyLand"/> reads the queue from the UI thread on a timer of its own.</para>
     ///
     /// <para><b>The interlude brackets the whole of it (DD210).</b> Said before the work starts and
     /// not after the engine has gone, because the tray decides what an engine that stopped answering
@@ -434,6 +449,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         Show(RepairPrompt.WorkingOn(_work.ToolsAreReady), steps: null);
 
         var steps = new System.Collections.Concurrent.ConcurrentQueue<RepairStep>();
+        var ticker = DrawAsTheyLand(steps, RepairPrompt.WorkingOn(_work.ToolsAreReady));
         RepairOutcome outcome;
         try
         {
@@ -446,6 +462,10 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
             outcome = new RepairOutcome(
                 [new RepairStep("run the check", false, exception.Message)]);
         }
+        finally
+        {
+            ticker.Stop();
+        }
 
         var prompt = RepairPrompt.Of(outcome, wrote);
         if (prompt.StartsAgain)
@@ -456,6 +476,48 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
 
         Show(prompt, Transcript(steps, outcome.Findings));
         Busy(false);
+    }
+
+    /// <summary>
+    /// Draw the steps a run is producing, while it is still producing them (DD239).
+    /// </summary>
+    /// <param name="steps">The queue the run is filling, from its own thread.</param>
+    /// <param name="working">What the panel says above them for the duration.</param>
+    /// <returns>The ticker, which the caller stops when the run ends.</returns>
+    /// <remarks>
+    /// <para><b>Pulled on a timer rather than pushed from the run</b>, and that is the whole of how
+    /// this answers the objection it overturns. The steps arrive off the UI thread, and a page that
+    /// marshalled each one would be doing dispatcher work inside a minutes-long <c>e2fsck</c>. So
+    /// nothing is marshalled: the run goes on enqueueing exactly as it did, and the UI thread reads
+    /// the queue at a cadence it chose, which is bounded whatever the run does.</para>
+    ///
+    /// <para><b>Only when something landed.</b> A tick that finds the same count redraws nothing,
+    /// so the common case — a step that takes four minutes — costs a comparison every half second
+    /// and no layout at all.</para>
+    ///
+    /// <para>What it draws is what the ending draws, out of the same queue through the same
+    /// <see cref="Transcript"/>. A reader who looks away and back is not shown two accounts of one
+    /// run, and the last line before the ending is still there underneath it.</para>
+    /// </remarks>
+    private DispatcherTimer DrawAsTheyLand(
+        System.Collections.Concurrent.ConcurrentQueue<RepairStep> steps, RepairPrompt working)
+    {
+        var drawn = 0;
+        var ticker = new DispatcherTimer(DispatcherPriority.Background) { Interval = StepsEvery };
+        ticker.Tick += (_, _) =>
+        {
+            var landed = steps.Count;
+            if (landed == drawn)
+            {
+                return;
+            }
+
+            drawn = landed;
+            Show(working, Transcript(steps, findings: null));
+        };
+
+        ticker.Start();
+        return ticker;
     }
 
     /// <summary>Everything the run said, as one block.</summary>

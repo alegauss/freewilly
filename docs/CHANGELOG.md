@@ -81,6 +81,7 @@
 - ✅ **DD234** **the compaction drops the build cache under a twenty second budget, so the fuller the disk the surer that step fails** — EngineBudget names both kinds of call, the compaction's prune is asked as Housekeeping with ten minutes, and its ping keeps the twenty seconds telling a stopped engine from a busy one.
 - ✅ **DD237** **Windows has withdrawn the hand-back that needed no admin, so the Compact button now ends at a wall on every machine** — The refused ending now carries a button that runs diskpart under one runas, naming the four verbs first, and the tray itself stays unelevated.
 - ✅ **DD238** **diskpart cannot open the virtual disk because terminating the distribution leaves the WSL2 VM holding it** — The elevated compaction shuts WSL down, waits for Windows to release the disk, and the plan names every distribution that stops; diskpart returned 21.4 GB on the first run.
+- ✅ **DD239** **the panel says it is compacting and then nothing for minutes, so a working run looks the same as a hung one** — A timer on the UI thread reads the queue the run is filling and redraws only when something landed, so both runs show their steps as they happen.
 
 ## Block B — The daemon client (talk to the engine)
 

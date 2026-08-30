@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD239** (deps: —) **the panel says it is compacting and then nothing for minutes, so a working run looks the same as a hung one** — The steps are drawn as they land rather than held until the run ends, which is the arrival the queue already delivers and the page throws away. → §DD239
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
