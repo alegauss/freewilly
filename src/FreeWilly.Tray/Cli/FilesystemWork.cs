@@ -98,7 +98,8 @@ internal sealed class FilesystemWork : IFilesystemWork
     /// of a run that has already dropped the build cache and trimmed the filesystem, so what is left
     /// is taking the disk out of use and handing it to diskpart.
     /// </remarks>
-    public CompactionOutcome CompactAsAdministrator(Action<RepairStep> report)
+    public CompactionOutcome CompactAsAdministrator(
+        Action<RepairStep> report, Action<string>? saying = null)
     {
         ArgumentNullException.ThrowIfNull(report);
 
@@ -109,7 +110,7 @@ internal sealed class FilesystemWork : IFilesystemWork
         }
 
         return new ElevatedCompaction(new Wsl(), paths, new WindowsElevation(), StopTheEngine)
-            .Run(report);
+            .Run(report, saying);
     }
 
     private static RepairOutcome Run(Action<RepairStep> report, bool write)

@@ -84,6 +84,7 @@
 - ✅ **DD239** **the panel says it is compacting and then nothing for minutes, so a working run looks the same as a hung one** — A timer on the UI thread reads the queue the run is filling and redraws only when something landed, so both runs show their steps as they happen.
 - ✅ **DD242** **there is no compaction verb, so the one piece of work on this page a terminal cannot start** — --compact runs the compaction through the same seam the button reaches, and names --as-administrator rather than reaching for it where Windows has withdrawn the other route.
 - ✅ **DD244** **a compaction whose prune failed reports the prune as its outcome, so the withdrawn hand-back is never recognised** — Failure reads the step that decides the run through the same predicate Succeeded does, so a prune that could not reach the daemon no longer hides a withdrawn hand-back.
+- ✅ **DD243** **diskpart reports its progress to a log nobody reads, so the longest step of a compaction is one unchanging line** — A channel beside the steps carries diskpart's own percentages, read out of the log it is writing, matched on the number so a translated machine reads the same climb.
 
 ## Block B — The daemon client (talk to the engine)
 

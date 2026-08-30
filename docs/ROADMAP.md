@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 💭 **DD243** (deps: —) **diskpart reports its progress to a log nobody reads, so the longest step of a compaction is one unchanging line** — The percentages diskpart is already writing are followed while it runs, so the step that takes minutes says how far in it is. → §DD243
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

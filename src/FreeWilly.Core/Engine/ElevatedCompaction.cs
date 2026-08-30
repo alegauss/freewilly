@@ -36,6 +36,67 @@ public sealed class ElevatedCompaction
     /// </remarks>
     public const string TakeItDownStep = "take the disk out of use";
 
+    /// <summary>How often diskpart's log is asked how far it has got (DD243).</summary>
+    /// <remarks>
+    /// Half a second, which is the page's own redraw interval, so a percentage never waits on this
+    /// side longer than it waits on the other. Cheap: a file this size is in the cache, and the
+    /// alternative to reading it is a step that says nothing for two and a half minutes.
+    /// </remarks>
+    public static readonly TimeSpan AskEvery = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// How far diskpart said it had got, out of the log it is writing (DD243).
+    /// </summary>
+    /// <param name="log">Whatever the log holds so far.</param>
+    /// <returns>The last percentage, or <see langword="null"/> where it has not said one.</returns>
+    /// <remarks>
+    /// <para><b>The number and never the sentence around it.</b> diskpart is translated: this
+    /// machine reads "52 por cento concluído" and another reads "52 percent completed". Matching
+    /// the words would be a progress bar that works on one desk, which is the mistake
+    /// <see cref="DiskCompaction.WindowsWithdrewIt"/> already exists to avoid.</para>
+    ///
+    /// <para>Split on the carriage return, because that is how a console tool rewrites a line in
+    /// place: each update is its own segment, the last one is where it has got to, and the version
+    /// banner above them has its digits behind dots where this pattern will not read them.</para>
+    /// </remarks>
+    public static int? PercentIn(string? log)
+    {
+        if (string.IsNullOrEmpty(log))
+        {
+            return null;
+        }
+
+        for (var i = log.Length - 1; i >= 0; i--)
+        {
+            if (log[i] != '\r')
+            {
+                continue;
+            }
+
+            var segment = log.AsSpan(i + 1);
+            var digits = 0;
+            while (digits < segment.Length && char.IsWhiteSpace(segment[digits]))
+            {
+                digits++;
+            }
+
+            var start = digits;
+            while (digits < segment.Length && char.IsAsciiDigit(segment[digits]))
+            {
+                digits++;
+            }
+
+            if (digits > start
+                && int.TryParse(segment[start..digits], out var percent)
+                && percent is >= 0 and <= 100)
+            {
+                return percent;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>How long Windows is given to actually let go of the file.</summary>
     /// <remarks>
     /// A ceiling on the failing case: the wait ends when the handle does, and on the machine this
@@ -139,13 +200,17 @@ public sealed class ElevatedCompaction
 
     /// <summary>Run it.</summary>
     /// <param name="report">Called with each step as it lands.</param>
+    /// <param name="saying">
+    /// Called as diskpart reports how far in it is (DD243). Beside the steps rather than among
+    /// them: a percentage is not a step, and the two above read steps by name.
+    /// </param>
     /// <returns>What was done, and what the disk was either side of it.</returns>
     /// <remarks>
     /// No prune and no <c>fstrim</c>. This is offered at the end of a compaction that has just run
     /// both and been refused only at the hand-back, so repeating them would be two more minutes of
     /// work whose result is already on the disk.
     /// </remarks>
-    public CompactionOutcome Run(Action<RepairStep>? report = null)
+    public CompactionOutcome Run(Action<RepairStep>? report = null, Action<string>? saying = null)
     {
         var steps = new List<RepairStep>();
 
@@ -161,7 +226,7 @@ public sealed class ElevatedCompaction
             return new CompactionOutcome(steps) { Before = before };
         }
 
-        if (!Record(steps, report, Compact()))
+        if (!Record(steps, report, Compact(saying)))
         {
             // Still measured. The terminate happened either way, and a reading taken after a
             // diskpart that refused is the evidence that nothing moved rather than an assumption
@@ -253,7 +318,8 @@ public sealed class ElevatedCompaction
     }
 
     /// <summary>Ask diskpart, elevated, and read back what it said.</summary>
-    private RepairStep Compact()
+    /// <param name="saying">Told how far in it is, as diskpart says so (DD243).</param>
+    private RepairStep Compact(Action<string>? saying)
     {
         string script;
         try
@@ -261,6 +327,11 @@ public sealed class ElevatedCompaction
             Directory.CreateDirectory(_paths.Root);
             script = Path.Combine(_paths.Root, "compact.diskpart");
             File.WriteAllText(script, Script(VirtualDiskPath));
+
+            // The last run's log, gone before this one starts. Left in place it would be read as
+            // this run's progress and would say a hundred per cent before diskpart had opened
+            // anything — the one reading that must never be wrong.
+            File.Delete(LogPath);
         }
         catch (Exception exception) when (exception is IOException
             or UnauthorizedAccessException or DirectoryNotFoundException)
@@ -271,8 +342,10 @@ public sealed class ElevatedCompaction
 
         // Quoted the way cmd wants a command line that itself contains quotes: the outer pair is
         // what /c strips, so both paths inside keep theirs.
-        var run = _elevated.Run(
-            "cmd.exe", $"/c \"\"{Diskpart}\" /s \"{script}\" > \"{LogPath}\" 2>&1\"");
+        var run = Watched(
+            () => _elevated.Run(
+                "cmd.exe", $"/c \"\"{Diskpart}\" /s \"{script}\" > \"{LogPath}\" 2>&1\""),
+            saying);
 
         if (run.Refused)
         {
@@ -301,6 +374,81 @@ public sealed class ElevatedCompaction
                 CompactStep,
                 false,
                 $"diskpart exited {run.ExitCode}: {Complaint()}");
+    }
+
+    /// <summary>
+    /// Run the elevated call, following its log while it goes (DD243).
+    /// </summary>
+    /// <param name="run">The elevated call, which blocks until the child is gone.</param>
+    /// <param name="saying">Told each percentage as diskpart reaches it, or null.</param>
+    /// <returns>What the elevated call returned.</returns>
+    /// <remarks>
+    /// <para>The call is put on a thread so this one can read, which is the only way round the fact
+    /// that an elevated child's handles cannot be redirected into this process. What it writes goes
+    /// to a file either way, for the failing case; this reads the same file while it is still being
+    /// written, which was measured to work before it was built.</para>
+    ///
+    /// <para><b>Only when the number changes.</b> diskpart repeats the same percentage for many
+    /// updates in a row, so reporting every read would be a hundred lines saying fifty-two.</para>
+    ///
+    /// <para>Progress is not a step and never becomes one. <see cref="CompactionOutcome.Succeeded"/>
+    /// and <see cref="CompactionOutcome.Failure"/> read steps by name, and DD244 is what a step that
+    /// meant something other than what it said already cost.</para>
+    /// </remarks>
+    private ElevatedRun Watched(Func<ElevatedRun> run, Action<string>? saying)
+    {
+        var running = Task.Run(run);
+        if (saying is null)
+        {
+            return running.GetAwaiter().GetResult();
+        }
+
+        int? last = null;
+        while (!running.Wait(AskEvery))
+        {
+            if (SoFar() is not { } percent || percent == last)
+            {
+                continue;
+            }
+
+            // The leading hundreds are not this step's. Measured against a real log: `select vdisk`
+            // and `attach vdisk readonly` each report a completion of their own before `compact`
+            // starts at zero, so a reader who was told the first number they saw would watch the
+            // bar hit a hundred and then fall to nothing. Silence until it starts climbing is the
+            // honest reading, and a compact that finished between two polls has nothing to show
+            // anyway.
+            if (last is null && percent == 100)
+            {
+                continue;
+            }
+
+            last = percent;
+            saying($"diskpart is {percent} per cent through the disk");
+        }
+
+        return running.GetAwaiter().GetResult();
+    }
+
+    /// <summary>How far the log says diskpart has got, or null.</summary>
+    /// <remarks>
+    /// <see cref="FileShare.ReadWrite"/>, because the writer still has it open and anything stricter
+    /// would fail every read. A read that cannot be taken is silence rather than a failure: this is
+    /// a progress line, and losing one costs nothing the run depends on.
+    /// </remarks>
+    private int? SoFar()
+    {
+        try
+        {
+            using var reading = new FileStream(
+                LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var text = new StreamReader(reading);
+            return PercentIn(text.ReadToEnd());
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException or FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Where diskpart lives, by full path.</summary>

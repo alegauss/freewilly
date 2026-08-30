@@ -807,7 +807,14 @@ internal static class EngineCommand
 
         var work = FilesystemWork.OnThisMachine();
         var outcome = elevated
-            ? work.CompactAsAdministrator(step => Console.WriteLine(Line(step)))
+            ? work.CompactAsAdministrator(
+                step => Console.WriteLine(Line(step)),
+
+                // Indented under the step it belongs to and printed as its own line, because a
+                // console has no line to rewrite in place: what a reader wants here is evidence
+                // that the minutes are going somewhere, and a short column of climbing numbers is
+                // that (DD243).
+                said => Console.WriteLine($"          {said}"))
             : work.Compact(step => Console.WriteLine(Line(step)));
 
         Console.WriteLine();

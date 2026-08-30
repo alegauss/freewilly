@@ -52,6 +52,17 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     private MachineHealth? _readings;
 
     /// <summary>
+    /// How far the step now running says it is, or null (DD243).
+    /// </summary>
+    /// <remarks>
+    /// Written from the run's own thread and read from the UI thread's ticker, which is safe for the
+    /// same reason the queue beside it is: this is one reference-sized field, the writer only ever
+    /// replaces it, and a reader that catches the previous sentence is a reader that is half a
+    /// second behind a progress line. Nothing decides anything on it.
+    /// </remarks>
+    private volatile string? _saying;
+
+    /// <summary>
     /// Whether the tree is built. Nothing may draw before it is.
     /// </summary>
     /// <remarks>
@@ -373,6 +384,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         _interlude.Expected();
         Show(RepairPrompt.Compacting, steps: null);
 
+        _saying = null;
         var steps = new System.Collections.Concurrent.ConcurrentQueue<RepairStep>();
         var ticker = DrawAsTheyLand(steps, RepairPrompt.Compacting);
         CompactionOutcome outcome;
@@ -382,7 +394,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
             // UAC prompt on the screen (DD237).
             outcome = await Task.Run(
                 () => elevated
-                    ? _work.CompactAsAdministrator(steps.Enqueue)
+                    ? _work.CompactAsAdministrator(steps.Enqueue, said => _saying = said)
                     : _work.Compact(steps.Enqueue)).ConfigureAwait(true);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -395,6 +407,11 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
             // Stopped on every ending, the thrown one included: a ticker left running would go on
             // redrawing a working panel over the outcome this is about to show.
             ticker.Stop();
+
+            // And the progress line goes with it. It described a step that has now landed with a
+            // line of its own, so leaving it would put "fifty-two per cent through" under a
+            // transcript that says the disk was compacted.
+            _saying = null;
         }
 
         var prompt = RepairPrompt.Of(outcome);
@@ -503,17 +520,23 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         System.Collections.Concurrent.ConcurrentQueue<RepairStep> steps, RepairPrompt working)
     {
         var drawn = 0;
+        string? shown = null;
         var ticker = new DispatcherTimer(DispatcherPriority.Background) { Interval = StepsEvery };
         ticker.Tick += (_, _) =>
         {
+            // Either half is a reason to redraw, and neither on its own is enough: a long step
+            // lands nothing for minutes while saying how far in it is (DD243), and a fast run says
+            // nothing at all while landing everything.
             var landed = steps.Count;
-            if (landed == drawn)
+            var said = _saying;
+            if (landed == drawn && said == shown)
             {
                 return;
             }
 
             drawn = landed;
-            Show(working, Transcript(steps, findings: null));
+            shown = said;
+            Show(working, Transcript(steps, findings: null, saying: said));
         };
 
         ticker.Start();
@@ -523,14 +546,24 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// <summary>Everything the run said, as one block.</summary>
     /// <param name="steps">The steps, in the order they landed.</param>
     /// <param name="findings">What a tool printed under them, where one did.</param>
+    /// <param name="saying">What the step now running says about itself, or null (DD243).</param>
     /// <returns>The transcript.</returns>
-    private static string Transcript(IEnumerable<RepairStep> steps, string? findings)
+    private static string Transcript(
+        IEnumerable<RepairStep> steps, string? findings, string? saying = null)
     {
         var text = new System.Text.StringBuilder();
         foreach (var step in steps)
         {
             text.Append(step.Ok ? "[ok  ]  " : "[FAIL]  ")
                 .Append(step.What.PadRight(22)).Append("  ").Append(step.Detail).Append('\n');
+        }
+
+        // Under the steps and not among them, which is what keeps it out of the model (DD243). It
+        // is the step now running talking about itself, so it belongs after the last one that
+        // landed and it goes away when that step lands with its own line.
+        if (saying is { Length: > 0 } now)
+        {
+            text.Append("        ").Append(now).Append('\n');
         }
 
         if (findings is { Length: > 0 } said)

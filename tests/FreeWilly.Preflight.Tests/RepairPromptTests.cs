@@ -510,8 +510,10 @@ public sealed class RepairPromptTests
         Assert.DoesNotContain("Dispatcher.BeginInvoke", page, StringComparison.Ordinal);
 
         // And a tick that found nothing new draws nothing, so a four-minute step costs a comparison
-        // every half second and no layout.
-        Assert.Contains("if (landed == drawn)", body, StringComparison.Ordinal);
+        // every half second and no layout. Asserted on the comparison rather than on the whole
+        // condition, which grew a second half when DD243 gave a long step something to say.
+        Assert.Contains("landed == drawn", body, StringComparison.Ordinal);
+        Assert.Contains("said == shown", body, StringComparison.Ordinal);
     }
 
     [Fact]

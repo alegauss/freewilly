@@ -98,7 +98,8 @@ public sealed class SampleFilesystemWork : IFilesystemWork
     /// Refuses like the rest, and this is the one where it matters most: a fixture that reached the
     /// real implementation would put a UAC prompt on the screen during a screenshot capture.
     /// </remarks>
-    public CompactionOutcome CompactAsAdministrator(Action<RepairStep> report) =>
+    public CompactionOutcome CompactAsAdministrator(
+        Action<RepairStep> report, Action<string>? saying = null) =>
         new(Refuse().Steps);
 
     /// <inheritdoc/>

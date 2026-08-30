@@ -134,6 +134,104 @@ public sealed class ElevatedCompactionTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void How_far_diskpart_has_got_is_read_off_the_number_and_never_the_words()
+    {
+        // DD243. diskpart is translated: this machine reads "por cento concluído" and another reads
+        // "percent completed", so a progress bar matched on the prose works on one desk. The shape
+        // below is what the real log carried on 30 August 2026, carriage returns and all, because a
+        // console tool rewrites its line in place.
+        const string portuguese =
+            "\r    0 por cento concluído\r   19 por cento concluído\r   52 por cento concluído";
+        const string english =
+            "\r    0 percent completed\r   87 percent completed\r  100 percent completed";
+
+        Assert.Equal(52, ElevatedCompaction.PercentIn(portuguese));
+        Assert.Equal(100, ElevatedCompaction.PercentIn(english));
+    }
+
+    [Fact]
+    public void The_version_banner_above_the_progress_is_not_mistaken_for_it()
+    {
+        // The header diskpart writes first is full of digits: "Microsoft DiskPart versão
+        // 10.0.26100.1150". None of them is a percentage, and reading one as a hundred would put a
+        // finished bar over a run that had not started.
+        const string banner =
+            "\nMicrosoft DiskPart versão 10.0.26100.1150\n\nNo computador: XPS\n\n"
+            + "DiskPart selecionou com êxito o arquivo de disco virtual.\n";
+
+        Assert.Null(ElevatedCompaction.PercentIn(banner));
+        Assert.Null(ElevatedCompaction.PercentIn(""));
+        Assert.Null(ElevatedCompaction.PercentIn(null));
+    }
+
+    /// <summary>An elevation that writes a log the way diskpart writes one, and takes its time.</summary>
+    private sealed class WritingElevation(string logPath, IReadOnlyList<string> stages) : IElevated
+    {
+        public ElevatedRun Run(string fileName, string arguments)
+        {
+            foreach (var stage in stages)
+            {
+                File.AppendAllText(logPath, stage);
+                Thread.Sleep(700);
+            }
+
+            return new ElevatedRun(Ran: true, ExitCode: 0);
+        }
+    }
+
+    [Fact]
+    public void The_hundreds_that_belong_to_select_and_attach_are_not_reported_as_progress()
+    {
+        // Measured against the real log this machine produced on 30 August 2026: it carried 387
+        // progress segments, and the first of them was already "100 por cento concluído" — because
+        // `select vdisk` and `attach vdisk readonly` each complete before `compact` starts at zero.
+        //
+        // Reported naively, a reader watches the bar reach a hundred and then fall to nothing. So
+        // the climb is what gets reported, and the hundreds before it are silence.
+        var paths = Paths();
+        Directory.CreateDirectory(paths.Root);
+        var log = Path.Combine(paths.Root, "diskpart.log");
+
+        var said = new List<string>();
+        new ElevatedCompaction(
+            Machine(),
+            paths,
+            new WritingElevation(
+                log,
+                [
+                    "\r  100 por cento concluído",  // select
+                    "\r  100 por cento concluído",  // attach
+                    "\r    0 por cento concluído",  // the compaction starts
+                    "\r   52 por cento concluído",
+                    "\r  100 por cento concluído",
+                ]),
+            () => new RepairStep(FilesystemRepair.StopStep, true, "the host was told"),
+            releaseBudget: TimeSpan.FromMilliseconds(200)).Run(saying: said.Add);
+
+        Assert.NotEmpty(said);
+        Assert.DoesNotContain("100 per cent", said[0], StringComparison.Ordinal);
+        Assert.Contains(said, line => line.Contains("0 per cent", StringComparison.Ordinal));
+        Assert.Contains(said, line => line.Contains("52 per cent", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_percentage_never_becomes_a_step()
+    {
+        // DD244 is what one step meaning something other than what it said already cost, so the
+        // progress channel is asserted to stay out of the steps entirely: nothing it says can move
+        // Succeeded or Failure, which read steps by name.
+        var elevated = new FakeElevation(new ElevatedRun(Ran: true, ExitCode: 0));
+        var said = new List<string>();
+        var steps = new List<RepairStep>();
+
+        var outcome = Compaction(Machine(), elevated).Run(steps.Add, said.Add);
+
+        Assert.DoesNotContain(steps, step => said.Contains(step.Detail));
+        Assert.Equal(
+            steps.Count, outcome.Steps.Count);
+    }
+
     [Theory]
     [InlineData("Ubuntu\nfreewilly\n", new[] { "Ubuntu" })]
     [InlineData("freewilly\n", new string[0])]

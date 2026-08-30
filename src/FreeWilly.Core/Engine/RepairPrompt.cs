@@ -35,13 +35,24 @@ public interface IFilesystemWork
     /// Compact it with administrator rights, where Windows has withdrawn the other way (DD237).
     /// </summary>
     /// <param name="report">Called with each step as it lands.</param>
+    /// <param name="saying">
+    /// Called as the run says how far into a long step it is, where it can (DD243). Optional, and a
+    /// caller that passes nothing gets the steps alone.
+    /// </param>
     /// <returns>What was done, and what the disk was either side of it.</returns>
     /// <remarks>
-    /// Beside <see cref="Compact"/> rather than folded into it, because the difference is the whole
-    /// point: this one raises a UAC prompt and that one never does. A single method with a flag
-    /// would be a seam whose most important property was invisible at the call site.
+    /// <para>Beside <see cref="Compact"/> rather than folded into it, because the difference is the
+    /// whole point: this one raises a UAC prompt and that one never does. A single method with a
+    /// flag would be a seam whose most important property was invisible at the call site.</para>
+    ///
+    /// <para><b>Two channels and not one.</b> A percentage is not a step, and putting it through the
+    /// step callback would make it one:
+    /// <see cref="CompactionOutcome.Succeeded"/> and <see cref="CompactionOutcome.Failure"/> read
+    /// steps by name, and DD244 is what one step meaning something other than what it said already
+    /// cost this page.</para>
     /// </remarks>
-    CompactionOutcome CompactAsAdministrator(Action<RepairStep> report);
+    CompactionOutcome CompactAsAdministrator(
+        Action<RepairStep> report, Action<string>? saying = null);
 
     /// <summary>
     /// Whether a check on this machine still owes a network call before it can start (DD216).
