@@ -104,17 +104,26 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
 
     private readonly HttpClient _http;
     private readonly string _pipeName;
+    private readonly TimeSpan _question;
+    private readonly TimeSpan _housekeeping;
 
     /// <summary>Construct a client.</summary>
     /// <param name="pipeName">The pipe to talk to; overridden in tests.</param>
-    /// <param name="timeout">
-    /// How long any one call may take, named from <see cref="EngineBudget"/> by a caller doing
-    /// something other than asking a question. Streaming calls ignore it.
+    /// <param name="timeout">How long a question may take. Streaming calls have no budget.</param>
+    /// <param name="housekeeping">
+    /// How long a prune may take, which is a separate number because it is a separate kind of call
+    /// (DD235). Both are here rather than one: a client is shared by pages asking different things
+    /// of the same daemon, so neither budget can be the other's.
     /// </param>
-    public DockerApi(string pipeName = DefaultPipeName, TimeSpan? timeout = null)
+    public DockerApi(
+        string pipeName = DefaultPipeName,
+        TimeSpan? timeout = null,
+        TimeSpan? housekeeping = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pipeName);
         _pipeName = pipeName;
+        _question = timeout ?? EngineBudget.Question;
+        _housekeeping = housekeeping ?? EngineBudget.Housekeeping;
 
         var handler = new SocketsHttpHandler
         {
@@ -127,12 +136,62 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
 
         // A host is required to build a request URI and is never resolved: the callback above is
         // what decides where the bytes go.
+        //
+        // No timeout on the client since DD235, and that is not the same as no timeout: one number
+        // here would be every call's number, and this client is shared by a page listing containers
+        // and a button pruning a hundred gigabytes. The budget is applied per call below, where
+        // which kind of call it is happens to be known.
         _http = new HttpClient(handler)
         {
             BaseAddress = new Uri("http://localhost/"),
-            Timeout = timeout ?? EngineBudget.Question,
+            Timeout = System.Threading.Timeout.InfiniteTimeSpan,
         };
     }
+
+    /// <summary>
+    /// A token that gives up after <paramref name="budget"/>, and when the caller does.
+    /// </summary>
+    /// <param name="budget">How long this kind of call is given.</param>
+    /// <param name="cancellation">The caller's own token, which still ends the call early.</param>
+    /// <returns>The source, which the caller disposes.</returns>
+    /// <remarks>
+    /// Linked rather than replacing: a page that navigates away has cancelled, and that is a
+    /// different ending from a budget running out. <see cref="Elapsed"/> is what tells them apart
+    /// afterwards, because both arrive as the same exception type.
+    /// </remarks>
+    private static CancellationTokenSource Budgeted(
+        TimeSpan budget, CancellationToken cancellation)
+    {
+        var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        linked.CancelAfter(budget);
+        return linked;
+    }
+
+    /// <summary>
+    /// The sentence for a call that ran out of its budget, or <see langword="null"/> if it did not.
+    /// </summary>
+    /// <param name="thrown">What the call threw.</param>
+    /// <param name="path">The endpoint, so the reader knows what was being waited on.</param>
+    /// <param name="budget">How long it was given.</param>
+    /// <param name="cancellation">The caller's token, whose cancellation is not this.</param>
+    /// <returns>The sentence, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// Written here rather than passing <see cref="Exception.Message"/> through, which is what the
+    /// client used to do and what DD235 read in a log: "The request was canceled due to the
+    /// configured HttpClient.Timeout of 20 seconds elapsing" names a .NET class to somebody holding
+    /// a docker problem, and does not name the endpoint that was slow.
+    /// </remarks>
+    private static string? Elapsed(
+        Exception thrown, string path, TimeSpan budget, CancellationToken cancellation) =>
+        thrown is OperationCanceledException && !cancellation.IsCancellationRequested
+            ? $"the engine did not answer {Path(path)} within {Describe(budget)}"
+            : null;
+
+    /// <summary>A budget in the words a sentence about waiting wants.</summary>
+    private static string Describe(TimeSpan budget) =>
+        budget < TimeSpan.FromMinutes(1)
+            ? $"{budget.TotalSeconds:0.#} seconds"
+            : $"{budget.TotalMinutes:0.#} minutes";
 
     private async ValueTask<Stream> ConnectAsync(
         SocketsHttpConnectionContext context, CancellationToken cancellation)
@@ -162,7 +221,8 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
     {
         try
         {
-            using var response = await _http.GetAsync(Path("_ping"), cancellation)
+            using var budget = Budgeted(_question, cancellation);
+            using var response = await _http.GetAsync(Path("_ping"), budget.Token)
                 .ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
@@ -229,6 +289,10 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
     /// with <c>dangling=false</c> is <c>prune -a</c>, which deletes every image no *running*
     /// container uses — on a developer's machine that is most of them, and it is not a thing to
     /// arrive at by omitting a parameter.
+    ///
+    /// <para>Housekeeping and not a question (DD235). What the daemon does here is unlink layers by
+    /// the gigabyte, and the machine where that takes longest is the machine somebody pressed the
+    /// button on.</para>
     /// </remarks>
     /// <param name="cancellation">Cancellation.</param>
     /// <returns>What was deleted and how much space came back.</returns>
@@ -236,7 +300,8 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
         PostJsonAsync<ImagesPruned>(
             "images/prune?filters=" + Uri.EscapeDataString("""{"dangling":["true"]}"""),
             new { },
-            cancellation);
+            cancellation,
+            _housekeeping);
 
     /// <summary>
     /// Every volume, without their sizes.
@@ -290,12 +355,16 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
     /// <c>all=true</c>, which is not sent and not offered. Every <c>docker run -v /data</c> without
     /// a name leaves an anonymous volume behind and nothing ever collects them, which is the whole
     /// reason this button exists — and a named volume is somebody's database.
+    ///
+    /// <para>Housekeeping and not a question (DD235), for the reason above: nothing ever collects
+    /// these, so what has accumulated by the time somebody presses the button is a directory tree
+    /// the daemon has to walk and delete rather than a record it has to look up.</para>
     /// </remarks>
     /// <param name="cancellation">Cancellation.</param>
     /// <returns>What was deleted and how much space came back.</returns>
     public Task<VolumesPruned> PruneAnonymousVolumesAsync(
         CancellationToken cancellation = default) =>
-        PostJsonAsync<VolumesPruned>("volumes/prune", new { }, cancellation);
+        PostJsonAsync<VolumesPruned>("volumes/prune", new { }, cancellation, _housekeeping);
 
     /// <summary>
     /// Drop the build cache the daemon itself calls reclaimable, and report what came back (DD211).
@@ -315,7 +384,7 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
     /// <param name="cancellation">Cancellation.</param>
     /// <returns>What was deleted and how much space came back.</returns>
     public Task<BuildCachePruned> PruneBuildCacheAsync(CancellationToken cancellation = default) =>
-        PostJsonAsync<BuildCachePruned>("build/prune", new { }, cancellation);
+        PostJsonAsync<BuildCachePruned>("build/prune", new { }, cancellation, _housekeeping);
 
     /// <summary>
     /// What happened between two moments, from the daemon's own bounded history.
@@ -519,33 +588,39 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
         System.Net.Http.Json.JsonContent.Create(body, options: Json);
 
     private async Task<T> PostJsonAsync<T>(
-        string path, object body, CancellationToken cancellation)
+        string path, object body, CancellationToken cancellation, TimeSpan? budget = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, Path(path))
         {
             Content = JsonBody(body),
         };
 
+        var given = budget ?? _question;
+        using var giving = Budgeted(given, cancellation);
         HttpResponseMessage response;
         try
         {
-            response = await _http.SendAsync(request, cancellation).ConfigureAwait(false);
+            response = await _http.SendAsync(request, giving.Token).ConfigureAwait(false);
         }
         catch (Exception exception) when (
             (exception is HttpRequestException or IOException or TimeoutException
              || (exception is TaskCanceledException && !cancellation.IsCancellationRequested)))
         {
             throw new DockerApiException(
-                $"the engine did not answer {Path(path)}: {exception.Message}");
+                Elapsed(exception, path, given, cancellation)
+                ?? $"the engine did not answer {Path(path)}: {exception.Message}");
         }
 
         using (response)
         {
-            await ThrowIfRefusedAsync(response, path, cancellation).ConfigureAwait(false);
+            // The body is inside the budget too, and not only the headers: a prune answers with a
+            // list of every record it deleted, and a call that has spent its ten minutes has spent
+            // them whichever half of the exchange is still going.
+            await ThrowIfRefusedAsync(response, path, giving.Token).ConfigureAwait(false);
             try
             {
                 return await response.Content
-                    .ReadFromJsonAsync<T>(Json, cancellation).ConfigureAwait(false)
+                    .ReadFromJsonAsync<T>(Json, giving.Token).ConfigureAwait(false)
                     ?? throw new DockerApiException($"{Path(path)} returned null");
             }
             catch (JsonException exception)
@@ -569,17 +644,19 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
         HttpMethod method, string path, CancellationToken cancellation)
     {
         using var request = new HttpRequestMessage(method, Path(path));
+        using var giving = Budgeted(_question, cancellation);
         HttpResponseMessage response;
         try
         {
-            response = await _http.SendAsync(request, cancellation).ConfigureAwait(false);
+            response = await _http.SendAsync(request, giving.Token).ConfigureAwait(false);
         }
         catch (Exception exception) when (
             (exception is HttpRequestException or IOException or TimeoutException
              || (exception is TaskCanceledException && !cancellation.IsCancellationRequested)))
         {
             throw new DockerApiException(
-                $"the engine did not answer {Path(path)}: {exception.Message}");
+                Elapsed(exception, path, _question, cancellation)
+                ?? $"the engine did not answer {Path(path)}: {exception.Message}");
         }
 
         using (response)
@@ -592,7 +669,7 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
                 return;
             }
 
-            await ThrowIfRefusedAsync(response, path, cancellation).ConfigureAwait(false);
+            await ThrowIfRefusedAsync(response, path, giving.Token).ConfigureAwait(false);
         }
     }
 
@@ -600,9 +677,14 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
     /// Open a streaming endpoint and hand back its body, unread.
     /// </summary>
     /// <remarks>
-    /// For <c>/events</c> and container logs: endpoints that never end. The response is not buffered,
-    /// so the caller reads frames as the daemon writes them — which is the thing shelling out to a
-    /// CLI cannot do without owning a child process's stdout.
+    /// <para>For <c>/events</c> and container logs: endpoints that never end. The response is not
+    /// buffered, so the caller reads frames as the daemon writes them — which is the thing shelling
+    /// out to a CLI cannot do without owning a child process's stdout.</para>
+    ///
+    /// <para><b>The one call with no budget of its own</b>, which is why DD235 could move the
+    /// budgets off the client without changing anything here. An endpoint that never ends is the
+    /// one shape a deadline cannot describe, and the caller's token is the whole of how it stops.
+    /// </para>
     /// </remarks>
     /// <param name="path">The endpoint, without a leading slash or version.</param>
     /// <param name="cancellation">Cancellation. Closing it is how the stream ends.</param>
@@ -615,11 +697,17 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var request = new HttpRequestMessage(method, Path(path)) { Content = body };
+
+        // Only as far as the headers, which is exactly how much of a streaming call the client's
+        // own timeout used to bound: with ResponseHeadersRead it stopped counting once they
+        // arrived. Keeping that under DD235 takes saying so, because a budget applied to the whole
+        // call here would close /events twenty seconds after opening it.
+        using var giving = Budgeted(_question, cancellation);
         HttpResponseMessage response;
         try
         {
             response = await _http
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation)
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, giving.Token)
                 .ConfigureAwait(false);
         }
         catch (Exception exception) when (
@@ -627,19 +715,23 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
              || (exception is TaskCanceledException && !cancellation.IsCancellationRequested)))
         {
             throw new DockerApiException(
-                $"the engine did not answer {Path(path)}: {exception.Message}");
+                Elapsed(exception, path, _question, cancellation)
+                ?? $"the engine did not answer {Path(path)}: {exception.Message}");
         }
 
+        // The caller's token from here, and not the budgeted one: what is left is a body with no
+        // end, and the caller closing its token is the whole of how such a call stops.
         await ThrowIfRefusedAsync(response, path, cancellation).ConfigureAwait(false);
         return await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
     }
 
     private async Task<T> GetAsync<T>(string path, CancellationToken cancellation)
     {
+        using var giving = Budgeted(_question, cancellation);
         HttpResponseMessage response;
         try
         {
-            response = await _http.GetAsync(Path(path), cancellation).ConfigureAwait(false);
+            response = await _http.GetAsync(Path(path), giving.Token).ConfigureAwait(false);
         }
         catch (Exception exception) when (
             (exception is HttpRequestException or IOException or TimeoutException
@@ -647,20 +739,21 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
         {
             // Naming the endpoint matters: "the pipe is not there" is one failure and "this call was
             // refused" is another, and a UI that shows the same message for both teaches nothing.
-            // TaskCanceledException is in the list because that is what HttpClient raises when its
-            // own timeout elapses, and letting it out raw is the same failure with no endpoint in it.
-            // A cancellation the caller asked for is not caught: that one belongs to them.
+            // TaskCanceledException is in the list because that is what a budget elapsing raises,
+            // and letting it out raw is the same failure with no endpoint in it. A cancellation the
+            // caller asked for is not caught: that one belongs to them.
             throw new DockerApiException(
-                $"the engine did not answer {Path(path)}: {exception.Message}");
+                Elapsed(exception, path, _question, cancellation)
+                ?? $"the engine did not answer {Path(path)}: {exception.Message}");
         }
 
         using (response)
         {
-            await ThrowIfRefusedAsync(response, path, cancellation).ConfigureAwait(false);
+            await ThrowIfRefusedAsync(response, path, giving.Token).ConfigureAwait(false);
             try
             {
                 return await response.Content
-                    .ReadFromJsonAsync<T>(Json, cancellation).ConfigureAwait(false)
+                    .ReadFromJsonAsync<T>(Json, giving.Token).ConfigureAwait(false)
                     ?? throw new DockerApiException($"{Path(path)} returned null");
             }
             catch (JsonException exception)

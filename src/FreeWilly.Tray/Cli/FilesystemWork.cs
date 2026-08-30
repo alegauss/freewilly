@@ -160,19 +160,18 @@ internal sealed class FilesystemWork : IFilesystemWork
     /// before the stop because it needs the daemon, which is the whole reason the sequence takes it
     /// as a seam rather than doing it itself.</para>
     ///
-    /// <para><b>Asked as housekeeping and not as a question (DD234).</b> Under the client's default
-    /// this step failed at twenty seconds on a disk with 56.5 GB in use, which is the disk the
-    /// button is for. The ping keeps the short budget it always had: it is a question, it is what
-    /// tells a stopped engine from a busy one, and a pipe nothing is serving still refuses in two
-    /// seconds.</para>
+    /// <para><b>An ordinary client since DD235.</b> DD234 had to hand this one a longer timeout,
+    /// because under the client's default the step failed at twenty seconds on a disk with 56.5 GB
+    /// in use — the disk the button is for. The budget now belongs to the call rather than to the
+    /// client, so the prune asks for the long one and the ping still gets the short one without
+    /// anything here saying so.</para>
     /// </remarks>
     private static RepairStep PruneBuildCache()
     {
         try
         {
-            using var api = new DockerApi(timeout: EngineBudget.Housekeeping);
-            using var asking = new CancellationTokenSource(EngineBudget.Question);
-            if (!api.PingAsync(asking.Token).GetAwaiter().GetResult())
+            using var api = new DockerApi();
+            if (!api.PingAsync().GetAwaiter().GetResult())
             {
                 return new RepairStep(
                     DiskCompaction.PruneStep,

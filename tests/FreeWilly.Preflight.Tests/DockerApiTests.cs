@@ -440,15 +440,18 @@ public sealed class DockerApiTests
     }
 
     [Fact]
-    public async Task A_prune_that_outlives_the_question_budget_still_returns_what_it_freed()
+    public async Task A_prune_outlives_the_budget_a_question_gets_on_the_same_client()
     {
-        // The daemon here is not stuck, it is deleting: the shape of a real prune, which takes as
-        // long as there is cache to walk. Milliseconds rather than minutes, because what is under
-        // test is that the budget is the caller's to name and not that ten of them is the number.
+        // One client, two budgets, which is the whole of DD235: the window's pages and its prune
+        // buttons share a client, so raising the one number would have been raising it for every
+        // list too. The daemon here is not stuck, it is deleting.
         await using var daemon = new FakeDockerDaemon()
             .Json(Path("build/prune"), """{"CachesDeleted":["k1","k2"],"SpaceReclaimed":4294967296}""")
             .Takes(Path("build/prune"), TimeSpan.FromMilliseconds(600));
-        using var api = new DockerApi(daemon.PipeName, TimeSpan.FromSeconds(10));
+        using var api = new DockerApi(
+            daemon.PipeName,
+            timeout: TimeSpan.FromMilliseconds(250),
+            housekeeping: TimeSpan.FromSeconds(10));
 
         var pruned = await api.PruneBuildCacheAsync();
 
@@ -456,17 +459,78 @@ public sealed class DockerApiTests
         Assert.Equal(4294967296, pruned.SpaceReclaimed);
     }
 
-    [Fact]
-    public async Task The_same_prune_under_too_short_a_budget_is_the_failure_DD234_reported()
+    [Theory]
+    [InlineData("images/prune?filters=%7B%22dangling%22%3A%5B%22true%22%5D%7D")]
+    [InlineData("volumes/prune")]
+    public async Task The_window_s_prune_buttons_get_the_same_budget_the_compaction_does(string endpoint)
     {
+        // DD235's actual report: both of these ran under the list's twenty seconds, on the surface
+        // where a user is watching and the machine is large enough to have pressed the button.
         await using var daemon = new FakeDockerDaemon()
-            .Json(Path("build/prune"), """{"CachesDeleted":[],"SpaceReclaimed":0}""")
-            .Takes(Path("build/prune"), TimeSpan.FromSeconds(5));
+            .Json(Path(endpoint), """{"ImagesDeleted":[],"VolumesDeleted":[],"SpaceReclaimed":17}""")
+            .Takes(Path(endpoint), TimeSpan.FromMilliseconds(600));
+        using var api = new DockerApi(
+            daemon.PipeName,
+            timeout: TimeSpan.FromMilliseconds(250),
+            housekeeping: TimeSpan.FromSeconds(10));
+
+        var reclaimed = endpoint.StartsWith("images", StringComparison.Ordinal)
+            ? (await api.PruneDanglingImagesAsync()).SpaceReclaimed
+            : (await api.PruneAnonymousVolumesAsync()).SpaceReclaimed;
+
+        Assert.Equal(17, reclaimed);
+    }
+
+    [Fact]
+    public async Task A_list_keeps_the_short_budget_on_a_client_whose_prune_is_patient()
+    {
+        // The other half of the same claim, and the one that would break if the fix had been to
+        // raise the client's timeout: a hung list still has to give up while somebody is looking.
+        await using var daemon = new FakeDockerDaemon()
+            .Json(Path("containers/json?all=1"), ContainersJson)
+            .Takes(Path("containers/json?all=1"), TimeSpan.FromSeconds(5));
+        using var api = new DockerApi(
+            daemon.PipeName,
+            timeout: TimeSpan.FromMilliseconds(300),
+            housekeeping: TimeSpan.FromMinutes(10));
+
+        var thrown = await Assert.ThrowsAsync<DockerApiException>(() => api.ContainersAsync());
+
+        Assert.Contains("containers/json", thrown.Message, StringComparison.Ordinal);
+        Assert.Null(thrown.Status);
+    }
+
+    [Fact]
+    public async Task A_budget_that_runs_out_names_the_endpoint_and_the_wait_and_no_dotnet_class()
+    {
+        // What DD235 read in a log was ".NET's own sentence": "The request was canceled due to the
+        // configured HttpClient.Timeout of 20 seconds elapsing" — a class the reader does not have,
+        // and no endpoint.
+        await using var daemon = new FakeDockerDaemon()
+            .Json(Path("version"), VersionJson)
+            .Takes(Path("version"), TimeSpan.FromSeconds(5));
         using var api = new DockerApi(daemon.PipeName, TimeSpan.FromMilliseconds(300));
 
-        var thrown = await Assert.ThrowsAsync<DockerApiException>(() => api.PruneBuildCacheAsync());
+        var thrown = await Assert.ThrowsAsync<DockerApiException>(() => api.VersionAsync());
 
-        Assert.Contains("build/prune", thrown.Message, StringComparison.Ordinal);
-        Assert.Null(thrown.Status);
+        Assert.Contains("did not answer", thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("version", thrown.Message, StringComparison.Ordinal);
+        Assert.Contains("0.3 seconds", thrown.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("HttpClient", thrown.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_cancellation_the_caller_asked_for_is_not_dressed_up_as_a_budget()
+    {
+        // The linked token is what makes these two tellable apart, and they are different endings:
+        // one is a page that navigated away, the other is a daemon that took too long.
+        await using var daemon = new FakeDockerDaemon()
+            .Json(Path("version"), VersionJson)
+            .Takes(Path("version"), TimeSpan.FromSeconds(5));
+        using var api = new DockerApi(daemon.PipeName, TimeSpan.FromMinutes(1));
+        using var caller = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => api.VersionAsync(caller.Token));
     }
 }
