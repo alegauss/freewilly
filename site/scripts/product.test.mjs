@@ -329,9 +329,21 @@ test("the generated help text is CommandLine's, with its verb constants resolved
   const printed = [...commandLine.matchAll(/^ {2,}(--[a-z-]+)/gm)].map(([, verb]) => verb);
   assert.ok(printed.length > 5, "the help text in CommandLine.cs no longer lists verbs");
 
+  // On the whole verb and not on a prefix of one (DD248). `startsWith` was what this asked for a
+  // session, and it answered `--compact` with the `--compact-drill` line that was already there —
+  // so a verb shipped, the generated help never carried it, and this passed. The project makes
+  // that collision on purpose: it names a rehearsal after the thing it rehearses, so `--fsck` sits
+  // under `--fsck-drill` and `--compact` under `--compact-drill`, and there will be more.
+  const names = (line, verb) => {
+    const trimmed = line.trimStart();
+    if (!trimmed.startsWith(verb)) return false;
+    const next = trimmed[verb.length];
+    return next === undefined || next === " ";
+  };
+
   for (const verb of new Set(printed)) {
     assert.ok(
-      product.help.some((line) => line.trimStart().startsWith(verb)),
+      product.help.some((line) => names(line, verb)),
       `CommandLine.cs prints ${verb} and the generated help does not: run npm run generate`,
     );
   }
