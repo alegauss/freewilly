@@ -13,15 +13,19 @@ climb: 0, 10, 19, 20, 29, 52, 86, 87, 98, 100 per cent. That went to `diskpart.l
 because an elevated child's handles cannot be read from this side, and the file is
 written for the failing case. Nothing reads it while it matters.
 
-Following the file is the obvious shape and it is a tail rather than a parse: the last
-percentage in it is the answer, and the words around the number are translated on every
-machine. So the number is what is matched and the sentence beside it stays this tool's
-own.
+The doubt this was filed under is now settled. A log being written through a `>`
+redirect can be opened with `FileShare.ReadWrite` and read while the child is still
+going: probed on 30 August 2026 against a command writing eight lines over eight
+seconds, a read at four seconds returned four of them. So the mechanism works.
 
-An idea rather than a task because the cost is not obvious. It is a second reader of a
-file being written by a process this one cannot see, and the payoff is a number on a
-line that is already honest about what it is doing. Worth doing after somebody has
-watched a slow compaction and said whether the one line was enough.
+What is still unmeasured is diskpart's own buffering. A console tool writing to a
+redirected handle often switches to block buffering, so the climb may arrive in two or
+three jumps rather than smoothly. Two jumps over two and a half minutes is still worth
+more than one unchanging line.
+
+The cost is a second callback beside the step one, through `IFilesystemWork`, because a
+percentage is not a step and must not be one: `Succeeded` and `Failure` read steps by
+name.
 
 ## Block B — The daemon client (talk to the engine)
 
