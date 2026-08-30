@@ -79,6 +79,7 @@
 - ✅ **DD228** **a temporary distribution left by an interrupted run makes the next one refuse instead of taking it back** — Every import first terminates and unregisters the name it is about to take, so a run that meets a leftover of its own clears it and says so instead of stopping on ERROR_ALREADY_EXISTS.
 - ✅ **DD231** **the preflight calls this tool's own running engine an unidentified rival and tells the user to uninstall it first** — The pipe signal drops out where a host of this tool's holds the engine slot, so a running FreeWilly is no longer reported as an unidentified engine the user is told to uninstall.
 - ✅ **DD234** **the compaction drops the build cache under a twenty second budget, so the fuller the disk the surer that step fails** — EngineBudget names both kinds of call, the compaction's prune is asked as Housekeeping with ten minutes, and its ping keeps the twenty seconds telling a stopped engine from a busy one.
+- ✅ **DD237** **Windows has withdrawn the hand-back that needed no admin, so the Compact button now ends at a wall on every machine** — The refused ending now carries a button that runs diskpart under one runas, naming the four verbs first, and the tray itself stays unelevated.
 
 ## Block B — The daemon client (talk to the engine)
 

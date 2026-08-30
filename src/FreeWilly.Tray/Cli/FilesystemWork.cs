@@ -70,6 +70,26 @@ internal sealed class FilesystemWork : IFilesystemWork
         return new DiskCompaction(new Wsl(), paths, PruneBuildCache, StopTheEngine).Run(report);
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Shorter still than the compaction, and for the reason DD237 gives: this is offered at the end
+    /// of a run that has already dropped the build cache and trimmed the filesystem, so what is left
+    /// is taking the disk out of use and handing it to diskpart.
+    /// </remarks>
+    public CompactionOutcome CompactAsAdministrator(Action<RepairStep> report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        var paths = new EnginePaths();
+        if (Unregistered(paths, "virtual disk here to compact") is { } missing)
+        {
+            return new CompactionOutcome([missing]);
+        }
+
+        return new ElevatedCompaction(new Wsl(), paths, new WindowsElevation(), StopTheEngine)
+            .Run(report);
+    }
+
     private static RepairOutcome Run(Action<RepairStep> report, bool write)
     {
         ArgumentNullException.ThrowIfNull(report);

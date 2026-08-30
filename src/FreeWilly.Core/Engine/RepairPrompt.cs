@@ -32,6 +32,18 @@ public interface IFilesystemWork
     CompactionOutcome Compact(Action<RepairStep> report);
 
     /// <summary>
+    /// Compact it with administrator rights, where Windows has withdrawn the other way (DD237).
+    /// </summary>
+    /// <param name="report">Called with each step as it lands.</param>
+    /// <returns>What was done, and what the disk was either side of it.</returns>
+    /// <remarks>
+    /// Beside <see cref="Compact"/> rather than folded into it, because the difference is the whole
+    /// point: this one raises a UAC prompt and that one never does. A single method with a flag
+    /// would be a seam whose most important property was invisible at the call site.
+    /// </remarks>
+    CompactionOutcome CompactAsAdministrator(Action<RepairStep> report);
+
+    /// <summary>
     /// Whether a check on this machine still owes a network call before it can start (DD216).
     /// </summary>
     /// <remarks>
@@ -77,6 +89,21 @@ public interface IFilesystemWork
 public sealed record RepairPrompt(
     string Headline, string Detail, bool OfferRepair, bool StartsAgain = false)
 {
+    /// <summary>
+    /// Whether compacting with administrator rights is worth offering from here (DD237).
+    /// </summary>
+    /// <remarks>
+    /// <para>Set on exactly one ending: the hand-back Windows has withdrawn. Not on an ordinary
+    /// failure, which is something a second press might get a different answer to, and not on
+    /// success, where there is nothing left to offer. Elevation offered anywhere else would be this
+    /// tool reaching for administrator rights as a way of getting past problems.</para>
+    ///
+    /// <para>Beside <see cref="OfferRepair"/> and decided here rather than by the page, for the
+    /// reason that one is: a window working out for itself when to raise a UAC prompt would be a
+    /// second opinion about the same refusal, and the two surfaces would drift.</para>
+    /// </remarks>
+    public bool OfferElevated { get; init; }
+
     /// <summary>What the panel says before anything has been run.</summary>
     /// <remarks>
     /// The cost is in the sentence rather than discovered by pressing. Checking needs the root
@@ -190,13 +217,37 @@ public sealed record RepairPrompt(
         + "which Docker rebuilds the next time it needs it.\n\n"
         + (refusedBefore
             ? "Windows refused the last step on this machine: it has sparse disks turned off, and "
-              + "the only way round that is a setting this tool will not use on a disk holding "
+              + "the setting that overrides it is one this tool will not use on a disk holding "
               + "your images. The earlier steps still run, and the last one is likely to be "
-              + "refused again.\n\n"
+              + "refused again. If it is, this page then offers to do it with administrator "
+              + "rights instead.\n\n"
               + "Docker starts again by itself at the end.\n\n"
               + "Stop Docker and try anyway?"
             : "Docker starts again by itself at the end.\n\n"
               + "Stop Docker and compact now?");
+
+    /// <summary>What the elevated compaction asks before it raises a prompt (DD237).</summary>
+    /// <returns>The question, as the dialog asks it.</returns>
+    /// <remarks>
+    /// <para><b>It names the command.</b> Asking somebody to approve administrator rights without
+    /// saying what will run with them is asking them to approve the rights themselves, which is the
+    /// habit that trains people into clicking through UAC. The four verbs are short enough to
+    /// print, so they are printed.</para>
+    ///
+    /// <para><b>It says what declining costs</b>, which is nothing. The prompt is refusable and the
+    /// disk is exactly as it was afterwards; a dialog that left that unsaid would make the safe
+    /// answer feel like the risky one.</para>
+    /// </remarks>
+    public static string ElevatedConfirmation() =>
+        "Windows has turned off the way of doing this that needs no administrator rights, so the "
+        + "one route left asks for them.\n\n"
+        + "Windows will show a prompt. Approving it runs diskpart, which selects the virtual disk, "
+        + "attaches it read-only, compacts it and detaches it.\n\n"
+        + "That reclaims what the disk is holding and the filesystem has already finished with. It "
+        + "does not delete images, containers or volumes.\n\n"
+        + "Docker stops while it runs and starts again afterwards. Declining the prompt costs "
+        + "nothing: the disk is left exactly as it is now.\n\n"
+        + "Ask for administrator rights?";
 
     /// <summary>What the panel says while a compaction is running.</summary>
     public static readonly RepairPrompt Compacting = new(
@@ -305,11 +356,19 @@ public sealed record RepairPrompt(
             return new RepairPrompt(
                 withdrawn ? "Windows has turned this off" : "The disk was not compacted",
                 (outcome.Failure?.Detail ?? "nothing said where it stopped")
+                + (withdrawn
+                    ? " There is one route left and it needs administrator rights."
+                    : "")
                 + (outcome.EngineWentDown
                     ? " Nothing on the disk was changed by this, so Docker is being started again."
                     : " Nothing was stopped, so Docker is as it was."),
                 OfferRepair: false,
-                StartsAgain: outcome.EngineWentDown);
+                StartsAgain: outcome.EngineWentDown)
+            {
+                // The one ending that gets the offer (DD237). An ordinary failure does not: that is
+                // something a retry might answer differently, and elevation is not a way past it.
+                OfferElevated = withdrawn,
+            };
         }
 
         return outcome.HandedBack is { } bytes

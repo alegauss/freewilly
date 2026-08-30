@@ -419,6 +419,38 @@ public sealed class RepairPromptTests
     }
 
     [Fact]
+    public void The_administrator_button_is_collapsed_in_the_markup_and_shown_only_by_the_prompt()
+    {
+        // DD237, asserted in the markup because the window driver cannot reach it: that verb
+        // attaches to whatever FreeWilly is already running, which on a developer's machine is the
+        // installed build rather than the one just compiled.
+        //
+        // What must never regress is the starting state. A button asking for administrator rights
+        // that is visible on a freshly opened page is a tool asking for them because it can, and
+        // the page has to have been refused the other route before it may offer this one.
+        var markup = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Ui/Pages/EnginePage.xaml"));
+        var page = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Ui/Pages/EnginePage.xaml.cs"));
+
+        var button = markup.IndexOf("x:Name=\"Elevate\"", StringComparison.Ordinal);
+        Assert.True(button > 0, "the page carries no administrator button");
+
+        var declared = markup.IndexOf("/>", button, StringComparison.Ordinal);
+        Assert.Contains(
+            "Visibility=\"Collapsed\"", markup[button..declared], StringComparison.Ordinal);
+
+        // And it is the prompt that decides, not the page: a window working out for itself when to
+        // raise a UAC prompt would be a second opinion about the same refusal.
+        Assert.Contains("prompt.OfferElevated", page, StringComparison.Ordinal);
+
+        // Words rather than a colour emoji, which is what the reference does and what every other
+        // button on this page is.
+        var content = markup.IndexOf("Content=\"Compact as administrator\"", StringComparison.Ordinal);
+        Assert.True(content > 0, "the administrator button was relabelled");
+    }
+
+    [Fact]
     public void The_readings_follow_the_engine_rather_than_only_the_page_being_opened()
     {
         // DD212, and the picture that filed it: the strip said Engine running while the panel under
@@ -551,6 +583,69 @@ public sealed class RepairPromptTests
         ]);
 
         Assert.Equal("The disk was not compacted", RepairPrompt.Of(ordinary).Headline);
+    }
+
+    [Fact]
+    public void Only_the_withdrawn_hand_back_is_offered_administrator_rights()
+    {
+        // DD237. The offer exists because that one ending has no unelevated route left, and it must
+        // not spread: an ordinary failure is something a retry might answer differently, and a tool
+        // that reached for administrator rights whenever something went wrong would be teaching the
+        // habit this whole design avoids.
+        var withdrawn = new CompactionOutcome(
+        [
+            new RepairStep(FilesystemRepair.StopStep, true, "told the host to stop"),
+            new RepairStep(
+                DiskCompaction.HandBackStep,
+                false,
+                "Windows has turned off the only way of handing these blocks back that needs no "
+                + $"administrator rights, and offers {DiskCompaction.UnsafeFlag} instead."),
+        ]);
+
+        var offered = RepairPrompt.Of(withdrawn);
+        Assert.True(offered.OfferElevated);
+        Assert.Contains("administrator rights", offered.Detail, StringComparison.Ordinal);
+
+        var ordinary = new CompactionOutcome(
+        [
+            new RepairStep(FilesystemRepair.StopStep, true, "told the host to stop"),
+            new RepairStep(DiskCompaction.HandBackStep, false, "the disk is still in use"),
+        ]);
+        Assert.False(RepairPrompt.Of(ordinary).OfferElevated);
+
+        // Nor on the ending where it worked, which has nothing left to offer.
+        var worked = new CompactionOutcome(
+            [new RepairStep(DiskCompaction.HandBackStep, true, "freewilly is sparse")]);
+        Assert.False(RepairPrompt.Of(worked).OfferElevated);
+    }
+
+    [Fact]
+    public void The_elevated_plan_names_the_command_and_says_declining_costs_nothing()
+    {
+        // DD237. Approving administrator rights without being told what runs with them is approving
+        // the rights themselves, which is the habit that trains people into clicking through UAC.
+        // And a dialog that left the cost of "No" unsaid would make the safe answer feel risky.
+        var plan = RepairPrompt.ElevatedConfirmation();
+
+        Assert.Contains("diskpart", plan, StringComparison.Ordinal);
+        Assert.Contains("read-only", plan, StringComparison.Ordinal);
+        Assert.Contains(
+            "does not delete images, containers or volumes", plan, StringComparison.Ordinal);
+        Assert.Contains("Declining the prompt costs nothing", plan, StringComparison.Ordinal);
+
+        // The unsafe flag is what the other route refuses, and no dialog here offers it as a way on.
+        Assert.DoesNotContain(DiskCompaction.UnsafeFlag, plan, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_plan_for_a_machine_that_was_refused_points_at_the_route_that_is_left()
+    {
+        // DD226 told a refused machine it was likely to be refused again and stopped there, which
+        // was true when there was nothing after it. DD237 put something after it, so leaving that
+        // sentence alone would have made the plan the one thing on this page that was out of date.
+        var again = RepairPrompt.CompactConfirmation(refusedBefore: true);
+
+        Assert.Contains("administrator rights", again, StringComparison.Ordinal);
     }
 
     [Fact]

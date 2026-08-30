@@ -39,14 +39,20 @@ public sealed record CompactionOutcome(IReadOnlyList<RepairStep> Steps)
     /// Whether the blocks were handed back.
     /// </summary>
     /// <remarks>
-    /// Read off the one step that does it, and not off all of them, because two of the steps here
-    /// are preparation: pruning the daemon's cache and trimming the filesystem only make the reclaim
-    /// larger. Neither failing is a reason to leave already-freed blocks sitting on the Windows
-    /// volume, and a run that could not reach the daemon and still handed back four gigabytes did
-    /// the thing the button is for.
+    /// <para>Read off the one step that does it, and not off all of them, because two of the steps
+    /// here are preparation: pruning the daemon's cache and trimming the filesystem only make the
+    /// reclaim larger. Neither failing is a reason to leave already-freed blocks sitting on the
+    /// Windows volume, and a run that could not reach the daemon and still handed back four
+    /// gigabytes did the thing the button is for.</para>
+    ///
+    /// <para>Two step names since DD237, because there are now two ways to do the one thing: the
+    /// unelevated hand-back, and diskpart where Windows has withdrawn it. Either landing is this
+    /// record's subject having happened, and a reader of the outcome should not have to know which
+    /// route the machine was able to take.</para>
     /// </remarks>
     public bool Succeeded => Steps.Any(
-        step => step.What == DiskCompaction.HandBackStep && step.Ok);
+        step => step.Ok
+            && step.What is DiskCompaction.HandBackStep or ElevatedCompaction.CompactStep);
 
     /// <summary>The first step that failed, or <see langword="null"/>.</summary>
     public RepairStep? Failure => Steps.FirstOrDefault(step => !step.Ok);
@@ -248,17 +254,30 @@ public sealed class DiskCompaction
 
     /// <summary>Both sizes, at this moment.</summary>
     /// <returns>The reading, with either half null where it could not be taken.</returns>
+    private DiskSizes Sizes() => Read(_wsl, _paths);
+
+    /// <summary>All three sizes, at this moment.</summary>
+    /// <param name="wsl">The WSL command, for the reading taken from inside.</param>
+    /// <param name="paths">Where the distribution and its virtual disk are.</param>
+    /// <returns>The reading, with any part null where it could not be taken.</returns>
     /// <remarks>
-    /// The inside half asks the distribution, which starts it where it is stopped — which is why the
-    /// second reading is taken after the hand-back and the hand-back is the last thing that needs the
-    /// distribution down.
+    /// <para>The inside half asks the distribution, which starts it where it is stopped — which is
+    /// why the second reading is taken after the hand-back and the hand-back is the last thing that
+    /// needs the distribution down.</para>
+    ///
+    /// <para>Public and static since DD237, because the elevated compaction reports the same three
+    /// numbers and has to read them the same way. A second copy of this would be the one that
+    /// forgot DD225 and went back to measuring a sparse file by its length.</para>
     /// </remarks>
-    private DiskSizes Sizes()
+    public static DiskSizes Read(IWsl wsl, EnginePaths paths)
     {
+        ArgumentNullException.ThrowIfNull(wsl);
+        ArgumentNullException.ThrowIfNull(paths);
+
+        var vhdx = Path.Combine(paths.Distribution, "ext4.vhdx");
         long? onDisk = null;
         try
         {
-            var vhdx = VirtualDiskPath;
             if (File.Exists(vhdx))
             {
                 onDisk = new FileInfo(vhdx).Length;
@@ -271,8 +290,8 @@ public sealed class DiskCompaction
             onDisk = null;
         }
 
-        var asked = _wsl.Run(
-            WslBudget.Work, "-d", _paths.DistributionName, "-u", "root", "--exec",
+        var asked = wsl.Run(
+            WslBudget.Work, "-d", paths.DistributionName, "-u", "root", "--exec",
             "/bin/sh", "-c", DistributionState.Script);
 
         var used = asked.Succeeded ? DistributionState.Of(asked.Output)?.UsedKb : null;
@@ -280,8 +299,7 @@ public sealed class DiskCompaction
         // What the volume is charging for, which is the only one of the three a hand-back moves
         // (DD225). Asked of Windows rather than derived, because a sparse file's length says
         // nothing about it.
-        return new DiskSizes(
-            onDisk, used is { } kb ? kb * 1024 : null, FileOnDisk.Bytes(VirtualDiskPath));
+        return new DiskSizes(onDisk, used is { } kb ? kb * 1024 : null, FileOnDisk.Bytes(vhdx));
     }
 
     /// <summary>Tell ext4 to discard the blocks it is no longer using.</summary>

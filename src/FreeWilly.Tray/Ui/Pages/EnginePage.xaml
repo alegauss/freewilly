@@ -75,6 +75,17 @@
                  already costs, so this is the row where both of those are already on screen. -->
             <Button x:Name="Repair" Content="Repair" Click="RepairTheFilesystem"
                     Visibility="Collapsed" Padding="12,2" Margin="0,0,8,0" FontSize="12" />
+            <!-- Hidden like Repair and for the same rule (DD237): it appears only where a run has
+                 just found the thing it is for, which here is Windows refusing the hand-back that
+                 needs no rights.
+
+                 Words and no glyph, which is what every other button on this page is and what
+                 claude-tray does with the one control it marks — a Segoe MDL2 code point, never a
+                 colour emoji. "as administrator" is Windows' own phrase for a thing that raises a
+                 prompt, so the label already carries the warning a shield would. -->
+            <Button x:Name="Elevate" Content="Compact as administrator"
+                    Click="CompactAsAdministrator" Visibility="Collapsed"
+                    Padding="12,2" Margin="0,0,8,0" FontSize="12" />
             <Button x:Name="Compact" Content="Compact" Click="CompactTheDisk"
                     Padding="12,2" Margin="0,0,8,0" FontSize="12" />
             <Button x:Name="Check" Content="Check filesystem" Click="CheckTheFilesystem"

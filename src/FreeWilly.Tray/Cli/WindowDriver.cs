@@ -141,6 +141,19 @@ internal static class WindowDriver
 
         Say("repair", "not offered, which is right before a check has found anything");
 
+        // The same guard one button along (DD237). This one is worth more than Repair's: a page
+        // that offered administrator rights before a compaction had been refused would be a tool
+        // asking for them because it can rather than because the machine has left it no other way.
+        if (Look(window, "Elevate") is { } elevate && !elevate.Current.IsOffscreen)
+        {
+            Console.Error.WriteLine(
+                $"{CommandLine.ExecutableName}: Compact as administrator is on screen before any "
+                + "compaction has been refused, so the page is asking for elevation unprompted");
+            return Failed;
+        }
+
+        Say("elevate", "not offered, which is right until Windows has refused the other route");
+
         if (!checking)
         {
             Console.WriteLine();

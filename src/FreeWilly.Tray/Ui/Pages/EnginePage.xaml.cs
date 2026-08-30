@@ -318,6 +318,35 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         }
     }
 
+    /// <summary>Compact it with administrator rights, once asked to (DD237).</summary>
+    /// <param name="sender">Unused.</param>
+    /// <param name="e">Unused.</param>
+    /// <remarks>
+    /// <para>Two confirmations before one UAC prompt looks like one too many until you notice they
+    /// ask different questions. Windows asks whether this program may have administrator rights and
+    /// will not say what for; this asks whether the user wants what the rights are being taken out
+    /// for, which is the only question with a command in it.</para>
+    ///
+    /// <para>The button that opens this is hidden until a run has been refused the unelevated way,
+    /// so nothing here re-checks that: the page draws what
+    /// <see cref="RepairPrompt.OfferElevated"/> decided, exactly as it does for Repair.</para>
+    /// </remarks>
+    private async void CompactAsAdministrator(object sender, RoutedEventArgs e)
+    {
+        var answer = System.Windows.MessageBox.Show(
+            Window.GetWindow(this),
+            RepairPrompt.ElevatedConfirmation(),
+            "Compact as administrator",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning,
+            System.Windows.MessageBoxResult.No);
+
+        if (answer is System.Windows.MessageBoxResult.Yes)
+        {
+            await Compacting(elevated: true).ConfigureAwait(true);
+        }
+    }
+
     /// <summary>Run the compaction, off the thread that draws the result (DD211).</summary>
     /// <returns>The work.</returns>
     /// <remarks>
@@ -330,7 +359,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
     /// two sizes it acted on are three rows further up this page, and a headline claiming gigabytes
     /// above a panel still showing the old figure is one the reader has no reason to believe.</para>
     /// </remarks>
-    internal async Task Compacting()
+    internal async Task Compacting(bool elevated = false)
     {
         Busy(true);
         _interlude.Expected();
@@ -340,7 +369,12 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         CompactionOutcome outcome;
         try
         {
-            outcome = await Task.Run(() => _work.Compact(steps.Enqueue)).ConfigureAwait(true);
+            // The two seams and not one with a flag, so the call site says which of these puts a
+            // UAC prompt on the screen (DD237).
+            outcome = await Task.Run(
+                () => elevated
+                    ? _work.CompactAsAdministrator(steps.Enqueue)
+                    : _work.Compact(steps.Enqueue)).ConfigureAwait(true);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -374,6 +408,7 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
         Check.IsEnabled = !running;
         Repair.IsEnabled = !running;
         Compact.IsEnabled = !running;
+        Elevate.IsEnabled = !running;
     }
 
     /// <summary>Run one of the two, off the thread that draws the result.</summary>
@@ -458,6 +493,10 @@ internal sealed partial class EnginePage : System.Windows.Controls.UserControl
 
         Found.Visibility = Visibility.Visible;
         Repair.Visibility = prompt.OfferRepair ? Visibility.Visible : Visibility.Collapsed;
+
+        // Same rule as Repair, one button along (DD237): the offer is on screen only where a run
+        // has just found the thing it is for, and the prompt is what decided that.
+        Elevate.Visibility = prompt.OfferElevated ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Hand the readings to whoever is being asked about this machine (DD197).</summary>

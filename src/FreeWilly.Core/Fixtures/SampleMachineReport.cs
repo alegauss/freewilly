@@ -95,6 +95,14 @@ public sealed class SampleFilesystemWork : IFilesystemWork
 
     /// <inheritdoc/>
     /// <remarks>
+    /// Refuses like the rest, and this is the one where it matters most: a fixture that reached the
+    /// real implementation would put a UAC prompt on the screen during a screenshot capture.
+    /// </remarks>
+    public CompactionOutcome CompactAsAdministrator(Action<RepairStep> report) =>
+        new(Refuse().Steps);
+
+    /// <inheritdoc/>
+    /// <remarks>
     /// False, so a capture draws the sentence a machine that has never run a check gets. It is the
     /// harder of the two to notice being wrong, and a picture is where somebody would notice it.
     /// </remarks>
