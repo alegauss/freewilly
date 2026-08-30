@@ -86,6 +86,7 @@
 - ✅ **DD244** **a compaction whose prune failed reports the prune as its outcome, so the withdrawn hand-back is never recognised** — Failure reads the step that decides the run through the same predicate Succeeded does, so a prune that could not reach the daemon no longer hides a withdrawn hand-back.
 - ✅ **DD243** **diskpart reports its progress to a log nobody reads, so the longest step of a compaction is one unchanging line** — A channel beside the steps carries diskpart's own percentages, read out of the log it is writing, matched on the number so a translated machine reads the same climb.
 - ✅ **DD245** **the two compaction sequences carry the same five steps twice, and the copy already inherited a wrong verb once** — DiskCompaction.Walk carries the five beats once and both routes pass what differs, so a take-down cannot be copied and inherit the wrong verb again.
+- ✅ **DD247** **the elevated route has no rehearsal, and it is the one that shipped broken twice against a real disk** — --compact-drill --as-administrator points the same sequence at the scratch distribution, so the diskpart route is answered over half a gigabyte of wasted disk.
 
 ## Block B — The daemon client (talk to the engine)
 

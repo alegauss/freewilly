@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD247** (deps: —) **the elevated route has no rehearsal, and it is the one that shipped broken twice against a real disk** — The drill that already grows and empties a scratch disk takes the diskpart route too, so the shutdown and the wait are exercised on a disk holding nobody's images. → §DD247
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

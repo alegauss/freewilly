@@ -43,9 +43,9 @@ internal static class EngineCommand
     {
         var mode = args.Length == 0 ? "--help" : args[0];
 
-        // --autostart takes a value, and --fsck and --compact each take a flag; everything else is a
-        // verb on its own.
-        var allowed = mode is "--autostart" or "--fsck" or "--compact" ? 2 : 1;
+        // --autostart takes a value, and --fsck, --compact and --compact-drill each take a flag;
+        // everything else is a verb on its own.
+        var allowed = mode is "--autostart" or "--fsck" or "--compact" or "--compact-drill" ? 2 : 1;
         if (args.Length > allowed)
         {
             return Complain($"unexpected argument {args[allowed]}");
@@ -64,7 +64,7 @@ internal static class EngineCommand
             "--fsck" => Fsck(args.Length > 1 ? args[1] : ""),
             "--fsck-drill" => Drill(),
             "--compact" => Compact(args.Length > 1 ? args[1] : ""),
-            "--compact-drill" => CompactDrill(),
+            "--compact-drill" => CompactDrill(args.Length > 1 ? args[1] : ""),
             "--autostart" => AutostartMode(args.Length > 1 ? args[1] : "status"),
             "-h" or "--help" => Help(Ok),
             _ => Complain($"unknown argument {mode}"),
@@ -923,9 +923,22 @@ internal static class EngineCommand
     ///
     /// <para>It prints the panel's own sentence too. The claim under test is a number of bytes shown
     /// to a user, so the figure the window would put on screen is part of what is being checked.</para>
+    ///
+    /// <para><b><c>--as-administrator</c> rehearses the other route (DD247)</b>, which is the one
+    /// that shipped broken twice. A flag here rather than a third verb, because unlike
+    /// <c>--fsck-drill</c> beside <c>--fsck</c> these two rehearse one sequence: since DD245 it is
+    /// literally one method, with the acting step passed in.</para>
     /// </remarks>
-    private static int CompactDrill()
+    /// <param name="flag"><c>--as-administrator</c>, or nothing.</param>
+    private static int CompactDrill(string flag)
     {
+        var elevated = string.Equals(flag, "--as-administrator", StringComparison.Ordinal);
+        if (flag.Length > 0 && !elevated)
+        {
+            return Complain(
+                $"unexpected argument {flag}: --compact-drill takes --as-administrator or nothing");
+        }
+
         var paths = new EnginePaths();
         using var fetcher = new HttpArtefactFetcher();
         var acquired = new ArtefactStore(fetcher, paths.Downloads)
@@ -943,10 +956,26 @@ internal static class EngineCommand
             "  Nothing on this machine is touched. The disk is a scratch distribution called");
         Console.WriteLine(
             $"  {CompactionDrill.DrillName}, unregistered when this finishes.");
+
+        if (elevated)
+        {
+            // The two costs a rehearsal does not make smaller, said before it starts (DD247). The
+            // scratch disk is the only thing being compacted, but the shutdown reaches every
+            // distribution on the machine and the prompt is Windows' own.
+            Console.WriteLine();
+            Console.WriteLine(
+                "  Windows will ask for administrator rights, and all of WSL is shut down first.");
+            Console.WriteLine(
+                "  Only the scratch disk is compacted; the shutdown is what diskpart needs.");
+        }
+
         Console.WriteLine();
 
-        var outcome = new CompactionDrill(new Wsl(), paths)
-            .Run(rootfs, step => Console.WriteLine(Line(step)));
+        var outcome = new CompactionDrill(new Wsl(), paths).Run(
+            rootfs,
+            step => Console.WriteLine(Line(step)),
+            elevated ? new WindowsElevation() : null,
+            elevated ? said => Console.WriteLine($"          {said}") : null);
 
         Console.WriteLine();
         if (outcome.Compaction is { } compaction)

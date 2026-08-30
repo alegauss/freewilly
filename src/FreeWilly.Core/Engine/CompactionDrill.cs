@@ -124,8 +124,32 @@ public sealed class CompactionDrill
     /// <summary>Grow a virtual disk, empty it, compact it, and report both readings.</summary>
     /// <param name="rootfsPath">The verified Alpine rootfs tarball.</param>
     /// <param name="report">Called with each step as it lands.</param>
+    /// <param name="elevated">
+    /// Where given, the rehearsal takes the diskpart route instead of the hand-back (DD247). The
+    /// caller supplies it because raising a UAC prompt is not something Core does.
+    /// </param>
+    /// <param name="saying">Called as diskpart says how far in it is, on the elevated route.</param>
     /// <returns>What happened.</returns>
-    public CompactionDrillOutcome Run(string rootfsPath, Action<RepairStep>? report = null)
+    /// <remarks>
+    /// <para><b>The elevated route is rehearsed here because it is the one with the record
+    /// (DD247).</b> DD215's argument was that a sequence which has never run against a real virtual
+    /// disk is a sequence nobody has tested, and DD221 proved it on the first go. The elevated route
+    /// then shipped broken twice, both times found by somebody pressing a button on the disk holding
+    /// every image they own.</para>
+    ///
+    /// <para>What it cannot rehearse is the prompt: UAC is on the secure desktop. What it buys is
+    /// that the answer is given over half a gigabyte of deliberately wasted disk rather than over
+    /// the real one.</para>
+    ///
+    /// <para><b>The shutdown's cost does not shrink for being a rehearsal.</b> diskpart needs the
+    /// WSL2 utility VM down, so this stops every distribution on the machine exactly as the real
+    /// route does, and the verb that offers it has to say so first.</para>
+    /// </remarks>
+    public CompactionDrillOutcome Run(
+        string rootfsPath,
+        Action<RepairStep>? report = null,
+        IElevated? elevated = null,
+        Action<string>? saying = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootfsPath);
 
@@ -154,21 +178,26 @@ public sealed class CompactionDrill
             var before = Measure(scratch);
             Record(steps, report, new RepairStep("read the scratch disk", true, Describe(before)));
 
-            // The shipped sequence, unchanged, pointed at the scratch machine. The two seams are the
-            // two things a scratch distribution does not have: a daemon holding build cache, and a
-            // host that would put an engine back.
-            var compaction = new DiskCompaction(
-                _wsl,
-                scratch,
-                () => new RepairStep(
-                    DiskCompaction.PruneStep,
-                    true,
-                    "there is no daemon on the scratch machine, so it holds no build cache"),
-                () => new RepairStep(
-                    FilesystemRepair.StopStep,
-                    true,
-                    "nothing is serving the scratch machine, so there is nothing to tell"))
-                .Run(step => Record(steps, report, step));
+            // The shipped sequence, unchanged, pointed at the scratch machine. The seams are the
+            // things a scratch distribution does not have: a daemon holding build cache, and a host
+            // that would put an engine back.
+            var nothingToTell = new RepairStep(
+                FilesystemRepair.StopStep,
+                true,
+                "nothing is serving the scratch machine, so there is nothing to tell");
+
+            var compaction = elevated is null
+                ? new DiskCompaction(
+                    _wsl,
+                    scratch,
+                    () => new RepairStep(
+                        DiskCompaction.PruneStep,
+                        true,
+                        "there is no daemon on the scratch machine, so it holds no build cache"),
+                    () => nothingToTell)
+                    .Run(step => Record(steps, report, step))
+                : new ElevatedCompaction(_wsl, scratch, elevated, () => nothingToTell)
+                    .Run(step => Record(steps, report, step), saying);
 
             var after = Measure(scratch);
             Record(steps, report, new RepairStep("read it again", true, Describe(after)));

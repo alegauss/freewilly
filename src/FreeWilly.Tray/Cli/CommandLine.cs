@@ -322,7 +322,8 @@ public static class CommandLine
                            the --as-administrator flag it takes the route Windows leaves when
                            it has turned the other one off, raising a prompt and stopping WSL
           --compact-drill  rehearse the compaction on a scratch disk grown and emptied on
-                           purpose, touching nothing on this machine
+                           purpose, touching nothing on this machine; add the same
+                           flag as above to rehearse the elevated route instead
           --api            version and containers, read through the Engine API
           --watch          print /events as they happen, until Ctrl+C
           --autostart      on | off | status  - off unless you turn it on

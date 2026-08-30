@@ -131,6 +131,61 @@ public sealed class CompactionDrillTests
     }
 
     [Fact]
+    public void The_elevated_route_is_rehearsed_against_the_scratch_disk_and_no_other()
+    {
+        // DD247. The route that shipped broken twice is the one that had no rehearsal, and both
+        // times it was found by somebody pressing a button on the disk holding every image they
+        // own. What the drill substitutes is only the machine.
+        var install = Install();
+        var drill = new CompactionDrill(new FakeWsl(), install);
+        var elevated = new FakeElevation();
+
+        drill.Run(Rootfs, elevated: elevated);
+
+        Assert.Equal(1, elevated.Asked);
+
+        // Asserted over the script rather than the command line, because the command line carries
+        // the script's path and the log's, and the disk being compacted is named inside the script.
+        // That is the one thing this class must never get wrong: the compaction acts on whatever
+        // its EnginePaths names, and the engine's is one directory away from the scratch one.
+        var script = File.ReadAllText(Path.Combine(drill.Scratch.Root, "compact.diskpart"));
+
+        Assert.Contains(
+            Path.Combine(drill.Scratch.Distribution, "ext4.vhdx"),
+            script,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            Path.Combine(install.Distribution, "ext4.vhdx"), script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_plain_rehearsal_raises_no_prompt_at_all()
+    {
+        // The flag is what asks for the elevated route, and a drill somebody ran to watch a
+        // hand-back must not put a UAC prompt on their screen.
+        var elevated = new FakeElevation();
+
+        new CompactionDrill(new FakeWsl(), Install()).Run(Rootfs);
+
+        Assert.Equal(0, elevated.Asked);
+    }
+
+    /// <summary>An elevation that records what it was asked and says it worked.</summary>
+    private sealed class FakeElevation : IElevated
+    {
+        internal string? Arguments { get; private set; }
+
+        internal int Asked { get; private set; }
+
+        public ElevatedRun Run(string fileName, string arguments)
+        {
+            Arguments = arguments;
+            Asked++;
+            return new ElevatedRun(Ran: true, ExitCode: 0);
+        }
+    }
+
+    [Fact]
     public void The_scratch_machine_is_put_away_and_never_kept()
     {
         // Half a gigabyte of deliberately wasted disk. It is of no use to anything after the
