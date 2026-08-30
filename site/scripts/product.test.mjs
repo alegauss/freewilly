@@ -25,6 +25,25 @@ function loadGenerated(file, exportName) {
   return JSON.parse(text.slice(start, end + 1));
 }
 
+/**
+ * Whether a help line names this verb, on the whole verb and not a prefix of one.
+ *
+ * DD248 is what the prefix spelling cost: `--compact` shipped, the generated help never carried
+ * it, and the guard below answered the question with the `--compact-drill` line that was already
+ * there. The collision is not an accident — this project names a rehearsal after the thing it
+ * rehearses, so `--fsck` sits under `--fsck-drill` and there will be more.
+ *
+ * One function for every guard in this file since DD249, because the second copy was the one in
+ * the excerpt test, and a guard written from the same assumption as the thing it guards is the
+ * one arrangement that cannot catch anything.
+ */
+function names(line, verb) {
+  const trimmed = line.trimStart();
+  if (!trimmed.startsWith(verb)) return false;
+  const next = trimmed[verb.length];
+  return next === undefined || next === " ";
+}
+
 const product = loadGenerated("product.generated.ts", "product");
 const content = readFileSync(join(siteDir, "src", "lib", "site-content.ts"), "utf8");
 const featurePages = readFileSync(join(siteDir, "src", "lib", "features.ts"), "utf8");
@@ -280,6 +299,31 @@ test("no count the generator states is typed in the copy as well", () => {
   }
 });
 
+test("a verb is never answered by a longer one that begins with it", () => {
+  // DD249. The matcher above is shared by every guard in this file and by helpExcerpt on the page,
+  // so this is the one place the rule itself is stated rather than relied on. Both pairs below are
+  // real: the project names a rehearsal after the thing it rehearses.
+  assert.ok(!names("  --compact-drill  rehearse the compaction", "--compact"));
+  assert.ok(!names("  --fsck-drill     rehearse the repair", "--fsck"));
+
+  // And it still answers the verb it is actually given, whether the line ends after it or not.
+  assert.ok(names("  --compact        hand back what the disk holds", "--compact"));
+  assert.ok(names("  --compact-drill  rehearse the compaction", "--compact-drill"));
+  assert.ok(names("  --autostart", "--autostart"));
+
+  // The page slices the published excerpt with a matcher of its own, in TypeScript this file
+  // cannot import. Asserted on its source instead, because a rule the guard follows and the page
+  // does not is the arrangement DD249 was filed about, one layer down.
+  const page = readFileSync(join(siteDir, "src", "lib", "product.ts"), "utf8");
+  const excerpt = page.slice(page.indexOf("export function helpExcerpt("));
+
+  assert.match(excerpt, /next === undefined \|\| next === " "/);
+  assert.ok(
+    !/=> \(line: string\) => line\.trimStart\(\)\.startsWith\(verb\)/.test(excerpt),
+    "helpExcerpt is back to matching a prefix, so a longer verb can move where the slice begins",
+  );
+});
+
 test("the help block on the page is a slice of the real help text", () => {
   // DD157 found this block as a hand-picked half of the output under a title claiming to be the
   // whole of it, and the half had itself drifted: it printed a pipe path the command does not.
@@ -288,9 +332,8 @@ test("the help block on the page is a slice of the real help text", () => {
   assert.equal(anchors.length, 1, "the page no longer slices the help text");
 
   const [, from, to] = anchors[0];
-  const names = (verb) => (line) => line.trimStart().startsWith(verb);
-  const start = product.help.findIndex(names(from));
-  const end = product.help.findIndex(names(to));
+  const start = product.help.findIndex((line) => names(line, from));
+  const end = product.help.findIndex((line) => names(line, to));
 
   assert.ok(start >= 0, `the help text no longer names "${from}"`);
   assert.ok(end >= start, `the help text no longer names "${to}" after "${from}"`);
@@ -328,18 +371,6 @@ test("the generated help text is CommandLine's, with its verb constants resolved
   // the generator copies: a verb the command does not print is not one this artefact is missing.
   const printed = [...commandLine.matchAll(/^ {2,}(--[a-z-]+)/gm)].map(([, verb]) => verb);
   assert.ok(printed.length > 5, "the help text in CommandLine.cs no longer lists verbs");
-
-  // On the whole verb and not on a prefix of one (DD248). `startsWith` was what this asked for a
-  // session, and it answered `--compact` with the `--compact-drill` line that was already there —
-  // so a verb shipped, the generated help never carried it, and this passed. The project makes
-  // that collision on purpose: it names a rehearsal after the thing it rehearses, so `--fsck` sits
-  // under `--fsck-drill` and `--compact` under `--compact-drill`, and there will be more.
-  const names = (line, verb) => {
-    const trimmed = line.trimStart();
-    if (!trimmed.startsWith(verb)) return false;
-    const next = trimmed[verb.length];
-    return next === undefined || next === " ";
-  };
 
   for (const verb of new Set(printed)) {
     assert.ok(

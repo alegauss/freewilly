@@ -135,7 +135,17 @@ export function version(id: string): string {
  * leaving an excerpt that is a plan.
  */
 export function helpExcerpt(from: string, to: string): string {
-  const names = (verb: string) => (line: string) => line.trimStart().startsWith(verb);
+  // On the whole verb and not a prefix of one (DD249). This project names a rehearsal after the
+  // thing it rehearses, so `--fsck` sits under `--fsck-drill` and `--compact` under
+  // `--compact-drill`; DD248 is what one such collision already cost. Today's anchors are safe by
+  // luck rather than by construction, and luck is not what an excerpt of the real output rests on.
+  const names = (verb: string) => (line: string) => {
+    const trimmed = line.trimStart();
+    if (!trimmed.startsWith(verb)) return false;
+    const next = trimmed[verb.length];
+    return next === undefined || next === " ";
+  };
+
   const start = product.help.findIndex(names(from));
   const end = product.help.findIndex(names(to));
 
