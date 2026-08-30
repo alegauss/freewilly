@@ -1556,6 +1556,26 @@ public sealed class PackagingTests
         return script[start..];
     }
 
+    /// <summary>
+    /// The stop, which both paths share since DD236.
+    /// </summary>
+    /// <remarks>
+    /// Its own section rather than the uninstall's since DD236 moved it: the install needs the same
+    /// three verbs, and Pascal Script resolves a name only if it was declared above the caller.
+    /// </remarks>
+    private static string StoppingSection()
+    {
+        var script = InstallerScript();
+        var start = script.IndexOf(
+            "// Stopping what is already running", StringComparison.Ordinal);
+        var end = script.IndexOf(
+            "// The wizard, wired to the two pages above", StringComparison.Ordinal);
+
+        Assert.True(start > 0, "the stopping section was renamed and these guards now read nothing");
+        Assert.True(end > start, "the stopping section no longer stands above the wizard's events");
+        return script[start..end];
+    }
+
     [Fact]
     public void Nothing_is_deleted_until_what_is_holding_the_files_has_been_asked_to_go()
     {
@@ -1568,37 +1588,36 @@ public sealed class PackagingTests
         // and usPostUninstall — where every DelTree in this script lives — after.
         var uninstall = UninstallSection();
 
-        var stopping = uninstall.IndexOf("procedure StopEverything;", StringComparison.Ordinal);
         var stage = uninstall.IndexOf(
             "if CurUninstallStep = usUninstall then", StringComparison.Ordinal);
         var called = uninstall.IndexOf("StopEverything;", stage, StringComparison.Ordinal);
         var later = uninstall.IndexOf(
             "if CurUninstallStep <> usPostUninstall then", StringComparison.Ordinal);
 
-        Assert.True(stopping > 0, "nothing in the uninstall stops the product");
-        Assert.True(stage > stopping, "the uninstall never reaches usUninstall");
+        Assert.Contains("procedure StopEverything;", StoppingSection(), StringComparison.Ordinal);
+        Assert.True(stage > 0, "the uninstall never reaches usUninstall");
         Assert.True(called > stage && called < later,
             "the stop does not happen in usUninstall, which is the only step that runs before "
             + "Inno removes files");
     }
 
     [Fact]
-    public void The_uninstall_stops_the_product_with_the_product_s_own_verbs()
+    public void The_stop_uses_the_product_s_own_verbs()
     {
         // Two strings in Pascal against two constants in C#, and nothing but this notices them
-        // drifting: a renamed verb leaves an uninstall that runs a command the executable refuses,
-        // exits 2, and carries on into the delete that was the whole reason for running it.
-        var uninstall = UninstallSection();
+        // drifting: a renamed verb leaves a stop that runs a command the executable refuses, exits
+        // 2, and carries on into the delete or the file copy that was the reason for running it.
+        var stopping = StoppingSection();
 
-        Assert.Contains($"'{CommandLine.QuitVerb}'", uninstall, StringComparison.Ordinal);
-        Assert.Contains("'--stop'", uninstall, StringComparison.Ordinal);
+        Assert.Contains($"'{CommandLine.QuitVerb}'", stopping, StringComparison.Ordinal);
+        Assert.Contains("'--stop'", stopping, StringComparison.Ordinal);
         Assert.Contains("--stop", CommandLine.EngineVerbs);
 
         // The engine before the tray: --stop terminates the distribution, and the detached --run
         // process serves something that lives inside it. Quitting the tray first would leave that
         // one running with nothing left to ask it to go.
-        var stop = uninstall.IndexOf("'--stop'", StringComparison.Ordinal);
-        var quit = uninstall.IndexOf($"'{CommandLine.QuitVerb}'", StringComparison.Ordinal);
+        var stop = stopping.IndexOf("'--stop'", StringComparison.Ordinal);
+        var quit = stopping.IndexOf($"'{CommandLine.QuitVerb}'", StringComparison.Ordinal);
         Assert.True(stop < quit, "the tray is asked to quit before the engine is stopped");
     }
 
@@ -1608,14 +1627,61 @@ public sealed class PackagingTests
         // A terminated tray leaves its icon in the notification area until something hovers it, so
         // the graceful verb has to be tried and its result read before anything is killed. The
         // ordering is the assertion: taskkill after the probe, and the probe after the verbs.
-        var uninstall = UninstallSection();
+        var stopping = StoppingSection();
 
-        var quit = uninstall.IndexOf($"'{CommandLine.QuitVerb}'", StringComparison.Ordinal);
-        var probe = uninstall.IndexOf("if not AnythingIsStillRunning then", StringComparison.Ordinal);
-        var kill = uninstall.IndexOf("taskkill.exe", StringComparison.Ordinal);
+        var quit = stopping.IndexOf($"'{CommandLine.QuitVerb}'", StringComparison.Ordinal);
+        var probe = stopping.IndexOf("if not AnythingIsStillRunning then", StringComparison.Ordinal);
+        var kill = stopping.IndexOf("taskkill.exe", StringComparison.Ordinal);
 
         Assert.True(probe > quit, "nothing checks whether the graceful exit worked");
-        Assert.True(kill > probe, "the uninstall forces processes without asking them first");
+        Assert.True(kill > probe, "processes are forced without being asked first");
+    }
+
+    [Fact]
+    public void The_install_stops_the_running_product_instead_of_leaving_it_to_Restart_Manager()
+    {
+        // DD236, reported against 1.0.8: the setup announces it will close FreeWilly to continue,
+        // and cannot. CloseApplications is Restart Manager, which closes a windowed application by
+        // asking its window to close — and the tray usually has no window while the detached --run
+        // engine has none at all.
+        //
+        // Both call sites are the assertion. Neither is redundant: wpReady is the last point
+        // certainly earlier than the Preparing page, where the scan happens, and PrepareToInstall
+        // is the only one a silent install ever reaches.
+        var script = InstallerScript();
+
+        Assert.Contains(
+            "procedure StopBeforeInstalling;", StoppingSection(), StringComparison.Ordinal);
+        Assert.Contains("if CurPageID = wpReady then", script, StringComparison.Ordinal);
+
+        var ready = script.IndexOf("if CurPageID = wpReady then", StringComparison.Ordinal);
+        var onReady = script.IndexOf("StopBeforeInstalling;", ready, StringComparison.Ordinal);
+        var prepare = script.IndexOf("function PrepareToInstall(", StringComparison.Ordinal);
+        var whenSilent = script.IndexOf("StopBeforeInstalling;", prepare, StringComparison.Ordinal);
+
+        Assert.True(onReady > ready, "the ready page does not stop what is running");
+        Assert.True(whenSilent > prepare, "a silent install never stops what is running");
+        Assert.True(prepare > onReady, "these two guards are reading the same call site twice");
+    }
+
+    [Fact]
+    public void The_stop_stands_above_every_hook_that_calls_it()
+    {
+        // Pascal Script resolves a name only if it was declared above the caller, so a section moved
+        // below one of its two call sites is a compile error in Inno and nothing here would say
+        // which move caused it. Cheaper to assert than to read a compiler message about line 1300.
+        var script = InstallerScript();
+
+        var declared = script.IndexOf("procedure StopBeforeInstalling;", StringComparison.Ordinal);
+        var ready = script.IndexOf("function NextButtonClick(", StringComparison.Ordinal);
+        var prepare = script.IndexOf("function PrepareToInstall(", StringComparison.Ordinal);
+        var uninstall = script.IndexOf(
+            "procedure CurUninstallStepChanged(", StringComparison.Ordinal);
+
+        Assert.True(declared > 0, "the install's stop is gone");
+        Assert.True(declared < ready, "NextButtonClick calls a procedure declared below it");
+        Assert.True(declared < prepare, "PrepareToInstall calls a procedure declared below it");
+        Assert.True(declared < uninstall, "the uninstall calls a procedure declared below it");
     }
 
     [Fact]

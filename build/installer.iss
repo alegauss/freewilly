@@ -1283,6 +1283,104 @@ end;
 // <<< page-probe (DD145)
 
 // ---------------------------------------------------------------------------------------------
+// Stopping what is already running (DD121, DD236)
+// ---------------------------------------------------------------------------------------------
+//
+// Both paths need this and for the same reason: a file cannot be replaced or deleted while the
+// process holding it is alive. DD121 wrote it for the uninstall, where an undeletable
+// FreeWilly.exe leaves a root nobody owns and no uninstaller left to offer to take it. DD236 found
+// the install failing on the same rock, having been left with only the backstop.
+//
+// The backstop is CloseApplications, and what it cannot do is the whole argument. Restart Manager
+// closes a windowed application by asking its window to close; the tray usually has no window and
+// the detached `--run` engine has none at all, so the graceful stop has to be asked for by name.
+//
+// Four steps, in this order. Stop the engine, ask the tray to go, check, and force only what is
+// left.
+
+var
+  // Set by the tasklist callback, because a callback cannot return anything.
+  SawTheProcess: Boolean;
+
+  // Whether the install path has already done it. The stop is asked for twice on purpose — see
+  // NextButtonClick and PrepareToInstall below — and this is what makes the second one free.
+  AlreadyStopped: Boolean;
+
+procedure TasklistSaid(const S: String; const Error, FirstLine: Boolean);
+begin
+  if Pos(Lowercase('{#MyAppExeName}'), Lowercase(S)) > 0 then
+    SawTheProcess := True;
+end;
+
+function AnythingIsStillRunning: Boolean;
+var
+  Code: Integer;
+begin
+  // tasklist rather than a handle test: a running executable can still be renamed and can still be
+  // opened for reading, so every cheap probe answers the wrong question. With no match it prints
+  // "INFO: No tasks are running..." and the image name appears nowhere in it, which is the whole
+  // decision below.
+  SawTheProcess := False;
+  if not ExecAndLogOutput(ExpandConstant('{sys}\tasklist.exe'),
+       '/FI "IMAGENAME eq {#MyAppExeName}" /NH', '', SW_HIDE,
+       ewWaitUntilTerminated, Code, @TasklistSaid) then
+  begin
+    // It could not be asked. Answering yes here would force-kill on no evidence, so this defers to
+    // Restart Manager, which is exactly what CloseApplications is carried for.
+    Result := False;
+    Exit;
+  end;
+
+  Result := SawTheProcess;
+end;
+
+procedure StopEverything;
+var
+  Code: Integer;
+  Exe: string;
+begin
+  Exe := ExpandConstant('{app}\{#MyAppExeName}');
+
+  // Nothing to ask, and nothing that could have started the engine either. A root without the
+  // executable in it is a fresh install, or one a previous uninstall got most of the way through.
+  if not FileExists(Exe) then
+    Exit;
+
+  // The engine first. --stop ends the pipe relay and terminates the distribution, which is what
+  // makes an unregister a clean one — an open virtual disk is a directory that survives its own
+  // deletion. It also takes the detached `--run` process with it, since what that serves lives
+  // inside the distribution being terminated.
+  Exec(Exe, '--stop', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code);
+
+  // Then the tray, by the verb written for this (DD121). It waits until the process is actually
+  // gone rather than until the request was delivered, so returning from here means the file is no
+  // longer open. A kill would leave the notification icon in the overflow until something hovers it.
+  Exec(Exe, '--quit', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code);
+
+  if not AnythingIsStillRunning then
+    Exit;
+
+  // The last resort. Reached by a process that ignored the verb or by a `--run` started outside the
+  // tray; either way the alternative is the failure this whole section exists to remove.
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#MyAppExeName} /T',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
+
+  // Handles are closed by the kernel after the process is, and the first delete follows
+  // immediately. Half a second costs nothing on the path where it was not needed.
+  Sleep(500);
+end;
+
+/// The install's half of it: once, however many times it is asked for (DD236).
+procedure StopBeforeInstalling;
+begin
+  if AlreadyStopped then
+    Exit;
+
+  AlreadyStopped := True;
+  StopEverything;
+end;
+
+// ---------------------------------------------------------------------------------------------
 // The wizard, wired to the two pages above
 // ---------------------------------------------------------------------------------------------
 //
@@ -1320,6 +1418,24 @@ end;
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
+
+  if CurPageID = wpReady then
+  begin
+    // Before the Preparing page exists, which is the point of doing it here (DD236). That page is
+    // where Restart Manager scans, and a graceful stop that ran after the scan would be a stop the
+    // user had already been shown a failure dialog about. This is the last moment certainly
+    // earlier than it, and Back off this page is not worth defending against: somebody on the
+    // ready page pressing Install has asked for the thing that stops the tray.
+    WizardForm.Cursor := crHourGlass;
+    try
+      StopBeforeInstalling;
+    finally
+      WizardForm.Cursor := crDefault;
+    end;
+
+    Exit;
+  end;
+
   if CurPageID <> TasksPage.ID then
     Exit;
 
@@ -1363,7 +1479,14 @@ begin
   // paths is the kind that is discovered by the path nobody tested.
   Result := '';
   if Preflight then
+  begin
+    // The other half of DD236, and the only half a silent install has: there is no ready page to
+    // have stopped anything on. Free where the ready page already did it, and the machine that
+    // most needs it is the unattended one, where an in-use file is a deployment that fails with
+    // nothing watching.
+    StopBeforeInstalling;
     Exit;
+  end;
 
   Result := 'This machine cannot host the container engine yet, so nothing was installed.'
           + #13#10#13#10 + PreflightSaid + #13#10 + PreflightReport;
@@ -1502,17 +1625,15 @@ end;
 // Add/Remove Programs entry went, and then the one file could not be deleted — leaving a root nobody
 // owns and no uninstaller left to offer to take it.
 //
-// Four steps, in this order. Ask, stop gracefully, force only what did not go, then delete and say
-// what could not be removed rather than exiting 0 over it.
+// Three steps here, in this order: ask, stop, then delete and say what could not be removed rather
+// than exiting 0 over it. The stop itself moved up the file under DD236, because the install turned
+// out to need the same three verbs for the same reason.
 
 var
   // What the page below decided, read again in usPostUninstall — after Inno has removed its own
   // files, which is the only point at which the root is otherwise empty. Silence means keep, so the
   // safe default is what an unattended uninstall gets by never touching this.
   RemoveTheDistribution: Boolean;
-
-  // Set by the tasklist callback, because a callback cannot return anything.
-  SawTheProcess: Boolean;
 
 function OwnedDataExists: Boolean;
 begin
@@ -1521,34 +1642,6 @@ begin
   // wart this project has already been bitten by, and a misread here would delete on a maybe.
   Result := DirExists(ExpandConstant('{app}\distro'))
          or DirExists(ExpandConstant('{app}\downloads'));
-end;
-
-procedure TasklistSaid(const S: String; const Error, FirstLine: Boolean);
-begin
-  if Pos(Lowercase('{#MyAppExeName}'), Lowercase(S)) > 0 then
-    SawTheProcess := True;
-end;
-
-function AnythingIsStillRunning: Boolean;
-var
-  Code: Integer;
-begin
-  // tasklist rather than a handle test: a running executable can still be renamed and can still be
-  // opened for reading, so every cheap probe answers the wrong question. With no match it prints
-  // "INFO: No tasks are running..." and the image name appears nowhere in it, which is the whole
-  // decision below.
-  SawTheProcess := False;
-  if not ExecAndLogOutput(ExpandConstant('{sys}\tasklist.exe'),
-       '/FI "IMAGENAME eq {#MyAppExeName}" /NH', '', SW_HIDE,
-       ewWaitUntilTerminated, Code, @TasklistSaid) then
-  begin
-    // It could not be asked. Answering yes here would force-kill on no evidence, so this defers to
-    // Restart Manager, which is exactly what CloseApplications is carried for.
-    Result := False;
-    Exit;
-  end;
-
-  Result := SawTheProcess;
 end;
 
 /// Lay one wrapping paragraph out at Y and answer the Y the next control starts at.
@@ -1683,43 +1776,6 @@ begin
   finally
     Form.Free;
   end;
-end;
-
-procedure StopEverything;
-var
-  Code: Integer;
-  Exe: string;
-begin
-  Exe := ExpandConstant('{app}\{#MyAppExeName}');
-
-  // Nothing to ask, and nothing that could have started the engine either. A root without the
-  // executable in it is one a previous uninstall got most of the way through.
-  if not FileExists(Exe) then
-    Exit;
-
-  // The engine first. --stop ends the pipe relay and terminates the distribution, which is what
-  // makes the unregister below a clean one — an open virtual disk is a directory that survives its
-  // own deletion. It also takes the detached `--run` process with it, since what that serves lives
-  // inside the distribution being terminated.
-  Exec(Exe, '--stop', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code);
-
-  // Then the tray, by the verb written for this (DD121). It waits until the process is actually
-  // gone rather than until the request was delivered, so returning from here means the file is no
-  // longer open. A kill would leave the notification icon in the overflow until something hovers it.
-  Exec(Exe, '--quit', ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code);
-
-  if not AnythingIsStillRunning then
-    Exit;
-
-  // The last resort, and the page said it would happen. Reached by a process that ignored the verb
-  // or by a `--run` started outside the tray; either way the alternative is the failure this whole
-  // section exists to remove.
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#MyAppExeName} /T',
-       '', SW_HIDE, ewWaitUntilTerminated, Code);
-
-  // Handles are closed by the kernel after the process is, and Inno's first delete follows
-  // immediately. Half a second costs nothing on the path where it was not needed.
-  Sleep(500);
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
