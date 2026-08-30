@@ -8,8 +8,6 @@
 
 ## Block C — The window (claude-tray's elements)
 
-- 📋 **DD240** (deps: —) **--drive-window never returns when no window is open, which is the machine it was written to serve** — The launched window is given its own handles instead of inheriting the driver's, so the pipe closes when the driver exits rather than when the window does. → §DD240
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks

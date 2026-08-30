@@ -135,6 +135,7 @@
 - ✅ **DD214** **every test of the window reads the window's own source, so nothing catches a control that is wired wrong** — A --drive-window verb works the real window through UI Automation and prints what it says; --check drives the filesystem check, and the dialog is pressed by control id rather than caption.
 - ✅ **DD222** **the driving verb's check half has never been run, because the tray holding the slot was an older build** — Both halves ran against a current window: the read-only one walked the whole page, and the check half found no confirmation appears at all, which is the window's defect and not the driver's.
 - ✅ **DD227** **Check filesystem and Compact show no confirmation, so pressing either does nothing at all** — The confirmation was there all along and the driver could not see it: DD222's finding was wrong, and a dialog is now found through the window that owns it rather than under the desktop.
+- ✅ **DD240** **--drive-window never returns when no window is open, which is the machine it was written to serve** — The launched window goes through the shell, so it gets its own handles and the driver's exit closes the caller's pipe; measured at 2.4 seconds where it used to never return.
 
 ## Block D — Container operations (what a user came to do)
 

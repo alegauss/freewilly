@@ -90,6 +90,31 @@ public sealed class WindowDriverTests
     }
 
     [Fact]
+    public void The_window_it_launches_does_not_inherit_the_driver_s_console()
+    {
+        // DD240, and it made the verb useless on exactly the machine it was written for. With a
+        // window already up this answers in about a second; with none it never returned at all,
+        // which is a clean checkout, a CI runner, or anybody who has not opened the tray.
+        //
+        // Not the driver hanging. The launched window is meant to stay up, and with
+        // UseShellExecute false it inherited this process's standard handles — so the write end of
+        // the caller's pipe outlived the driver and the caller waited for an end-of-file that was
+        // not coming. Redirecting the same run to a file finished normally, which is what points at
+        // the handle rather than the logic.
+        var driver = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/WindowDriver.cs"));
+
+        var launch = driver.IndexOf(
+            "Process.Start(new ProcessStartInfo(exe, CommandLine.WindowVerb)",
+            StringComparison.Ordinal);
+        Assert.True(launch > 0, "the driver no longer launches a window, so this guard reads nothing");
+
+        var settings = driver[launch..driver.IndexOf("}))", launch, StringComparison.Ordinal)];
+        Assert.Contains("UseShellExecute = true", settings, StringComparison.Ordinal);
+        Assert.DoesNotContain("UseShellExecute = false", settings, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_controls_it_drives_are_the_names_the_markup_carries()
     {
         // WPF publishes x:Name as the automation id, which is the whole address this driver uses.

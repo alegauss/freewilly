@@ -295,9 +295,17 @@ internal static class WindowDriver
 
         // Through the ordinary launch and not a second path: a second instance raises the live one
         // and exits (DD81), so this is also correct on the race where a tray appears in between.
+        //
+        // UseShellExecute, and that is the whole of DD240. With it false the child inherits this
+        // process's standard handles, and this child is a window that is meant to outlive the
+        // driver — so the write end of whatever pipe the caller is reading stayed open after the
+        // driver had exited, and the caller waited for an end-of-file that was not coming. Measured:
+        // with a window already up this verb answers in about a second, and with none it never
+        // returned at all, which is the machine it was written to serve. Launched through the shell
+        // the child gets its own handles and the driver's exit closes the pipe.
         using (Process.Start(new ProcessStartInfo(exe, CommandLine.WindowVerb)
         {
-            UseShellExecute = false,
+            UseShellExecute = true,
         }))
         {
             Say("launch", "no window was open, so one was started and is being left up");
