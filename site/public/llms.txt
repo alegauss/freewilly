@@ -118,8 +118,13 @@ it.
   really charging for, and the space used inside it and left on the drive), a check that reads
   the filesystem and offers to repair it only once it has found something and shown you what,
   and a Compact button that drops the build cache, trims the filesystem and hands the freed
-  blocks back where Windows still allows that. `freewilly read health` answers the same question
-  in one call, and `freewilly --fsck` runs the same check from a terminal. Every heading sorts and
+  blocks back. Current Windows builds have sparse virtual disks turned off, and where the
+  hand-back is refused for that reason the page offers the one route left: it asks for
+  administrator rights, shuts every WSL distribution down rather than only this product's, and
+  costs nothing at all if the prompt is declined. `freewilly read health` answers the same
+  question in one call, `freewilly --fsck` runs the same check from a terminal and
+  `freewilly --compact` the same compaction, with `--as-administrator` for the elevated
+  route. Every heading sorts and
   every list has a filter box, over the rows already in hand rather than a second call to the
   daemon.
 - **Nothing resident**: no Windows service and no scheduled task. Autostart is a single

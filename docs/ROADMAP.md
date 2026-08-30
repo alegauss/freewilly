@@ -18,8 +18,6 @@
 
 ## Block H — The public surface (the site a reader and an agent both read)
 
-- 📋 **DD246** (deps: —) **the site says the compaction ends where Windows stops allowing it, which stopped being true, and names no verb for it** — The prose says what the product does: a route that needs administrator rights where the other is gone, and a terminal verb beside the check's. → §DD246
-
 ## Non-goals
 
 - **Feature parity with Docker Desktop** Kubernetes, the extensions marketplace and Dev
