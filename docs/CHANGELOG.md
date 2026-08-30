@@ -136,6 +136,7 @@
 - ✅ **DD222** **the driving verb's check half has never been run, because the tray holding the slot was an older build** — Both halves ran against a current window: the read-only one walked the whole page, and the check half found no confirmation appears at all, which is the window's defect and not the driver's.
 - ✅ **DD227** **Check filesystem and Compact show no confirmation, so pressing either does nothing at all** — The confirmation was there all along and the driver could not see it: DD222's finding was wrong, and a dialog is now found through the window that owns it rather than under the desktop.
 - ✅ **DD240** **--drive-window never returns when no window is open, which is the machine it was written to serve** — The launched window goes through the shell, so it gets its own handles and the driver's exit closes the caller's pipe; measured at 2.4 seconds where it used to never return.
+- ✅ **DD241** **the driver cannot reach the compaction, so the one path with a UAC prompt is only ever exercised by hand** — --compact drives the compaction and goes on into the elevated half where the page offers it, stopping at the UAC prompt because that one is nobody's to automate.
 
 ## Block D — Container operations (what a user came to do)
 

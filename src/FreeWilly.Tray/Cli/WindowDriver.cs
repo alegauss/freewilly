@@ -35,6 +35,16 @@ internal static class WindowDriver
     internal const string CheckFlag = "--check";
 
     /// <summary>
+    /// What asks for the compaction, elevated half included (DD241).
+    /// </summary>
+    /// <remarks>
+    /// Its own flag rather than folded into <see cref="CheckFlag"/>, because the two cost different
+    /// things. The check stops Docker; this stops Docker, shuts every WSL distribution down, and
+    /// ends at a UAC prompt somebody has to answer.
+    /// </remarks>
+    internal const string CompactFlag = "--compact";
+
+    /// <summary>
     /// The button on a Windows message box that means yes, addressed by its control id.
     /// </summary>
     /// <remarks>
@@ -75,18 +85,33 @@ internal static class WindowDriver
         ArgumentNullException.ThrowIfNull(args);
 
         var checking = args.Contains(CheckFlag, StringComparer.Ordinal);
-        var rest = args.Where(a => !string.Equals(a, CheckFlag, StringComparison.Ordinal)).ToArray();
+        var compacting = args.Contains(CompactFlag, StringComparer.Ordinal);
+        var rest = args
+            .Where(a => !string.Equals(a, CheckFlag, StringComparison.Ordinal)
+                && !string.Equals(a, CompactFlag, StringComparison.Ordinal))
+            .ToArray();
         if (rest.Length > 0)
         {
             Console.Error.WriteLine(
                 $"{CommandLine.ExecutableName}: unexpected argument {rest[0]}: "
-                + $"{CommandLine.DriveWindowVerb} takes {CheckFlag} or nothing");
+                + $"{CommandLine.DriveWindowVerb} takes {CheckFlag}, {CompactFlag} or nothing");
+            return Usage;
+        }
+
+        // Refused rather than ordered, because both take the engine down and the second would start
+        // on a page still finishing the first. Which one should go first is not this verb's to
+        // decide: they are different questions and somebody asking for both has not said.
+        if (checking && compacting)
+        {
+            Console.Error.WriteLine(
+                $"{CommandLine.ExecutableName}: {CheckFlag} and {CompactFlag} both take the engine "
+                + "down, so they are driven one at a time");
             return Usage;
         }
 
         try
         {
-            return Drive(checking);
+            return Drive(checking, compacting);
         }
         catch (ElementNotAvailableException gone)
         {
@@ -105,7 +130,7 @@ internal static class WindowDriver
         }
     }
 
-    private static int Drive(bool checking)
+    private static int Drive(bool checking, bool compacting)
     {
         var window = TheWindow();
         Say("window", $"{window.Current.Name}, pid {window.Current.ProcessId}");
@@ -163,16 +188,83 @@ internal static class WindowDriver
 
         Say("elevate", "not offered, which is right until Windows has refused the other route");
 
+        if (compacting)
+        {
+            return DriveTheCompaction(window, compact, headline, reading);
+        }
+
         if (!checking)
         {
             Console.WriteLine();
             Console.WriteLine(
                 $"  Read only. `{CommandLine.ExecutableName} {CommandLine.DriveWindowVerb} "
-                + $"{CheckFlag}` drives the check itself, which stops Docker.");
+                + $"{CheckFlag}` drives the check itself, which stops Docker. "
+                + $"`{CompactFlag}` drives the compaction, which also shuts WSL down.");
             return Ok;
         }
 
         return DriveTheCheck(window, check, headline, reading);
+    }
+
+    /// <summary>
+    /// Press Compact, answer the dialog, and follow it as far as a machine can go (DD241).
+    /// </summary>
+    /// <param name="window">The window.</param>
+    /// <param name="compact">The button.</param>
+    /// <param name="headline">Where the outcome is written.</param>
+    /// <param name="reading">Where the machine's verdict is written.</param>
+    /// <returns>The exit code.</returns>
+    /// <remarks>
+    /// <para><b>This is the path that shipped broken.</b> DD237 went out with <c>wsl --terminate</c>
+    /// where it needed <c>wsl --shutdown</c>, on a green suite of 1481 tests, because the elevation
+    /// is a seam and a fake seam does not care whether the disk was really released. One press found
+    /// it. That is the class of defect DD214 built this verb for, and until now the verb stopped at
+    /// the check.</para>
+    ///
+    /// <para><b>It goes on into the elevated half where the page offers it</b>, which is where the
+    /// interesting steps are: the announced stop, the shutdown, and the wait for Windows to let go
+    /// of the file all happen before the UAC prompt, so all three are watched. The prompt itself is
+    /// on the secure desktop and no automation touches it, so this says it is up and whose it is,
+    /// and then goes back to watching the panel — which is what a person answering it will move.
+    /// </para>
+    /// </remarks>
+    private static int DriveTheCompaction(
+        AutomationElement window,
+        AutomationElement compact,
+        AutomationElement headline,
+        AutomationElement reading)
+    {
+        Console.WriteLine();
+        Console.WriteLine("  Docker is about to stop. This is the compaction, driven for real.");
+        Console.WriteLine();
+
+        var ending = DriveTheButton(
+            window, compact, "the Compact button", RepairPrompt.Compacting.Headline, headline);
+
+        Report(window, ending, reading);
+
+        // Collapsed until the page has been refused, so its absence here is the ordinary answer on a
+        // machine where the hand-back still works, and not a failure.
+        if (Look(window, "Elevate") is not { } elevate || elevate.Current.IsOffscreen)
+        {
+            Say("elevate", "not offered, so this machine still has the route that needs no rights");
+            return Ok;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine(
+            "  Windows refused the hand-back, so the page is offering the elevated route. Driving "
+            + "it: all of WSL goes down, and it ends at a prompt only you can answer.");
+        Console.WriteLine();
+
+        var elevated = DriveTheButton(
+            window, elevate, "the Compact as administrator button",
+            RepairPrompt.Compacting.Headline, headline,
+            afterAgreeing: "the UAC prompt is Windows' own and is on the secure desktop, so nothing "
+                + "here can answer it. Answer it and this goes on watching the panel.");
+
+        Report(window, elevated, reading);
+        return Ok;
     }
 
     /// <summary>Press Check filesystem, answer the dialog, and read the ending back.</summary>
@@ -197,8 +289,52 @@ internal static class WindowDriver
         Console.WriteLine("  Docker is about to stop. This is the check, driven for real.");
         Console.WriteLine();
 
-        Pattern<InvokePattern>(
-            check, InvokePattern.Pattern, "the Check filesystem button").Invoke();
+        var ending = DriveTheButton(
+            window, check, "the Check filesystem button", RepairPrompt.Working.Headline, headline);
+
+        Report(window, ending, reading);
+
+        // The buttons coming back is the end of the run as far as the window is concerned, and it is
+        // the assertion no source match could make: a page that threw on its way out leaves them
+        // dead and looks exactly like a page still working.
+        if (!Await(
+            () => check.Current.IsEnabled ? check : null,
+            ControlBudget,
+            "the check ended and its own button never came back, so the page is stuck")
+            .Current.IsEnabled)
+        {
+            return Failed;
+        }
+
+        Say("buttons", "enabled again, so the page finished its own work");
+        return Ok;
+    }
+
+    /// <summary>
+    /// Press one of the page's buttons, agree to what it asks, and read the ending back (DD241).
+    /// </summary>
+    /// <param name="window">The window that owns the confirmation.</param>
+    /// <param name="button">What to press.</param>
+    /// <param name="what">The button, as a complaint would name it.</param>
+    /// <param name="working">The headline the page shows while this runs.</param>
+    /// <param name="headline">Where that headline is written.</param>
+    /// <param name="afterAgreeing">Something to say between the agreement and the wait, or null.</param>
+    /// <returns>The headline the run ended on.</returns>
+    /// <remarks>
+    /// Shared by the check and the compaction rather than written twice, which is the rule DD204
+    /// applied to the work these two start: the second copy of a sequence is the one that goes stale,
+    /// and here it would go stale silently — a driver that agreed to a dialog the wrong way reports
+    /// a page that did nothing rather than a driver that asked nothing.
+    /// </remarks>
+    private static string DriveTheButton(
+        AutomationElement window,
+        AutomationElement button,
+        string what,
+        string working,
+        AutomationElement headline,
+        string? afterAgreeing = null)
+    {
+        Pattern<InvokePattern>(button, InvokePattern.Pattern, what).Invoke();
 
         // Asked of the window and asked in Win32, which is DD227's whole finding. The confirmation
         // is a native message box: UI Automation does not list it among the desktop's children and
@@ -212,8 +348,8 @@ internal static class WindowDriver
         var dialog = AwaitValue(
             () => OwnedPopup(window),
             ControlBudget,
-            "the Check filesystem button was invoked and no confirmation appeared. Whether the "
-            + "engine was touched is not something this watched, so it is not being claimed");
+            $"{what} was invoked and no confirmation appeared. Whether the engine was touched is "
+            + "not something this watched, so it is not being claimed");
 
         Say("dialog", Caption(dialog));
 
@@ -232,22 +368,33 @@ internal static class WindowDriver
 
         Say("agreed", $"pressed control {YesButton}, whatever this machine calls it");
 
+        if (afterAgreeing is { Length: > 0 } warning)
+        {
+            Say("prompt", warning);
+        }
+
         // The working sentence has to arrive before the ending, or what follows would read a panel
         // that had not been touched yet and call the previous run's headline an outcome.
         Await(
-            () => Text(headline) == RepairPrompt.Working.Headline ? headline : null,
+            () => Text(headline) == working ? headline : null,
             ControlBudget,
             "the panel never said it was working, so the click reached nothing");
 
-        Say("working", RepairPrompt.Working.Headline);
+        Say("working", working);
 
-        var ending = Await(
-            () => Text(headline) is { Length: > 0 } said
-                && said != RepairPrompt.Working.Headline ? said : null,
+        return Await(
+            () => Text(headline) is { Length: > 0 } said && said != working ? said : null,
             CheckBudget,
-            $"the check was still running after {CheckBudget.TotalMinutes:0} minutes. It has not "
-            + "failed and this has stopped watching it; the window still has the panel");
+            $"it was still running after {CheckBudget.TotalMinutes:0} minutes. It has not failed "
+            + "and this has stopped watching it; the window still has the panel");
+    }
 
+    /// <summary>What the page ended on, with everything under it.</summary>
+    /// <param name="window">The window.</param>
+    /// <param name="ending">The headline the run stopped at.</param>
+    /// <param name="reading">Where the machine's verdict is written.</param>
+    private static void Report(AutomationElement window, string ending, AutomationElement reading)
+    {
         Console.WriteLine();
         Say("ending", ending);
         Say("detail", Text(Find(window, "FoundDetail", "the outcome detail")));
@@ -259,21 +406,6 @@ internal static class WindowDriver
             Console.WriteLine();
             Console.WriteLine(steps);
         }
-
-        // The buttons coming back is the end of the run as far as the window is concerned, and it is
-        // the assertion no source match could make: a page that threw on its way out leaves them
-        // dead and looks exactly like a page still working.
-        if (!Await(
-            () => check.Current.IsEnabled ? check : null,
-            ControlBudget,
-            "the check ended and its own button never came back, so the page is stuck")
-            .Current.IsEnabled)
-        {
-            return Failed;
-        }
-
-        Say("buttons", "enabled again, so the page finished its own work");
-        return Ok;
     }
 
     /// <summary>The window this is driving, launching one where there is none.</summary>

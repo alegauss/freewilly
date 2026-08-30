@@ -90,6 +90,72 @@ public sealed class WindowDriverTests
     }
 
     [Fact]
+    public void The_compaction_is_drivable_and_costs_more_than_the_check_does()
+    {
+        // DD241. The compaction is the path that shipped broken: DD237 went out with a terminate
+        // where it needed a shutdown, on a green suite, because the elevation is a seam and a fake
+        // seam does not care whether the disk was really released. One press found it.
+        var route = CommandLine.Of([CommandLine.DriveWindowVerb, WindowDriver.CompactFlag]);
+
+        Assert.Equal(Surface.DriveWindow, route.Surface);
+        Assert.False(route.OpenWindow);
+        Assert.Equal([WindowDriver.CompactFlag], route.Arguments);
+
+        // Its own flag, because the two cost different things: the check stops Docker, and this
+        // stops Docker, shuts every distribution down, and ends at a prompt somebody must answer.
+        Assert.NotEqual(WindowDriver.CheckFlag, WindowDriver.CompactFlag);
+
+        // And named in the help, which is the only place somebody finds a verb they were not told
+        // about. DD230 is the guard that this text is regenerated rather than drifting.
+        Assert.Contains(
+            WindowDriver.CompactFlag, CommandLine.HelpText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_two_runs_that_take_the_engine_down_are_not_driven_in_one_go()
+    {
+        // Both stop the engine, so the second would start against a page still finishing the first.
+        // Which should go first is not this verb's to decide: they are different questions, and
+        // somebody who passed both has not said.
+        var driver = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/WindowDriver.cs"));
+
+        Assert.Contains("if (checking && compacting)", driver, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void One_sequence_answers_the_dialog_for_both_buttons()
+    {
+        // DD204's rule applied to the driver: the second copy of a sequence is the one that goes
+        // stale, and here it would go stale silently. A driver that agreed to a dialog the wrong
+        // way reports a page that did nothing rather than a driver that asked nothing.
+        var driver = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Cli/WindowDriver.cs"));
+
+        Assert.Contains("private static string DriveTheButton(", driver, StringComparison.Ordinal);
+
+        // The claim stated directly rather than as a count of call sites, which is arithmetic that
+        // goes wrong the moment a third caller is right to exist — and one already is, since the
+        // compaction presses two buttons.
+        foreach (var caller in new[] { "DriveTheCheck(", "DriveTheCompaction(" })
+        {
+            var at = driver.IndexOf(
+                $"private static int {caller}", StringComparison.Ordinal);
+            Assert.True(at > 0, $"{caller} is gone, so this guard reads nothing");
+            Assert.Contains(
+                "DriveTheButton(",
+                driver[at..(driver.IndexOf("\n    /// <summary>", at, StringComparison.Ordinal))],
+                StringComparison.Ordinal);
+        }
+
+        // One press, and it is the shape DD227 measured: BM_CLICK on the control, never a
+        // WM_COMMAND to the dialog, which is obeyed even where the button is disabled.
+        Assert.Equal(
+            1,
+            driver.Split("SendMessage(yes, ClickMessage", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
     public void The_window_it_launches_does_not_inherit_the_driver_s_console()
     {
         // DD240, and it made the verb useless on exactly the machine it was written for. With a

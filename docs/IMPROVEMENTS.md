@@ -47,28 +47,6 @@ watched a slow compaction and said whether the one line was enough.
 
 ## Block C — The window (claude-tray's elements)
 
-### §DD241 The path that shipped broken is the one nothing drives
-
-DD237 shipped with `wsl --terminate` where it needed `wsl --shutdown`. The suite was
-green on 1481 tests, because the elevation is a seam and a fake seam does not care
-whether the disk was actually released. What found it was a person pressing the button
-once, and diskpart refusing.
-
-That is the class of defect DD214 built this verb for, and the verb cannot reach here.
-It drives the check and stops at the compaction, so the newest path on the page, the
-only one that raises a UAC prompt, and the one that reaches past the engine into every
-distribution on the machine, is exercised by nobody but whoever remembers.
-
-A flag beside `--check`, and the same bargain: it is not in the suite, because it stops
-Docker and shuts WSL down. What it buys is that the path can be run deliberately, before
-a release, by somebody who did not write it.
-
-The UAC prompt is the part it cannot drive, and that is not a reason to skip the rest.
-Windows raises it on the secure desktop and no automation touches it, so the run stops
-at the prompt and says so. Everything before it is what broke: the announced stop, the
-shutdown, the wait for the file, and the dialog naming what else goes down. Everything
-after it is readable from the panel once a person has answered.
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks

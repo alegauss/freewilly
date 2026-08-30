@@ -229,7 +229,8 @@ public static class CommandLine
 
         if (string.Equals(first, DriveWindowVerb, StringComparison.Ordinal))
         {
-            // The verb is dropped: what follows is --check or nothing. OpenWindow stays false —
+            // The verb is dropped: what follows is --check, --compact or nothing. OpenWindow stays
+            // false —
             // this reaches a window through the desktop and does not become one.
             return new Route(Surface.DriveWindow, OpenWindow: false, arguments[1..]);
         }
@@ -295,9 +296,10 @@ public static class CommandLine
           {QuitVerb}           ask the running tray to exit, and wait until it has
           {CaptureWindowVerb} <out.png> [tab]
                            render the window to a PNG off-screen, photographing nothing else
-          {DriveWindowVerb} [--check]
+          {DriveWindowVerb} [--check | --compact]
                            work the real window through UI Automation and print what it says;
-                           with --check it drives the filesystem check, which stops Docker
+                           with --check it drives the filesystem check, which stops Docker,
+                           and with --compact the compaction, which also shuts WSL down
           {ShowMenuVerb} [state] [--seconds n]
                            hold the tray's context menu open, for scripts\Capture-Window.ps1
           {OpenBuildVerb} <link>

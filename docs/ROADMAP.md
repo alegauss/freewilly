@@ -11,8 +11,6 @@
 
 ## Block C — The window (claude-tray's elements)
 
-- 📋 **DD241** (deps: —) **the driver cannot reach the compaction, so the one path with a UAC prompt is only ever exercised by hand** — The verb grows a flag for the compaction the way it has one for the check, so the elevated path has a reader that is not a person remembering to press it. → §DD241
-
 ## Block D — Container operations (what a user came to do)
 
 ## Block E — Images, volumes and networks
