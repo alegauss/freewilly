@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD245** (deps: —) **the two compaction sequences carry the same five steps twice, and the copy already inherited a wrong verb once** — The read, the stop, the take-down and the second read are written once with the acting step as the difference, which is the shape DD204 gave the check and the repair. → §DD245
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

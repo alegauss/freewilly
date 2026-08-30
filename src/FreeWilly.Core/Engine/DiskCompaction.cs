@@ -236,39 +236,84 @@ public sealed class DiskCompaction
     /// <summary>Run the whole sequence.</summary>
     /// <param name="report">Called with each step as it lands.</param>
     /// <returns>What was done, and what the disk was either side of it.</returns>
-    public CompactionOutcome Run(Action<RepairStep>? report = null)
-    {
-        var steps = new List<RepairStep>();
-
-        // Read while the distribution is still up, because the inside half of it is a `df` and there
-        // is nothing to ask once the terminate has happened.
-        var before = Sizes();
-        Record(steps, report, new RepairStep("read the disk", true, Describe(before)));
+    public CompactionOutcome Run(Action<RepairStep>? report = null) => Walk(
+        _wsl,
+        _paths,
+        report,
 
         // Both preparation, and neither stops the run. Every byte they free is a byte the hand-back
         // can return, and a daemon that would not answer is not a reason to leave the blocks that
         // were already free sitting on the Windows volume.
-        Record(steps, report, _pruneCache());
-        Record(steps, report, Trim());
+        preparing: [_pruneCache, Trim],
+        stopEngine: _stopEngine,
+        takeDown: TakeTheDistributionDown,
+        act: HandBack);
 
-        // Announced before it is done, for the reason DD207 cost: the host puts back an engine it
-        // loses (DD136), so a teardown it was not told about is indistinguishable in there from WSL2
-        // dying under a suspend — and it would have the engine back, and the distribution running,
-        // under the terminate this needs.
-        Record(steps, report, _stopEngine());
+    /// <summary>
+    /// The compaction sequence, whichever route is taking it (DD245).
+    /// </summary>
+    /// <param name="wsl">The WSL command, for the two readings.</param>
+    /// <param name="paths">Where the distribution and its virtual disk are.</param>
+    /// <param name="report">Called with each step as it lands.</param>
+    /// <param name="preparing">
+    /// Steps that free blocks before anything is handed back, none of which stops the run.
+    /// </param>
+    /// <param name="stopEngine">Takes the engine down the announced way.</param>
+    /// <param name="takeDown">Puts the virtual disk out of use, however far that has to go.</param>
+    /// <param name="act">The one step that hands the blocks back, and decides the run.</param>
+    /// <returns>What was done, and what the disk was either side of it.</returns>
+    /// <remarks>
+    /// <para><b>Written once because the copy had already gone stale (DD245).</b> The two routes are
+    /// the same five beats and were two methods, and
+    /// <see cref="ElevatedCompaction"/>'s take-down was written by copying this one's. It inherited
+    /// <c>--terminate</c>, which is right here and wrong there: diskpart needs the WSL2 utility VM
+    /// down and a terminate leaves it up. That shipped, on a green suite, and failed on the first
+    /// real press. DD204 made this argument for the check and the repair; this is the same shape.
+    /// </para>
+    ///
+    /// <para><b>The order is the whole of it.</b> The engine is told before the disk is taken, for
+    /// the reason DD207 cost: the host puts back an engine it loses (DD136), so a teardown it was
+    /// not told about is indistinguishable in there from WSL2 dying under a suspend, and it would
+    /// have the engine back and the distribution running under the take-down this needs.</para>
+    ///
+    /// <para>Both readings are this sequence's rather than either route's, because the figure the
+    /// page claims is arithmetic over two readings one run took itself (DD225).</para>
+    /// </remarks>
+    internal static CompactionOutcome Walk(
+        IWsl wsl,
+        EnginePaths paths,
+        Action<RepairStep>? report,
+        IReadOnlyList<Func<RepairStep>> preparing,
+        Func<RepairStep> stopEngine,
+        Func<RepairStep> takeDown,
+        Func<RepairStep> act)
+    {
+        var steps = new List<RepairStep>();
 
-        if (!Record(steps, report, TakeTheDistributionDown()))
+        // Read while the distribution is still up, because the inside half of it is a `df` and there
+        // is nothing to ask once the take-down has happened.
+        var before = Read(wsl, paths);
+        Record(steps, report, new RepairStep("read the disk", true, Describe(before)));
+
+        foreach (var step in preparing)
+        {
+            Record(steps, report, step());
+        }
+
+        Record(steps, report, stopEngine());
+
+        // The one early return. Nothing was done to the disk, so there is no second reading worth
+        // taking and no difference to report.
+        if (!Record(steps, report, takeDown()))
         {
             return new CompactionOutcome(steps) { Before = before };
         }
 
-        Record(steps, report, HandBack());
+        Record(steps, report, act());
 
-        // Taken after the hand-back rather than trusted, which is the whole of being answerable for
-        // the figure: the panel says what the disk is now, and the difference is arithmetic over two
-        // readings this run took itself.
-        var after = Sizes();
-        return new CompactionOutcome(steps) { Before = before, After = after };
+        // Taken after the acting step rather than trusted, on the failing path too: "nothing moved"
+        // is a measurement rather than an inference from an exit code.
+        return new CompactionOutcome(steps) { Before = before, After = Read(wsl, paths) };
     }
 
     private static bool Record(
@@ -278,10 +323,6 @@ public sealed class DiskCompaction
         report?.Invoke(step);
         return step.Ok;
     }
-
-    /// <summary>Both sizes, at this moment.</summary>
-    /// <returns>The reading, with either half null where it could not be taken.</returns>
-    private DiskSizes Sizes() => Read(_wsl, _paths);
 
     /// <summary>All three sizes, at this moment.</summary>
     /// <param name="wsl">The WSL command, for the reading taken from inside.</param>

@@ -2,30 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD245 One sequence written twice, and the copy has already gone stale
-
-`DiskCompaction.Run` and `ElevatedCompaction.Run` are the same five beats: read the
-disk, stop the engine the announced way, take the disk out of use, do the one thing that
-differs, read the disk again. Only the fourth is genuinely different, and only the third
-differs in a detail.
-
-That detail is what makes this a task rather than a tidy-up.
-`ElevatedCompaction.TakeItDown` was written by copying `TakeTheDistributionDown`, which
-terminates the distribution, and DD238 is the whole story of what that cost: it shipped,
-the suite stayed green on 1481 tests because the elevation is a seam, and it failed on
-the first real press because diskpart needs the WSL2 utility VM down and a terminate
-leaves it up. The copy inherited a verb that was right where it came from and wrong
-where it landed.
-
-DD204 made this argument for the check and the repair and gave the shape: one assembly,
-with what differs passed in. The same shape fits here, with the acting step as the seam
-and the take-down as a second one, so the two routes cannot disagree about the order the
-engine comes down in.
-
-What must survive the merge is that the elevated route runs no prune and no `fstrim`. It
-is offered at the end of a compaction that has just run both, and repeating them would
-be minutes of work whose result is already on the disk.
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

@@ -13,6 +13,20 @@ namespace FreeWilly.Preflight.Tests;
 /// </remarks>
 public sealed class DiskCompactionTests
 {
+    /// <summary>The checkout, for the guards that read source rather than run it.</summary>
+    private static string RepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null
+            && !File.Exists(Path.Combine(directory.FullName, "FreeWilly.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        Assert.True(directory is not null, "the repository root was not found above the test binaries");
+        return directory!.FullName;
+    }
+
     private static EnginePaths Paths() =>
         new(Path.Combine(Path.GetTempPath(), $"fw-{Guid.NewGuid():N}"));
 
@@ -279,6 +293,53 @@ public sealed class DiskCompactionTests
         Assert.False(
             DiskCompaction.WasRefusedHere(paths),
             "a hand-back that worked left the machine still marked as refusing them");
+    }
+
+    [Fact]
+    public void Both_routes_walk_one_sequence_rather_than_two_copies_of_it()
+    {
+        // DD245, and it is a guard against a defect that already happened rather than a tidiness
+        // rule. ElevatedCompaction's take-down was written by copying this one's and inherited
+        // `--terminate`, which is right here and wrong there: diskpart needs the WSL2 utility VM
+        // down and a terminate leaves it up. It shipped on a green suite and failed on the first
+        // real press, because the elevation is a seam and a fake seam does not care.
+        var shared = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Core/Engine/DiskCompaction.cs"));
+        var raised = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Core/Engine/ElevatedCompaction.cs"));
+
+        Assert.Contains("internal static CompactionOutcome Walk(", shared, StringComparison.Ordinal);
+        Assert.Contains("DiskCompaction.Walk(", raised, StringComparison.Ordinal);
+
+        // Neither route keeps a reading of its own. Two callers of Read are the sequence's two, and
+        // a third would be a route measuring the disk on its own terms again.
+        Assert.DoesNotContain("Read(_wsl, _paths)", raised, StringComparison.Ordinal);
+
+        // And neither collects its own steps, which is where the copies diverged.
+        Assert.DoesNotContain("new List<RepairStep>()", raised, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_engine_is_told_before_the_disk_is_taken_on_either_route()
+    {
+        // DD207's ordering, now asserted once because it is written once. The host puts back an
+        // engine it loses (DD136), so a teardown it was not told about is indistinguishable in
+        // there from WSL2 dying under a suspend — and it would have the engine back, and the
+        // distribution running, under the take-down that follows.
+        var shared = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Core/Engine/DiskCompaction.cs"));
+
+        var walk = shared.IndexOf(
+            "internal static CompactionOutcome Walk(", StringComparison.Ordinal);
+        var body = shared[walk..];
+
+        var told = body.IndexOf("Record(steps, report, stopEngine())", StringComparison.Ordinal);
+        var taken = body.IndexOf("Record(steps, report, takeDown())", StringComparison.Ordinal);
+        var acted = body.IndexOf("Record(steps, report, act())", StringComparison.Ordinal);
+
+        Assert.True(told > 0, "the sequence no longer tells the engine anything");
+        Assert.True(taken > told, "the disk is taken before the engine has been told");
+        Assert.True(acted > taken, "the blocks are handed back while the disk is still in use");
     }
 
     [Fact]

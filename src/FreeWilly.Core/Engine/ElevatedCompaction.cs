@@ -210,48 +210,20 @@ public sealed class ElevatedCompaction
     /// both and been refused only at the hand-back, so repeating them would be two more minutes of
     /// work whose result is already on the disk.
     /// </remarks>
-    public CompactionOutcome Run(Action<RepairStep>? report = null, Action<string>? saying = null)
-    {
-        var steps = new List<RepairStep>();
+    public CompactionOutcome Run(
+        Action<RepairStep>? report = null, Action<string>? saying = null) =>
+        DiskCompaction.Walk(
+            _wsl,
+            _paths,
+            report,
 
-        // Read while the distribution is still up, because the inside half of it is a `df` and there
-        // is nothing to ask once the terminate has happened.
-        var before = DiskCompaction.Read(_wsl, _paths);
-        Record(steps, report, new RepairStep("read the disk", true, Describe(before)));
-
-        Record(steps, report, _stopEngine());
-
-        if (!Record(steps, report, TakeItDown()))
-        {
-            return new CompactionOutcome(steps) { Before = before };
-        }
-
-        if (!Record(steps, report, Compact(saying)))
-        {
-            // Still measured. The terminate happened either way, and a reading taken after a
-            // diskpart that refused is the evidence that nothing moved rather than an assumption
-            // about it.
-            return new CompactionOutcome(steps)
-            {
-                Before = before,
-                After = DiskCompaction.Read(_wsl, _paths),
-            };
-        }
-
-        return new CompactionOutcome(steps)
-        {
-            Before = before,
-            After = DiskCompaction.Read(_wsl, _paths),
-        };
-    }
-
-    private static bool Record(
-        List<RepairStep> steps, Action<RepairStep>? report, RepairStep step)
-    {
-        steps.Add(step);
-        report?.Invoke(step);
-        return step.Ok;
-    }
+            // Nothing. This is offered at the end of a compaction that has just pruned and trimmed
+            // and been refused only at the hand-back, so repeating them would be minutes of work
+            // whose result is already on the disk.
+            preparing: [],
+            stopEngine: _stopEngine,
+            takeDown: TakeItDown,
+            act: () => Compact(saying));
 
     private RepairStep TakeItDown()
     {
@@ -474,14 +446,6 @@ public sealed class ElevatedCompaction
             return $"and its log could not be read from {LogPath}";
         }
     }
-
-    /// <summary>One reading, in the words the panel uses for the same three numbers.</summary>
-    private static string Describe(DiskSizes sizes) =>
-        $"virtual disk {Size(sizes.VirtualDisk)}, used on Windows {Size(sizes.OnDisk)}, "
-        + $"used inside {Size(sizes.UsedInside)}";
-
-    private static string Size(long? bytes) =>
-        bytes is { } value ? MachineReport.Size(value) : MachineReport.Unread;
 
     private static string Said(WslResult result) =>
         result.Failure ?? result.Output.Trim().ReplaceLineEndings(" ");
