@@ -21,6 +21,7 @@ internal sealed class FakeDockerDaemon : IAsyncDisposable
     private readonly CancellationTokenSource _stopping = new();
     private readonly Dictionary<string, byte[]> _routes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, byte[]> _prefixes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TimeSpan> _slow = new(StringComparer.Ordinal);
     private readonly List<string> _requested = [];
     private readonly Lock _guard = new();
     private readonly Task _serving;
@@ -50,6 +51,24 @@ internal sealed class FakeDockerDaemon : IAsyncDisposable
     /// <summary>Answer <paramref name="path"/> with a status and a body.</summary>
     internal FakeDockerDaemon Fails(string path, string status, string body) =>
         Raw(path, Http(status, "text/plain", body));
+
+    /// <summary>
+    /// Take <paramref name="taking"/> to answer <paramref name="path"/>, as a busy daemon does.
+    /// </summary>
+    /// <remarks>
+    /// For DD234, which is about a call whose duration is a function of how much the daemon has to
+    /// delete rather than of whether it is alive. A prune is not a question, and the only way to
+    /// test a budget is against a daemon that spends some of it.
+    /// </remarks>
+    internal FakeDockerDaemon Takes(string path, TimeSpan taking)
+    {
+        lock (_guard)
+        {
+            _slow[path] = taking;
+        }
+
+        return this;
+    }
 
     /// <summary>Answer <paramref name="path"/> with exactly these bytes.</summary>
     internal FakeDockerDaemon Raw(string path, string response) =>
@@ -136,6 +155,11 @@ internal sealed class FakeDockerDaemon : IAsyncDisposable
                     _requested.Add(asked.Line);
                 }
 
+                if (DelayFor(asked.Line) is { } spent)
+                {
+                    await Task.Delay(spent, cancellation).ConfigureAwait(false);
+                }
+
                 var response = ResponseFor(asked.Line);
                 await client.WriteAsync(response, cancellation).ConfigureAwait(false);
                 await client.FlushAsync(cancellation).ConfigureAwait(false);
@@ -162,11 +186,19 @@ internal sealed class FakeDockerDaemon : IAsyncDisposable
         }
     }
 
+    /// <summary>How long this path was told to take, or <see langword="null"/> for at once.</summary>
+    private TimeSpan? DelayFor(string request)
+    {
+        lock (_guard)
+        {
+            return _slow.TryGetValue(PathOf(request), out var spent) ? spent : null;
+        }
+    }
+
     /// <summary>The canned answer for a request line, or a 404 naming the path.</summary>
     private byte[] ResponseFor(string request)
     {
-        // The request line is `GET /v1.43/version HTTP/1.1`; routes are keyed by the path.
-        var path = request.Split(' ') is [_, var target, ..] ? target : "";
+        var path = PathOf(request);
         lock (_guard)
         {
             return _routes.TryGetValue(path, out var canned)
@@ -177,6 +209,11 @@ internal sealed class FakeDockerDaemon : IAsyncDisposable
                       Http("404 Not Found", "text/plain", $"no route for {path}"));
         }
     }
+
+    /// <summary>The path out of a request line, which is what both maps are keyed by.</summary>
+    /// <remarks>The line is <c>GET /v1.43/version HTTP/1.1</c>.</remarks>
+    private static string PathOf(string request) =>
+        request.Split(' ') is [_, var target, ..] ? target : "";
 
     /// <summary>Whether a response says where its body ends without closing the connection.</summary>
     private static bool EndsOnItsOwnCount(byte[] response)

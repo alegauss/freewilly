@@ -427,4 +427,46 @@ public sealed class DockerApiTests
 
         Assert.Equal(4, daemon.Requested.Count);
     }
+
+    // ---- how long a call is given, by what kind of call it is (DD234) ------------------------
+
+    [Fact]
+    public void Housekeeping_is_given_longer_than_a_question()
+    {
+        // The two exist to be different. A single constant is what DD234 was: the compaction's
+        // prune ran under the budget written for a list, and failed at twenty seconds on the disk
+        // the button is for.
+        Assert.True(EngineBudget.Housekeeping > EngineBudget.Question);
+    }
+
+    [Fact]
+    public async Task A_prune_that_outlives_the_question_budget_still_returns_what_it_freed()
+    {
+        // The daemon here is not stuck, it is deleting: the shape of a real prune, which takes as
+        // long as there is cache to walk. Milliseconds rather than minutes, because what is under
+        // test is that the budget is the caller's to name and not that ten of them is the number.
+        await using var daemon = new FakeDockerDaemon()
+            .Json(Path("build/prune"), """{"CachesDeleted":["k1","k2"],"SpaceReclaimed":4294967296}""")
+            .Takes(Path("build/prune"), TimeSpan.FromMilliseconds(600));
+        using var api = new DockerApi(daemon.PipeName, TimeSpan.FromSeconds(10));
+
+        var pruned = await api.PruneBuildCacheAsync();
+
+        Assert.Equal(2, pruned.CachesDeleted!.Count);
+        Assert.Equal(4294967296, pruned.SpaceReclaimed);
+    }
+
+    [Fact]
+    public async Task The_same_prune_under_too_short_a_budget_is_the_failure_DD234_reported()
+    {
+        await using var daemon = new FakeDockerDaemon()
+            .Json(Path("build/prune"), """{"CachesDeleted":[],"SpaceReclaimed":0}""")
+            .Takes(Path("build/prune"), TimeSpan.FromSeconds(5));
+        using var api = new DockerApi(daemon.PipeName, TimeSpan.FromMilliseconds(300));
+
+        var thrown = await Assert.ThrowsAsync<DockerApiException>(() => api.PruneBuildCacheAsync());
+
+        Assert.Contains("build/prune", thrown.Message, StringComparison.Ordinal);
+        Assert.Null(thrown.Status);
+    }
 }

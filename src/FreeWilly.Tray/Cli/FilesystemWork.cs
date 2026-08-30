@@ -154,18 +154,25 @@ internal sealed class FilesystemWork : IFilesystemWork
     /// </summary>
     /// <returns>The step.</returns>
     /// <remarks>
-    /// A failure here is reported and does not stop the compaction, which is
+    /// <para>A failure here is reported and does not stop the compaction, which is
     /// <see cref="CompactionOutcome.Succeeded"/>'s rule: an engine that would not answer is not a
     /// reason to leave blocks the filesystem has already freed sitting on the Windows volume. It runs
     /// before the stop because it needs the daemon, which is the whole reason the sequence takes it
-    /// as a seam rather than doing it itself.
+    /// as a seam rather than doing it itself.</para>
+    ///
+    /// <para><b>Asked as housekeeping and not as a question (DD234).</b> Under the client's default
+    /// this step failed at twenty seconds on a disk with 56.5 GB in use, which is the disk the
+    /// button is for. The ping keeps the short budget it always had: it is a question, it is what
+    /// tells a stopped engine from a busy one, and a pipe nothing is serving still refuses in two
+    /// seconds.</para>
     /// </remarks>
     private static RepairStep PruneBuildCache()
     {
         try
         {
-            using var api = new DockerApi();
-            if (!api.PingAsync().GetAwaiter().GetResult())
+            using var api = new DockerApi(timeout: EngineBudget.Housekeeping);
+            using var asking = new CancellationTokenSource(EngineBudget.Question);
+            if (!api.PingAsync(asking.Token).GetAwaiter().GetResult())
             {
                 return new RepairStep(
                     DiskCompaction.PruneStep,

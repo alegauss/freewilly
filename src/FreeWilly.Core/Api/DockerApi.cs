@@ -28,6 +28,42 @@ public sealed class DockerApiException(
 }
 
 /// <summary>
+/// How long one Engine API call is given, which depends on what it was asked to do (DD234).
+/// </summary>
+/// <remarks>
+/// <para>The same split <see cref="Engine.WslBudget"/> makes, for the same reason and against the
+/// other client. Nearly everything this tool asks the daemon is a question, and a question that has
+/// not been answered in twenty seconds is not going to be; a prune is the daemon walking its own
+/// storage and unlinking layers, and how long that takes is a function of how much there is to
+/// delete.</para>
+///
+/// <para>Raising the one constant was the fix not taken there and it is not taken here either. A
+/// list that hangs has to fail while somebody is still looking at the page, so what changed is that
+/// the caller names which kind of call it is making.</para>
+/// </remarks>
+public static class EngineBudget
+{
+    /// <summary>A question: a list, a version, an inspect, a ping.</summary>
+    /// <remarks>
+    /// The client's default, and the reason it stays twenty seconds. These are read on the way to
+    /// drawing a page, and every one of them is answered off state the daemon already holds.
+    /// </remarks>
+    public static readonly TimeSpan Question = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// Housekeeping: a prune, and anything else that asks the daemon to delete by the gigabyte.
+    /// </summary>
+    /// <remarks>
+    /// Ten minutes, and a ceiling rather than an estimate: the wait ends when the call does, so this
+    /// only bounds the failing case. What it has to cover is the run that most needs it, which is
+    /// the one this budget exists for. The compaction is offered because the disk is full, the
+    /// fuller it is the longer the prune runs, and under
+    /// <see cref="Question"/> the step was surest to fail on the machine that had most to gain.
+    /// </remarks>
+    public static readonly TimeSpan Housekeeping = TimeSpan.FromMinutes(10);
+}
+
+/// <summary>
 /// The Engine API over <c>\\.\pipe\docker_engine</c>. HTTP, JSON, and nothing from NuGet.
 /// </summary>
 /// <remarks>
@@ -71,7 +107,10 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
 
     /// <summary>Construct a client.</summary>
     /// <param name="pipeName">The pipe to talk to; overridden in tests.</param>
-    /// <param name="timeout">How long any one call may take. Streaming calls ignore it.</param>
+    /// <param name="timeout">
+    /// How long any one call may take, named from <see cref="EngineBudget"/> by a caller doing
+    /// something other than asking a question. Streaming calls ignore it.
+    /// </param>
     public DockerApi(string pipeName = DefaultPipeName, TimeSpan? timeout = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pipeName);
@@ -91,7 +130,7 @@ public sealed class DockerApi : IDisposable, Agent.IEngineRemovals, IEngineClien
         _http = new HttpClient(handler)
         {
             BaseAddress = new Uri("http://localhost/"),
-            Timeout = timeout ?? TimeSpan.FromSeconds(20),
+            Timeout = timeout ?? EngineBudget.Question,
         };
     }
 
