@@ -28,6 +28,7 @@ public sealed class EnginePipeRelay : IAsyncDisposable
     private Thread? _accepting;
     private NamedPipeServerStream? _listening;
     private int _holding;
+    private int _undrained;
 
     /// <summary>
     /// The one free listener, held where both the accept thread and a dispose can reach it.
@@ -371,12 +372,46 @@ public sealed class EnginePipeRelay : IAsyncDisposable
 
     /// <summary>How long the drain is given before the handle is closed regardless (DD259).</summary>
     /// <remarks>
-    /// Normally unreached: the listeners are created with no buffers, so a write has already been
-    /// taken by the client before it completes and there is nothing left to drain. The deadline is
-    /// here for the client that stops reading without hanging up, which would otherwise hold a
-    /// thread for as long as it liked.
+    /// <b>Never reached, and DD264 is the measurement rather than the guess.</b> DD259 wrote this
+    /// against the client that stops reading without hanging up, and that client turns out not to
+    /// arrive here at all: driven on 31 August 2026 with the deadline at 250 ms, a client that
+    /// connected, sent an attach and then never read left the relay holding the connection and
+    /// nothing undrained, for as long as the test cared to wait.
+    ///
+    /// <para>The listener's own shape is why. Server instances are created with no buffers reserved,
+    /// so a write into the pipe does not complete until the client takes it, and the teardown is
+    /// only reached once a pump has ended — so a client that is not reading blocks the pump that
+    /// would have to finish first. The connection stays in the serve instead of arriving at the close
+    /// with bytes still in flight, which is the only state a drain could wait on.</para>
+    ///
+    /// <para>It stays anyway. The path costs nothing when it is not taken, and what makes it
+    /// unreachable is two arguments to <see cref="NamedPipeServerStreamAcl.Create"/> — change the
+    /// buffer sizes and the wait becomes both real and unbounded. <see cref="Undrained"/> is what
+    /// would say so.</para>
+    ///
+    /// <para>Shortened by a test and only by a test, the same seam and the same reason as
+    /// <see cref="Listener"/>: an expiry that takes five seconds is one a suite cannot afford to
+    /// wait for, and a deadline nothing ever tries to reach is indistinguishable from one that does
+    /// not work.</para>
     /// </remarks>
-    private static readonly TimeSpan DrainDeadline = TimeSpan.FromSeconds(5);
+    internal TimeSpan DrainDeadline { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How many connections were let go of with the client still not reading (DD264).
+    /// </summary>
+    /// <remarks>
+    /// Zero, structurally, for as long as the listeners are created with no buffers — see
+    /// <see cref="DrainDeadline"/> for why the state it counts cannot occur. It exists because that
+    /// is a claim about a buffer size rather than a law: a count moving off zero here is the drain
+    /// having become reachable, and the wait behind it is on a pool thread and bounded only by the
+    /// deadline nobody has ever tested against a real client.
+    ///
+    /// <para>Internal rather than public, unlike <see cref="Stumbles"/>. The supervisor has nothing
+    /// to do about a client that stopped reading — that is the client's business, and the relay has
+    /// already handled it — so this is a fact for a test to hold and not a figure for a journal.
+    /// What would change that is a machine where it moves.</para>
+    /// </remarks>
+    internal int Undrained => Volatile.Read(ref _undrained);
 
     /// <summary>End one connection the way a client reading to EOF can survive (DD259).</summary>
     /// <param name="client">The connection, served or failed.</param>
@@ -397,7 +432,7 @@ public sealed class EnginePipeRelay : IAsyncDisposable
     /// every byte, and closing the handle after it ends the pipe with ERROR_BROKEN_PIPE, which is
     /// the ending every client reads as a stream that finished.</para>
     /// </remarks>
-    private static async Task EndAsync(NamedPipeServerStream client)
+    private async Task EndAsync(NamedPipeServerStream client)
     {
         try
         {
@@ -419,7 +454,14 @@ public sealed class EnginePipeRelay : IAsyncDisposable
                     }
                 });
 
-                await Task.WhenAny(drained, Task.Delay(DrainDeadline)).ConfigureAwait(false);
+                // Counted rather than merely bounded (DD264). Which of the two finished is the
+                // difference between a client that took its bytes and one that stopped reading and
+                // was let go of, and the second is the only reason the deadline exists.
+                var expiry = Task.Delay(DrainDeadline);
+                if (await Task.WhenAny(drained, expiry).ConfigureAwait(false) == expiry)
+                {
+                    Interlocked.Increment(ref _undrained);
+                }
             }
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException

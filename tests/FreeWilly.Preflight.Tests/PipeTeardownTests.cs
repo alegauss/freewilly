@@ -95,10 +95,7 @@ public sealed class PipeTeardownTests
 
         await client.ConnectAsync(30000);
 
-        var request = Encoding.ASCII.GetBytes(
-            "POST /v1.45/containers/probe/attach?stream=1&stdout=1 HTTP/1.1\r\n"
-            + "Host: docker\r\nConnection: Upgrade\r\nUpgrade: tcp\r\nContent-Length: 0\r\n\r\n");
-        client.Write(request);
+        client.Write(Request());
         client.Flush();
 
         var got = new MemoryStream();
@@ -119,6 +116,11 @@ public sealed class PipeTeardownTests
             got.Write(buffer.AsSpan(0, (int)read));
         }
     }
+
+    /// <summary>An attach, which is what a client sends to stop the connection being HTTP.</summary>
+    private static byte[] Request() => Encoding.ASCII.GetBytes(
+        "POST /v1.45/containers/probe/attach?stream=1&stdout=1 HTTP/1.1\r\n"
+        + "Host: docker\r\nConnection: Upgrade\r\nUpgrade: tcp\r\nContent-Length: 0\r\n\r\n");
 
     /// <summary>Name a Win32 ending, so a failure says what happened rather than which number.</summary>
     private static string Named(int code) => code switch
@@ -148,6 +150,126 @@ public sealed class PipeTeardownTests
             "the relay disconnected the pipe instead of closing it, so a client that reads a "
             + "hijacked stream to its end reads a failure where the stream ended — got "
             + Named(ending.Ended));
+    }
+
+    [Fact]
+    public async Task A_client_that_stops_reading_never_reaches_the_drain_at_all()
+    {
+        // DD264, and the answer turned out to be that the state the deadline guards cannot occur.
+        //
+        // Driven on 31 August 2026, with the deadline shortened to 250 ms so an expiry could not be
+        // missed for want of waiting: a client that connects, sends an attach and then never reads
+        // leaves the relay at holding=1 and undrained=0 for as long as it likes. The teardown is
+        // never entered, so there is never anything to drain.
+        //
+        // The reason is the listener's own shape. The server instances are created with no buffers
+        // reserved, so a write into the pipe does not complete until the client takes it — and the
+        // teardown is only reached once a pump has ended. A client that is not reading blocks the
+        // pump that would have to finish first, so the connection stays in the serve rather than
+        // arriving at the close with bytes still in flight.
+        //
+        // The deadline stays. It costs nothing on a path it never reaches, and the property it
+        // depends on is a buffer size two arguments away from being changed — at which point the
+        // wait becomes real and unbounded. This test is what would notice: undrained moving off
+        // zero here means the drain became reachable.
+        var pipe = Pipe();
+
+        await using var relay = new EnginePipeRelay(new Attaching(), pipe)
+        {
+            DrainDeadline = TimeSpan.FromMilliseconds(250),
+        };
+
+        relay.Start();
+
+        using var client = new NamedPipeClientStream(
+            ".", pipe, PipeDirection.InOut, PipeOptions.None);
+        await client.ConnectAsync(30000);
+
+        client.Write(Request());
+        client.Flush();
+
+        // The serve is in flight, which is DD263's count saying where the connection actually is.
+        Assert.True(
+            await Reached(() => relay.Holding == 1),
+            $"the relay is not holding the connection this client opened (holding={relay.Holding}, "
+            + $"accepted={relay.Accepted}), so the state under test was never reached");
+
+        // Well past the deadline, and nothing expired: there was nothing waiting to.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(1, relay.Holding);
+        Assert.Equal(0, relay.Undrained);
+
+        // And the relay goes on serving while that one sits there, which is what makes the held
+        // connection a held connection rather than a wedged relay.
+        var next = await AttachAsync(pipe);
+        Assert.Equal(Hijacked, next.Read);
+        Assert.True(next.Ended is BrokenPipe or 0, Named(next.Ended));
+    }
+
+    [Fact]
+    public async Task A_client_that_comes_back_and_reads_is_served_the_response_it_left_waiting()
+    {
+        // The mechanism above, shown from the other end. If the write really is waiting for the
+        // client rather than lost, then a client that reads late gets everything — which is also
+        // what says the held serve is a pause and not a leak.
+        var pipe = Pipe();
+
+        await using var relay = new EnginePipeRelay(new Attaching(), pipe)
+        {
+            DrainDeadline = TimeSpan.FromMilliseconds(250),
+        };
+
+        relay.Start();
+
+        using var client = new NamedPipeClientStream(
+            ".", pipe, PipeDirection.InOut, PipeOptions.None);
+        await client.ConnectAsync(30000);
+
+        client.Write(Request());
+        client.Flush();
+
+        Assert.True(await Reached(() => relay.Holding == 1));
+        await Task.Delay(TimeSpan.FromSeconds(1));
+
+        var got = new byte[Hijacked.Length];
+        var read = 0;
+        while (read < got.Length)
+        {
+            var some = client.Read(got, read, got.Length - read);
+            if (some == 0)
+            {
+                break;
+            }
+
+            read += some;
+        }
+
+        Assert.Equal(Hijacked, Encoding.ASCII.GetString(got, 0, read));
+
+        // Read late, served in full, and the serve then finishes on its own.
+        Assert.True(
+            await Reached(() => relay.Holding == 0),
+            $"the client took everything and the relay still holds {relay.Holding}");
+
+        Assert.Equal(0, relay.Undrained);
+    }
+
+    /// <summary>Wait for something to become true, or give up loudly.</summary>
+    private static async Task<bool> Reached(Func<bool> condition, TimeSpan? patience = null)
+    {
+        var deadline = DateTime.UtcNow.Add(patience ?? TimeSpan.FromSeconds(60));
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+            {
+                return true;
+            }
+
+            await Task.Delay(25);
+        }
+
+        return condition();
     }
 
     [Fact]

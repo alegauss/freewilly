@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD264** (deps: DD262 ✅) **nothing drives a client that stops reading without hanging up, so the drain deadline has never run** — DD262 was filed saying its follow would exercise it, and a killed client closes its handle instead, so the five-second wait and the thread it holds are untested. → §DD264
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
