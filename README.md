@@ -159,17 +159,24 @@ make; `--since <cursor>` is already the word for replaying what came before. The
 budget is the third bound, so a container printing faster than the ceiling allows ends the
 follow rather than the session's context.
 
-A pattern that never arrives exits 1, and the last line says which of the four endings it
-was, because your next move differs for each:
+A pattern that never arrives exits 1, and the last line says which ending it was, because
+your next move differs for each:
 
 ```
 until   "seed complete" did not arrive in 90s
 until   "seed complete" did not arrive, and the log ended
 until   "seed complete" did not arrive, and the budget filled first: raise --budget, or --out to a file
 until   "seed complete" had not arrived when this was stopped
+until   "seed complete" did not arrive, and the container was replaced: run this again to follow the one that answers now
 ```
 
-Only the first names a duration, because it is the only one that waited one.
+Only the first names a duration, because it is the only one that waited one. The last is
+the one worth having: a follow holds a stream belonging to one container id, and `compose
+up` recreates under a new one, so the stream ends while the service is running, printing,
+and about to print the line you asked for. Calling that "the log ended" would be true of
+the stream and false of the service. A replacement is reported even without `--until`,
+where nothing failed and the exit code is 0, because a payload that stops for that reason
+reads exactly like one that stops because the service went quiet.
 
 Nothing is printed until it returns. The reader is an agent, which sees stdout once the
 process has ended, so a live scroll buys it nothing and would cost `--level`, `--dedup`,

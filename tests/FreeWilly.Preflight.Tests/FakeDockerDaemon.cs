@@ -20,6 +20,8 @@ internal sealed class FakeDockerDaemon : IAsyncDisposable
 {
     private readonly CancellationTokenSource _stopping = new();
     private readonly Dictionary<string, byte[]> _routes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<byte[]>> _later = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _asked = new(StringComparer.Ordinal);
     private readonly Dictionary<string, byte[]> _prefixes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TimeSpan> _slow = new(StringComparer.Ordinal);
     private readonly List<string> _requested = [];
@@ -47,6 +49,29 @@ internal sealed class FakeDockerDaemon : IAsyncDisposable
     /// <summary>Answer <paramref name="path"/> with a 200 carrying <paramref name="json"/>.</summary>
     internal FakeDockerDaemon Json(string path, string json) =>
         Raw(path, Http("200 OK", "application/json", json));
+
+    /// <summary>
+    /// Answer <paramref name="path"/> with this instead, from the next time it is asked (DD257).
+    /// </summary>
+    /// <remarks>
+    /// The machine moves while a session is reading it, and a verb that reads the same path twice to
+    /// notice is a verb that cannot be tested against a daemon with one fixed answer per path. Called
+    /// more than once it queues; asked past the end of the queue, the last answer repeats.
+    /// </remarks>
+    internal FakeDockerDaemon Then(string path, string json)
+    {
+        lock (_guard)
+        {
+            if (!_later.TryGetValue(path, out var answers))
+            {
+                _later[path] = answers = [];
+            }
+
+            answers.Add(Encoding.UTF8.GetBytes(Http("200 OK", "application/json", json)));
+        }
+
+        return this;
+    }
 
     /// <summary>Answer <paramref name="path"/> with a status and a body.</summary>
     internal FakeDockerDaemon Fails(string path, string status, string body) =>
@@ -201,6 +226,16 @@ internal sealed class FakeDockerDaemon : IAsyncDisposable
         var path = PathOf(request);
         lock (_guard)
         {
+            _asked.TryGetValue(path, out var before);
+            _asked[path] = before + 1;
+
+            // The first ask gets the route; a path told what to say Then gets the next answer, and
+            // the last one repeats once the queue runs out.
+            if (before > 0 && _later.TryGetValue(path, out var answers) && answers.Count > 0)
+            {
+                return answers[Math.Min(before - 1, answers.Count - 1)];
+            }
+
             return _routes.TryGetValue(path, out var canned)
                 ? canned
                 : _prefixes.FirstOrDefault(p =>

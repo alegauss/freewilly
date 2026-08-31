@@ -707,7 +707,26 @@ public static class AgentSurface
                 }
             }
 
+            // A stream that ran out is three endings, and only the daemon can say which: ask it once,
+            // and only here, because every other ending already knows what it was (DD257).
+            if (ending == FollowEnd.Ended)
+            {
+                ending = Resettled(
+                    Match(engine.ContainersAsync().GetAwaiter().GetResult(), address), container.Id);
+            }
+
             var missed = until is not null && ending != FollowEnd.Matched;
+
+            // Worth a line even where nothing was claimed: a payload that stops because the container
+            // underneath it was swapped reads exactly like one that stops because the service went
+            // quiet, and only one of the two means the log above is still the log you want.
+            var note = ending switch
+            {
+                FollowEnd.Replaced when !missed =>
+                    "follow  the container was replaced; what is above is the one this started on",
+                FollowEnd.Gone when !missed => "follow  the container is gone",
+                _ => null,
+            };
 
             if (outPath is null)
             {
@@ -715,6 +734,10 @@ public static class AgentSurface
                 if (missed)
                 {
                     output.WriteLine(Missing(until!, timeout, ending));
+                }
+                else if (note is not null)
+                {
+                    output.WriteLine(note);
                 }
 
                 return missed ? Failed : Ok;
@@ -739,6 +762,10 @@ public static class AgentSurface
             if (missed)
             {
                 output.WriteLine(Missing(until!, timeout, ending));
+            }
+            else if (note is not null)
+            {
+                output.WriteLine(note);
             }
 
             return missed ? Failed : Ok;
@@ -892,8 +919,17 @@ public static class AgentSurface
         /// <summary>The line named by <c>--until</c> arrived.</summary>
         Matched,
 
-        /// <summary>The stream ended: the container stopped printing, or exited.</summary>
+        /// <summary>The stream ended, and the same container still answers the address.</summary>
         Ended,
+
+        /// <summary>
+        /// The stream ended because the container was replaced: something else answers the address
+        /// now, under a new id.
+        /// </summary>
+        Replaced,
+
+        /// <summary>The stream ended and nothing answers the address any more.</summary>
+        Gone,
 
         /// <summary><c>--timeout</c> elapsed.</summary>
         Deadline,
@@ -1021,8 +1057,33 @@ public static class AgentSurface
             FollowEnd.Stopped => "had not arrived when this was stopped",
             FollowEnd.Ceiling => "did not arrive, and the budget filled first: raise --budget, "
                 + "or --out to a file",
+            FollowEnd.Replaced => "did not arrive, and the container was replaced: run this again "
+                + "to follow the one that answers now",
+            FollowEnd.Gone => "did not arrive, and the container is gone",
             _ => "did not arrive, and the log ended",
         };
+
+    /// <summary>
+    /// Which of the three endings a stream that ran out actually was (DD257).
+    /// </summary>
+    /// <remarks>
+    /// A follow holds a stream belonging to one container id, and compose recreates on <c>up</c> under
+    /// a new one. The stream ends either way, so "the log ended" was being said of a service that was
+    /// running, printing, and about to print the line asked for. That is a confidently wrong answer in
+    /// the shape of a right one, which is what the rest of this surface refuses to give.
+    ///
+    /// <para>One extra list call, and only on this ending. It is the cheap half: this says the stream
+    /// is not the service's any more, and re-attaching to the new one is a separate argument.</para>
+    /// </remarks>
+    /// <param name="now">What answers the address after the follow, or null where nothing does.</param>
+    /// <param name="followed">The id the follow was reading.</param>
+    /// <returns>The ending, refined.</returns>
+    internal static FollowEnd Resettled(ContainerSummary? now, string followed) => now switch
+    {
+        null => FollowEnd.Gone,
+        var it when !string.Equals(it.Id, followed, StringComparison.Ordinal) => FollowEnd.Replaced,
+        _ => FollowEnd.Ended,
+    };
 
     /// <summary>
     /// Every published port beside what holds it on Windows (DD28).

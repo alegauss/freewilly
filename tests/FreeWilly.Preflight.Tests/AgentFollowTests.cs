@@ -200,6 +200,96 @@ public sealed class AgentFollowTests
         Assert.True(DateTimeOffset.UtcNow - started < Patience);
     }
 
+    // ---- a container replaced under the follow (DD257) -------------------------------------------
+
+    private const string Containers = """
+        [{"Id":"aaaaaaaaaaaa0000","Names":["/shop-api-1"],"Image":"shop/api:latest",
+          "State":"running","Status":"Up 4 minutes","Ports":[]}]
+        """;
+
+    private const string Recreated = """
+        [{"Id":"bbbbbbbbbbbb1111","Names":["/shop-api-1"],"Image":"shop/api:latest",
+          "State":"running","Status":"Up 2 seconds","Ports":[]}]
+        """;
+
+    [Fact]
+    public void A_stream_that_ran_out_is_three_endings_and_the_daemon_says_which()
+    {
+        static ContainerSummary Was(string id) => new()
+        {
+            Id = id, Names = ["/shop-api-1"], Image = "shop/api:latest", State = "running",
+        };
+
+        Assert.Equal(AgentSurface.FollowEnd.Ended, AgentSurface.Resettled(Was("aaaa"), "aaaa"));
+        Assert.Equal(AgentSurface.FollowEnd.Replaced, AgentSurface.Resettled(Was("bbbb"), "aaaa"));
+        Assert.Equal(AgentSurface.FollowEnd.Gone, AgentSurface.Resettled(null, "aaaa"));
+    }
+
+    [Fact]
+    public async Task A_replaced_container_is_not_reported_as_a_log_that_ended()
+    {
+        await using var daemon = Printing("migrating\n")
+            .Then(ApiPath("containers/json?all=1"), Recreated);
+        var output = new StringWriter();
+
+        var code = Logs(daemon, output, "shop-api-1", "--follow", "--until", "seed complete");
+
+        // The service is running and about to print the line; saying the log ended would be a
+        // confidently wrong answer in the shape of a right one.
+        Assert.Equal(1, code);
+        Assert.Contains("the container was replaced", output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("the log ended", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_replacement_is_worth_saying_even_where_nothing_was_claimed()
+    {
+        await using var daemon = Printing("migrating\n")
+            .Then(ApiPath("containers/json?all=1"), Recreated);
+        var output = new StringWriter();
+
+        // No --until, so nothing failed and the code is 0. The payload still stops for a reason the
+        // reader cannot see in it.
+        Assert.Equal(0, Logs(daemon, output, "shop-api-1", "--follow"));
+        Assert.Contains("the container was replaced", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_container_that_simply_stopped_printing_still_says_the_log_ended()
+    {
+        await using var daemon = Printing("migrating\n")
+            .Then(ApiPath("containers/json?all=1"), Containers);
+        var output = new StringWriter();
+
+        Assert.Equal(1, Logs(daemon, output, "shop-api-1", "--follow", "--until", "seed complete"));
+        Assert.Contains("the log ended", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_container_that_went_away_says_it_is_gone()
+    {
+        await using var daemon = Printing("migrating\n")
+            .Then(ApiPath("containers/json?all=1"), "[]");
+        var output = new StringWriter();
+
+        Assert.Equal(1, Logs(daemon, output, "shop-api-1", "--follow", "--until", "seed complete"));
+        Assert.Contains("the container is gone", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Only_a_stream_that_ran_out_pays_for_a_second_list()
+    {
+        // The refinement costs a call on the agent surface, so it is asked on the one ending that
+        // cannot tell itself apart and on no other.
+        await using var daemon = Printing("migrating\n", "seed complete\n")
+            .Then(ApiPath("containers/json?all=1"), Recreated);
+
+        Assert.Equal(0, Logs(daemon, "shop-api-1", "--follow", "--until", "seed complete"));
+        Assert.Equal(
+            1,
+            daemon.Requested.Count(r => r.Contains("containers/json?all=1", StringComparison.Ordinal)));
+    }
+
     // ---- which ending it was (DD256) -------------------------------------------------------------
 
     [Fact]
@@ -382,12 +472,7 @@ public sealed class AgentFollowTests
 
     private static FakeDockerDaemon Daemon() => new FakeDockerDaemon()
         .Fails(ApiPath("_ping"), "200 OK", "OK")
-        .Json(
-            ApiPath("containers/json?all=1"),
-            """
-            [{"Id":"aaaaaaaaaaaa0000","Names":["/shop-api-1"],"Image":"shop/api:latest",
-              "State":"running","Status":"Up 4 minutes","Ports":[]}]
-            """);
+        .Json(ApiPath("containers/json?all=1"), Containers);
 
     private static int Logs(FakeDockerDaemon daemon, params string[] arguments) =>
         Logs(daemon, new StringWriter(), arguments);

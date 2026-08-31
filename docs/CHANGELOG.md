@@ -230,6 +230,7 @@
 - ✅ **DD254** **two help rows run past the terminal's width, so a folded summary lands in the column a verb name goes in** — `read context` and `do reclaim` now break their summaries the way `read logs` does, and the width is asserted over every help row rather than only the rows that declare a break.
 - ✅ **DD255** **a follow's exit code is decided at the surface and asserted a layer below it, so what a session branches on is untested** — Four tests now drive a follow through `AgentSurface.Read` against a framed fake daemon, so the exit code a session branches on is asserted where it is decided, beside the payload.
 - ✅ **DD256** **a follow stopped by Ctrl+C reports the deadline it never reached, so the transcript names a wait that did not happen** — A follow now reports which of five endings stopped it, on two linked sources rather than one, so only the deadline names a duration and a stop, a ceiling and a log that ended say so.
+- ✅ **DD257** **a follow is bound to a container id, so a compose recreate ends it and the session is told the log ended** — A follow that ends on the stream now asks the daemon once who answers the address, so a container replaced under it says so instead of reporting the log ended, with or without `--until`.
 
 ## Block H — The public surface (the site a reader and an agent both read)
 

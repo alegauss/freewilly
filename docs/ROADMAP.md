@@ -16,8 +16,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-- 📋 **DD257** (deps: —) **a follow is bound to a container id, so a compose recreate ends it and the session is told the log ended** — `svc:` names the thing compose replaces, and a replaced container is a new id, so the ending reported is true of the stream and false of the service. → §DD257
-
 ## Block H — The public surface (the site a reader and an agent both read)
 
 ## Non-goals
