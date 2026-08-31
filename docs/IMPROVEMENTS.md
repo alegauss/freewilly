@@ -14,30 +14,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-### §DD255 The exit code nothing reads
-
-`read logs --follow --until <line>` exits 1 when the line never arrives, which is what
-makes it usable as a gate: a session runs it, reads the code, and branches. That code is
-decided in `ReadLogs`, and every test of it stops one layer short. `AgentFollowTests`
-drives `AgentSurface.Follow` directly with a stream, so it asserts the match and the
-three endings but never an exit code. The surface-level tests assert the refusals, and
-the one that does reach the daemon reads an empty body, so `missed` is never true where
-it is turned into a return value.
-
-Nothing in between is covered: that `--out` prints its line and *then* the miss, that
-the payload still arrives when the pattern did not, that a match exits 0 through the
-same path. A session branching on this is branching on the one value no test reads.
-
-The fake can serve it as it stands. `FakeDockerDaemon.Raw(path, byte[])` exists for
-framed logs, and a body with neither `Content-Length` nor chunked encoding is
-close-delimited, so the pipe closes and the follow ends on the stream rather than on the
-deadline. That is the end-to-end shape without teaching the fake to write half a body
-and pause.
-
-Acceptance: a follow whose pattern arrives exits 0 and one whose pattern does not exits
-1, both driven through `AgentSurface.Read` against the fake daemon, with the payload
-asserted alongside the code.
-
 ### §DD256 Two endings that arrive as one
 
 `AgentSurface.Follow` ends on the deadline and on Ctrl+C through the same

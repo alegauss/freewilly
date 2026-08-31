@@ -297,12 +297,102 @@ public sealed class AgentFollowTests
               "State":"running","Status":"Up 4 minutes","Ports":[]}]
             """);
 
-    private static int Logs(FakeDockerDaemon daemon, params string[] arguments)
+    private static int Logs(FakeDockerDaemon daemon, params string[] arguments) =>
+        Logs(daemon, new StringWriter(), arguments);
+
+    private static int Logs(FakeDockerDaemon daemon, TextWriter output, params string[] arguments)
     {
         using var api = new DockerApi(daemon.PipeName);
-        return AgentSurface.Read(
-            AgentSurface.Find(["read", "logs"])!, api, arguments, new StringWriter());
+        return AgentSurface.Read(AgentSurface.Find(["read", "logs"])!, api, arguments, output);
     }
+
+    /// <summary>
+    /// A daemon that hands over a container's log the way the real one frames it (DD255).
+    /// </summary>
+    /// <remarks>
+    /// Counted rather than close-delimited, so the body ends where the count says and the follow ends
+    /// on the stream. That is the container exiting, which is one of the endings a follow has, and it
+    /// is the one a test can reach without teaching the fake to write half a body and pause.
+    /// </remarks>
+    private static FakeDockerDaemon Printing(params string[] lines)
+    {
+        var body = lines.SelectMany(l => Frame(1, l)).ToArray();
+        var head = Encoding.ASCII.GetBytes(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
+            + $"Content-Length: {body.Length}\r\nApi-Version: 1.55\r\n\r\n");
+
+        return Daemon().Raw(
+            ApiPath("containers/aaaaaaaaaaaa0000/logs?stdout=1&stderr=1&tail=0&follow=1&timestamps=1"),
+            [.. head, .. body]);
+    }
+
+    // ---- the exit code a session branches on (DD255) ---------------------------------------------
+
+    [Fact]
+    public async Task A_pattern_that_arrives_exits_zero_through_the_surface()
+    {
+        await using var daemon = Printing("migrating\n", "seed complete\n");
+        var output = new StringWriter();
+
+        var code = Logs(daemon, output, "shop-api-1", "--follow", "--until", "seed complete");
+
+        Assert.Equal(0, code);
+        Assert.Contains("seed complete", output.ToString(), StringComparison.Ordinal);
+
+        // A pass says nothing about the pattern; the payload is the answer.
+        Assert.DoesNotContain("until  ", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_pattern_that_never_arrives_exits_one_and_still_hands_back_what_did()
+    {
+        await using var daemon = Printing("migrating\n", "rolling back\n");
+        var output = new StringWriter();
+
+        var code = Logs(daemon, output, "shop-api-1", "--follow", "--until", "seed complete");
+
+        // The value a session branches on, read where it is decided rather than a layer below it.
+        Assert.Equal(1, code);
+        Assert.Contains("rolling back", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("seed complete", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_follow_with_no_pattern_exits_zero_when_the_container_stops_printing()
+    {
+        await using var daemon = Printing("one\n", "two\n");
+        var output = new StringWriter();
+
+        Assert.Equal(0, Logs(daemon, output, "shop-api-1", "--follow"));
+        Assert.Contains("two", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_missed_pattern_writing_a_file_writes_it_and_still_exits_one()
+    {
+        var scratch = Directory.CreateTempSubdirectory("freewilly-follow-out");
+        try
+        {
+            var target = System.IO.Path.Combine(scratch.FullName, "seed.log");
+            await using var daemon = Printing("migrating\n");
+            var output = new StringWriter();
+
+            var code = Logs(
+                daemon, output, "shop-api-1", "--follow", "--until", "seed complete", "--out", target);
+
+            // Both halves: what was read is on disk, and the code still says the claim failed.
+            Assert.Equal(1, code);
+            Assert.True(File.Exists(target));
+            Assert.Contains("migrating", File.ReadAllText(target), StringComparison.Ordinal);
+            Assert.Contains("wrote ", output.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            scratch.Delete(recursive: true);
+        }
+    }
+
+    // ---- what the surface refuses ----------------------------------------------------------------
 
     [Theory]
     [InlineData("--until", "seed complete")]
