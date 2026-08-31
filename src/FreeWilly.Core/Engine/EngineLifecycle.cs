@@ -64,9 +64,23 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// is already narrower than "the launch failed". It is not narrow enough to be only the transient
     /// case: a daemon whose bytes are wrong or whose permission bits are would exit the same way. The
     /// cost of being wrong about it is <see cref="MostRelaunches"/> pauses before the same failure is
-    /// reported, which is why the code is enough to act on and the log is not read here (DD266).
+    /// reported, which is why it is enough to act on without reading anything else.
+    ///
+    /// <para>It is not, however, the whole of the condition, and since DD267 it is only the first
+    /// question <see cref="WorthLaunchingAgain"/> asks. This code can only ever be about the file the
+    /// shell was pointed at.</para>
     /// </remarks>
     private const int CouldNotExec = 126;
+
+    /// <summary>What the kernel's refusal to execute a file being written reads as (DD267).</summary>
+    /// <remarks>
+    /// Matched case-folded because the two writers disagree and both reach this log. The shell writes
+    /// <c>Text file busy</c>, which is strerror's own spelling, and Go's <c>os/exec</c> writes
+    /// <c>text file busy</c> lowercased into the error it wraps the syscall in. Measured on 31 August
+    /// 2026 the second one is the line that mattered, so an ordinal match on the first would have
+    /// read the evidence and thrown it away.
+    /// </remarks>
+    private const string Busy = "text file busy";
 
     /// <summary>How many times a start will launch a daemon it could not execute (DD265).</summary>
     /// <remarks>
@@ -83,6 +97,34 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// not, and every second spent waiting is one where the engine somebody just upgraded is down.
     /// </remarks>
     private static readonly TimeSpan BeforeRelaunching = TimeSpan.FromMilliseconds(700);
+
+    /// <summary>How long a start waits for a provision to finish unpacking (DD269).</summary>
+    /// <remarks>
+    /// Measured, and then tripled. The unpack that caused this is 85 MB and took about six seconds on
+    /// the machine it was caught on, so twenty is room for a slow disk rather than a guess at one.
+    ///
+    /// <para>It is a bound and not a promise, and an import onto a fresh install can exceed it by
+    /// minutes. That is deliberate: past this the start goes ahead and falls back on the relaunch,
+    /// because a start that waited out an arbitrarily long install would be indistinguishable from
+    /// the hang this product spends DD134 and DD175 refusing to report as one. It also comes out of
+    /// the caller's own budget, so a wait can never push a start past the timeout it was given.</para>
+    /// </remarks>
+    private static readonly TimeSpan WaitForTheUnpack = TimeSpan.FromSeconds(20);
+
+    /// <summary>Whichever is less, a span or what is left before a deadline (DD269).</summary>
+    /// <param name="span">The span asked for.</param>
+    /// <param name="deadline">The deadline it has to fit inside.</param>
+    /// <returns>The span to actually wait, never negative.</returns>
+    private static TimeSpan Shorter(TimeSpan span, DateTimeOffset deadline)
+    {
+        var left = deadline - DateTimeOffset.UtcNow;
+        if (left < TimeSpan.Zero)
+        {
+            return TimeSpan.Zero;
+        }
+
+        return left < span ? left : span;
+    }
 
     private readonly IWsl _wsl;
     private readonly IDaemonProcess _daemon;
@@ -152,12 +194,14 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// <param name="distribution">
     /// The distribution this install owns, or <see langword="null"/> to ask the machine (DD55).
     /// </param>
+    /// <param name="unpackLock">The provision's lock file; overridden in tests (DD269).</param>
     public EngineLifecycle(
         IWsl wsl,
         IDaemonProcess daemon,
         IEngineBackend backend,
         string pipeName = EnginePipeRelay.DefaultPipeName,
-        string? distribution = null)
+        string? distribution = null,
+        string? unpackLock = null)
     {
         ArgumentNullException.ThrowIfNull(wsl);
         ArgumentNullException.ThrowIfNull(daemon);
@@ -172,7 +216,18 @@ public sealed class EngineLifecycle : IAsyncDisposable
         var paths = new EnginePaths();
         Distribution = distribution ?? paths.DistributionName;
         _basePath = paths.Distribution;
+        _unpackLock = unpackLock ?? paths.UnpackLock;
     }
+
+    /// <summary>The file a provision holds while it rewrites the binaries (DD269).</summary>
+    /// <remarks>
+    /// Overridable for the reason <see cref="Distribution"/> is, which is that the default reads the
+    /// machine the suite happens to be running on. Left alone it answers false everywhere no
+    /// provision is in flight, so the tests that are not about this never notice it; a test that is
+    /// about it needs a lock it can hold and release on purpose, and holding the real one would mean
+    /// a suite that stalls any install running beside it.
+    /// </remarks>
+    private readonly string _unpackLock;
 
     /// <summary>Where WSL registered the distribution, which is where its disk is (DD190).</summary>
     private readonly string _basePath;
@@ -317,6 +372,17 @@ public sealed class EngineLifecycle : IAsyncDisposable
                 "the engine was already answering", already.ApiVersion);
         }
 
+        // Taken before the wait below rather than after it (DD269). The caller asked for an engine
+        // within this budget, and time spent waiting for an install to put the binaries down is time
+        // spent getting one: a deadline restarted after the wait would let a start overrun the
+        // timeout its caller set by however long the unpack took.
+        var deadline = DateTimeOffset.UtcNow + budget;
+
+        // DD269. Launching now would exec a directory somebody is still writing, which is what
+        // happened twice on 31 August 2026. Zero on every start that did not collide with an install.
+        var waited = await EngineUnpack.WaitForIdleAsync(
+            _unpackLock, Shorter(WaitForTheUnpack, deadline), cancellation).ConfigureAwait(false);
+
         if (!_daemon.Alive)
         {
             _daemon.Launch();
@@ -332,7 +398,6 @@ public sealed class EngineLifecycle : IAsyncDisposable
         // Poll, because there is no event for "the socket is open now". The daemon dying is checked
         // on every turn: waiting the full minute for a process that is already gone reports a
         // timeout where the real answer is in its log.
-        var deadline = DateTimeOffset.UtcNow + budget;
         var lastDetail = already.Detail;
         var relaunched = 0;
         while (DateTimeOffset.UtcNow < deadline)
@@ -341,7 +406,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
 
             if (!_daemon.Alive)
             {
-                if (relaunched < MostRelaunches && _daemon.ExitCode == CouldNotExec)
+                if (relaunched < MostRelaunches && WorthLaunchingAgain())
                 {
                     // DD265. The launch is tried again rather than reported, because the one
                     // condition that produces this code on this machine passes on its own: an
@@ -369,7 +434,8 @@ public sealed class EngineLifecycle : IAsyncDisposable
                 // invisible: an upgrade that needs one every time is worth knowing about, and the
                 // journal is where a reader would find it.
                 return new EngineStatus(EngineState.Running,
-                    $"the engine answered on \\\\.\\pipe\\{_pipeName}{Relaunches(relaunched)}",
+                    $"the engine answered on \\\\.\\pipe\\{_pipeName}"
+                    + $"{Waited(waited)}{Relaunches(relaunched)}",
                     ping.ApiVersion);
             }
 
@@ -710,6 +776,48 @@ public sealed class EngineLifecycle : IAsyncDisposable
 
         return daemon.Succeeded ? "the daemon is running" : "the daemon is not running";
     }
+
+    /// <summary>Whether a launch that died is one of the ones that passes on its own (DD267).</summary>
+    /// <returns>Whether to launch it again.</returns>
+    /// <remarks>
+    /// DD265 asked this of the launcher's exit code alone, and the code answers for one binary out of
+    /// the eight the install unpacks: 126 is a <em>shell</em> that could not exec what it was pointed
+    /// at, which here is <c>dockerd</c> and nothing else. Measured on 31 August 2026 upgrading 1.0.11
+    /// to 1.0.12, the shell exec'd dockerd perfectly, dockerd forked <c>containerd</c> against a file
+    /// the installer still held open, and the whole thing came back as an ordinary exit 1 that this
+    /// declined to retry. Same condition, same remedy, and the gate never opened.
+    ///
+    /// <para>So the daemon's own log is read where the code did not answer. DD266 already fetches
+    /// that line to write the journal's sentence, and the note that used to sit on
+    /// <see cref="CouldNotExec"/> said the code was enough to act on and the log need not be read
+    /// here. That claim had a counterexample four days after it was written.</para>
+    ///
+    /// <para><b>The code is still asked first</b>, and not only to save a subprocess. A shell's 126
+    /// is evidence about the launch that just died, while the log is a file appended to across every
+    /// launch this distribution has ever had: a stale busy line from the previous failure can answer
+    /// yes to a launch that died of something else. What that costs is bounded by
+    /// <see cref="MostRelaunches"/> and paid only on a path where a start has already failed, which
+    /// is the same trade DD265 took for a 126 that was never transient.</para>
+    /// </remarks>
+    private bool WorthLaunchingAgain() =>
+        _daemon.ExitCode == CouldNotExec
+        || LastLineOfTheDaemonLog()?.Contains(Busy, StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>The clause a start adds where it waited for an unpack to finish (DD269).</summary>
+    /// <param name="waited">How long it waited.</param>
+    /// <returns>The clause, or empty where there was nothing to wait for.</returns>
+    /// <remarks>
+    /// Empty on nearly every start, which is the point: a sentence saying "waited 0s for the install"
+    /// on a machine nobody is installing anything on is noise in a file read as a column of stamped
+    /// lines, and it would make the one line that matters harder to find rather than easier.
+    ///
+    /// <para>Whole seconds, because that is the resolution the fact has. What a reader does with this
+    /// clause is notice that a start collided with an install, and no decision they then make turns
+    /// on the milliseconds.</para>
+    /// </remarks>
+    private static string Waited(TimeSpan waited) => waited > TimeSpan.Zero
+        ? $", after waiting {waited.TotalSeconds:0}s for the install to finish unpacking"
+        : "";
 
     /// <summary>The clause a start adds where it had to launch the daemon again (DD265).</summary>
     /// <param name="relaunched">How many extra launches it took.</param>

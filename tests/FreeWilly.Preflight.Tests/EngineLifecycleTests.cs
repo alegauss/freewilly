@@ -538,6 +538,153 @@ public sealed class EngineLifecycleTests
     private const string Busy =
         "/bin/sh: exec: line 0: /usr/local/bin/dockerd: Text file busy";
 
+    /// <summary>The same refusal about a binary the daemon forks, as Go spells it (DD267).</summary>
+    /// <remarks>
+    /// Copied from the journal of 31 August 2026 rather than composed, lowercase <c>t</c> included:
+    /// this is <c>os/exec</c> wrapping the syscall, and the casing is the whole reason the matcher
+    /// folds it.
+    /// </remarks>
+    private const string BusyChild =
+        "failed to start containerd: fork/exec /usr/local/bin/containerd: text file busy";
+
+    [Fact]
+    public async Task A_daemon_whose_own_child_was_busy_is_launched_again_though_it_exited_one()
+    {
+        // DD267, measured on 31 August 2026 upgrading 1.0.11 to 1.0.12, on a build that carried
+        // DD265's retry and did not use it. The shell exec'd dockerd fine, so there was no 126 for
+        // the gate to read; dockerd forked containerd against a file the installer still held open
+        // and exited 1. The condition is DD265's exactly and the exit code cannot see it.
+        var daemon = new FakeDaemon
+        {
+            ExitCode = 1,
+            DeadLaunches = 1,
+        };
+
+        await using var engine = new EngineLifecycle(
+            LoggingTail(BusyChild), daemon, new FakeBackend(Ok200), Pipe(), Owned);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(EngineState.Running, status.State);
+        Assert.Equal(2, daemon.Launches);
+        Assert.Contains("after 1 relaunch", status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_busy_file_the_shell_capitalised_is_read_as_the_same_condition()
+    {
+        // The other spelling, and the reason the match folds case. The shell writes strerror's own
+        // "Text file busy" and Go writes it lowercased, and a start that only understood one of them
+        // would retry half the occurrences of a single condition.
+        var daemon = new FakeDaemon
+        {
+            ExitCode = 1,
+            DeadLaunches = 1,
+        };
+
+        await using var engine = new EngineLifecycle(
+            LoggingTail(Busy), daemon, new FakeBackend(Ok200), Pipe(), Owned);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(EngineState.Running, status.State);
+        Assert.Equal(2, daemon.Launches);
+    }
+
+    [Fact]
+    public async Task A_start_waits_for_a_provision_to_finish_unpacking_before_it_launches_anything()
+    {
+        // DD269, and it is the half DD267 cannot do. Measured on 31 August 2026: the unpack was
+        // still running when the start launched the daemon, and no relaunch budget worth spending
+        // outlasts 85 MB of tar. So the launch does not happen until the writer has let go.
+        var directory = Path.Combine(Path.GetTempPath(), $"freewilly-start-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var unpackLock = Path.Combine(directory, "unpack.lock");
+            var held = EngineUnpack.Hold(unpackLock);
+            Assert.NotNull(held);
+
+            var daemon = new FakeDaemon();
+            var wsl = new FakeWsl();
+            wsl.Default = new WslResult(0, "freewilly\r\n", null);
+
+            await using var engine = new EngineLifecycle(
+                wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned, unpackLock);
+
+            var starting = engine.StartAsync(TimeSpan.FromSeconds(30));
+
+            // Past the initial ping before anything is asserted. A start opens by asking whether the
+            // engine is already answering, and that carries its own three-second budget (EnginePing),
+            // so a check taken inside it would read zero launches whether this waits or not — which
+            // is a test that passes with the defect in place.
+            await Task.Delay(TimeSpan.FromSeconds(5));
+            Assert.Equal(0, daemon.Launches);
+
+            held.Dispose();
+            var status = await starting;
+
+            Assert.Equal(EngineState.Running, status.State);
+            Assert.Equal(1, daemon.Launches);
+
+            // And the wait is in the sentence, for the reason the relaunch is: a start that keeps
+            // colliding with installs is worth seeing in the journal.
+            Assert.Contains("unpacking", status.Detail, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_start_with_no_provision_running_says_nothing_about_waiting()
+    {
+        // The other half, and it is why the clause is conditional. Nearly every start on every
+        // machine takes this path, and a journal that reported a zero-second wait on all of them
+        // would bury the one line where the wait actually happened.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var unpackLock = Path.Combine(
+            Path.GetTempPath(), $"freewilly-absent-{Guid.NewGuid():N}", "unpack.lock");
+
+        await using var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned, unpackLock);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(EngineState.Running, status.State);
+        Assert.DoesNotContain("unpacking", status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_busy_child_that_never_clears_is_reported_rather_than_retried_forever()
+    {
+        // The same bound DD265 put on the exit code, over the wider gate. A log line is weaker
+        // evidence than the code — it is appended across every launch this distribution ever had, so
+        // a stale one can answer for a launch that died of something else — and the cost of being
+        // wrong has to stay the three pauses rather than becoming a loop.
+        var daemon = new FakeDaemon(aliveWhenLaunched: false)
+        {
+            ExitCode = 1,
+
+            // As the journal of 31 August 2026 had it: the launcher exited 1 and said nothing, which
+            // is DD266's branch and the reason the log's line reaches the verdict at all.
+            LastWords = "wsl.exe exited 1" + WslDaemonProcess.WithoutAWord,
+        };
+
+        await using var engine = new EngineLifecycle(
+            LoggingTail(BusyChild), daemon, new FakeBackend(null), Pipe(), Owned);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(EngineState.Stopped, status.State);
+        Assert.Equal(1 + EngineLifecycle.MostRelaunches, daemon.Launches);
+
+        // And the log is quoted in the verdict, so the reader is told what it kept retrying against.
+        Assert.Contains("text file busy", status.Detail, StringComparison.Ordinal);
+    }
+
     /// <summary>A wsl whose distribution is registered and whose daemon log ends as given.</summary>
     private static FakeWsl LoggingTail(string tail)
     {

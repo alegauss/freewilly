@@ -95,6 +95,9 @@
 - ✅ **DD264** **nothing drives a client that stops reading without hanging up, so the drain deadline has never run** — The state the deadline guards cannot occur while the listeners reserve no buffers, so a test pins the mechanism and the count that would notice the buffers changing.
 - ✅ **DD265** **an upgrade that replaces dockerd while a start is asked for leaves the engine down until somebody asks again** — A start launches the daemon again up to three times where the launcher exited 126, pausing between, and says how many relaunches it took where there was one.
 - ✅ **DD266** **the journal says wsl.exe exited without a word when the words are in the log the launch redirected them to** — A launcher that exited silently has the daemon log's last line read and quoted in the journal, and a launcher that named its own cause is still not sent to the log.
+- 🗑 **DD268** **the install execs only dockerd, so the other seven binaries are first found busy by a start seconds later** — superseded by DD269: Filed against the wrong writer: provision.log is stamped after the failure, so widening the install's exec check could not catch a file its own tar was still holding.
+- ✅ **DD267** **the retry reads the launcher's exit code only, so a binary the daemon forks being busy is never tried again** — A start now relaunches on the daemon log's own words as well as on the exit code, so a busy containerd under a daemon that exec'd fine is retried rather than reported.
+- ✅ **DD269** **a start can be asked for while the provisioner is rewriting the engine binaries, and nothing stops the two overlapping** — The provisioner holds a lock across the import and the unpack, and a start waits up to twenty seconds for it out of its own budget, saying so where it waited.
 
 ## Block B — The daemon client (talk to the engine)
 

@@ -178,14 +178,25 @@ public sealed class EngineProvisioner
             return new ProvisioningOutcome(steps);
         }
 
-        if (!Record(steps, report, ImportDistribution(rootfs)))
+        // DD269. Everything above this line reads the network and writes under the Windows root, and
+        // a start running alongside it is unaffected. These two are the ones that touch the
+        // distribution: the import creates it, and the install rewrites every binary a daemon is
+        // about to exec. Held across both rather than around the install alone, because a start
+        // launched against a half-imported distribution is the same defect one step earlier.
+        //
+        // Not a using on the whole method, so the lock is released the moment the last write lands
+        // rather than at the end of the placements that follow, which are Windows-side files.
+        using (EngineUnpack.Hold(_paths.UnpackLock))
         {
-            return new ProvisioningOutcome(steps);
-        }
+            if (!Record(steps, report, ImportDistribution(rootfs)))
+            {
+                return new ProvisioningOutcome(steps);
+            }
 
-        if (!Record(steps, report, InstallEngine(engine)))
-        {
-            return new ProvisioningOutcome(steps);
+            if (!Record(steps, report, InstallEngine(engine)))
+            {
+                return new ProvisioningOutcome(steps);
+            }
         }
 
         if (!Record(steps, report, PlaceCli(cli)))

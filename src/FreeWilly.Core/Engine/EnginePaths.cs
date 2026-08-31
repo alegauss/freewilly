@@ -226,6 +226,18 @@ public sealed class EnginePaths
     /// </remarks>
     public string SparseRefusal => Path.Combine(Root, "sparse-refused.txt");
 
+    /// <summary>The file a provision holds open while it rewrites the engine (DD269).</summary>
+    /// <remarks>
+    /// A path rather than a handle, because the two processes that care about it are not the same
+    /// process: <c>--provision</c> holds it and the engine host asks about it, and a lock inside one
+    /// of them would be a lock the other cannot see.
+    ///
+    /// <para>Not created by <see cref="Create"/>, and its contents are never read. What is being
+    /// asked is whether anything holds it, so a file left behind by a provision that was killed
+    /// answers no, which is the right answer: nothing is writing the binaries any more.</para>
+    /// </remarks>
+    public string UnpackLock => Path.Combine(Root, "unpack.lock");
+
     /// <summary>Create every directory this layout names. Idempotent.</summary>
     public void Create()
     {
