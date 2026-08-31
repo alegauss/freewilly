@@ -36,7 +36,13 @@ public enum LogLevel
 /// timestamps. This is what a log cursor is made of.
 /// </param>
 /// <param name="Text">The line, without its timestamp.</param>
-public sealed record LogLine(LogStream Stream, DateTimeOffset? Timestamp, string Text)
+/// <param name="Note">
+/// Whether this is the reader's own row rather than the container's, which is how a seam in the
+/// payload is written (DD258). A note is never filtered, never collapsed into a count and never
+/// carries a stream marker, so it reads as what it is: the log stopped being this container's here.
+/// </param>
+public sealed record LogLine(
+    LogStream Stream, DateTimeOffset? Timestamp, string Text, bool Note = false)
 {
     /// <summary>What this line says about its own severity.</summary>
     public LogLevel Level => LogDigest.LevelOf(Text);
@@ -216,6 +222,13 @@ public static class LogDigest
     /// <summary>Whether this line survives the query's filters.</summary>
     internal static bool Keeps(LogLine line, LogQuery query)
     {
+        // A note is the reader's own, and a filter that removed it would leave the payload saying
+        // the log simply carried on.
+        if (line.Note)
+        {
+            return true;
+        }
+
         if (query.Since is { } since && line.Timestamp is { } at && at <= since)
         {
             return false;
@@ -286,6 +299,14 @@ public static class LogDigest
         var order = new List<LogLine>();
         foreach (var line in kept)
         {
+            // A note keeps its place and its own row: two seams say the container changed twice,
+            // and collapsing them into "× 2" would put both at the first one's position.
+            if (line.Note)
+            {
+                order.Add(line);
+                continue;
+            }
+
             var key = (line.Stream, line.Text);
             if (counts.TryGetValue(key, out var seen))
             {
@@ -297,11 +318,17 @@ public static class LogDigest
             order.Add(line);
         }
 
-        return [.. order.Select(line => Format(line, counts[(line.Stream, line.Text)]))];
+        return [.. order.Select(line =>
+            Format(line, line.Note ? 1 : counts[(line.Stream, line.Text)]))];
     }
 
     private static string Format(LogLine line, int count)
     {
+        if (line.Note)
+        {
+            return line.Text;
+        }
+
         var marker = line.Stream == LogStream.StdErr ? "E" : "O";
         var repeat = count > 1
             ? " × " + count.ToString(CultureInfo.InvariantCulture)
@@ -466,6 +493,22 @@ public sealed class LogTally
         buffer.Clear();
         buffer.Append(text[start..]);
         return fresh;
+    }
+
+    /// <summary>Write the reader's own row into the payload (DD258).</summary>
+    /// <remarks>
+    /// Flushes the carry first, so a note lands after the lines that were already complete rather
+    /// than in the middle of one the stream was halfway through when it ended.
+    /// </remarks>
+    /// <param name="text">The row, rendered as it is written, with no stream marker.</param>
+    public void Note(string text)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(text);
+
+        Flush();
+        var line = new LogLine(LogStream.StdOut, null, text, Note: true);
+        _lines.Add(line);
+        _characters += LogDigest.Weight(line);
     }
 
     /// <summary>End the tally, so a last line with no newline after it is still a line.</summary>

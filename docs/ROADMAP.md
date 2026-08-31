@@ -16,8 +16,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-- 📋 **DD258** (deps: —) **a follow across a compose recreate costs a second call, because it reports the replacement rather than following it** — `svc:` names a role rather than a container, so a caller who asked about the role has already said it does not care which id fills it. → §DD258
-
 ## Block H — The public surface (the site a reader and an agent both read)
 
 ## Non-goals

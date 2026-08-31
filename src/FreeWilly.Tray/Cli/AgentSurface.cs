@@ -684,35 +684,26 @@ public static class AgentSurface
             var tail = follow && query.Since is null ? 0 : 2000;
             var ending = FollowEnd.Matched;
             IReadOnlyList<LogLine> lines;
-            using (var stream = engine.LogsAsync(
-                container.Id, tail: tail, follow: follow, timestamps: true, since: query.Since)
-                .GetAwaiter().GetResult())
-            {
-                if (follow)
-                {
-                    var followed = Follow(stream, query, until, timeout, ceiling: outPath is null);
-                    lines = followed.Lines;
-                    ending = followed.End;
-                }
-                else
-                {
-                    List<LogChunk> chunks = [];
-                    var frames = new LogFrames(stream, framed: true);
-                    while (frames.ReadAsync().GetAwaiter().GetResult() is { } chunk)
-                    {
-                        chunks.Add(chunk);
-                    }
 
-                    lines = LogDigest.Split(chunks);
-                }
+            if (follow)
+            {
+                var tally = new LogTally(query);
+                ending = Followed(engine, address, container, tally, asked);
+                lines = tally.Lines;
             }
-
-            // A stream that ran out is three endings, and only the daemon can say which: ask it once,
-            // and only here, because every other ending already knows what it was (DD257).
-            if (ending == FollowEnd.Ended)
+            else
             {
-                ending = Resettled(
-                    Match(engine.ContainersAsync().GetAwaiter().GetResult(), address), container.Id);
+                using var stream = engine.LogsAsync(
+                    container.Id, tail: tail, follow: false, timestamps: true, since: query.Since)
+                    .GetAwaiter().GetResult();
+                List<LogChunk> chunks = [];
+                var frames = new LogFrames(stream, framed: true);
+                while (frames.ReadAsync().GetAwaiter().GetResult() is { } chunk)
+                {
+                    chunks.Add(chunk);
+                }
+
+                lines = LogDigest.Split(chunks);
             }
 
             var missed = until is not null && ending != FollowEnd.Matched;
@@ -941,14 +932,6 @@ public static class AgentSurface
         Ceiling,
     }
 
-    /// <summary>What a follow collected, and what stopped it.</summary>
-    /// <param name="Lines">Everything read, split as usual, for the digest to filter and render.</param>
-    /// <param name="End">Which of the five endings it was.</param>
-    internal readonly record struct FollowedLog(IReadOnlyList<LogLine> Lines, FollowEnd End)
-    {
-        /// <summary>Whether <c>--until</c> was named and arrived.</summary>
-        internal bool Matched => End == FollowEnd.Matched;
-    }
 
     /// <summary>
     /// Read a log stream until the line the caller named, the deadline, or the ceiling (DD251).
@@ -969,27 +952,37 @@ public static class AgentSurface
     /// compile would be a refusal after the run had already started.</para>
     /// </remarks>
     /// <param name="stream">The daemon's log stream, already following.</param>
+    /// <param name="tally">
+    /// Where the lines go, owned by the caller so one payload can span two containers (DD258).
+    /// </param>
     /// <param name="query">What was asked, whose budget is the ceiling.</param>
     /// <param name="until">The line to wait for, or null to read to the deadline.</param>
-    /// <param name="timeout">How long the whole follow is given.</param>
+    /// <param name="until_when">
+    /// When the whole follow runs out, absolute rather than a duration, because a second attach
+    /// continues one deadline instead of starting another.
+    /// </param>
     /// <param name="ceiling">Whether the budget stops it; false when a file is being written.</param>
-    /// <returns>What was read, and which of the five endings stopped it.</returns>
-    internal static FollowedLog Follow(
-        Stream stream, LogQuery query, string? until, TimeSpan timeout, bool ceiling)
+    /// <returns>Which of the endings stopped it.</returns>
+    internal static FollowEnd Follow(
+        Stream stream,
+        LogTally tally,
+        LogQuery query,
+        string? until,
+        DateTimeOffset until_when,
+        bool ceiling)
     {
         ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(tally);
         ArgumentNullException.ThrowIfNull(query);
 
-        // The tally carries the split across chunks and counts the payload as it grows, so a follow
-        // costs what it reads rather than the square of it (DD253).
-        var tally = new LogTally(query);
         var end = FollowEnd.Ended;
+        var left = until_when - DateTimeOffset.UtcNow;
 
         // Two sources rather than one, linked rather than merged, because both arrive as the same
         // exception and only the source that fired says which happened (DD256). DockerApi draws the
         // same distinction between its budget and its caller, for the same reason.
         using var asked = new CancellationTokenSource();
-        using var deadline = new CancellationTokenSource(timeout);
+        using var deadline = new CancellationTokenSource(left > TimeSpan.Zero ? left : TimeSpan.Zero);
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(
             asked.Token, deadline.Token);
 
@@ -1034,7 +1027,7 @@ public static class AgentSurface
         }
 
         tally.Flush();
-        return new FollowedLog(tally.Lines, end);
+        return end;
     }
 
     /// <summary>
@@ -1062,6 +1055,84 @@ public static class AgentSurface
             FollowEnd.Gone => "did not arrive, and the container is gone",
             _ => "did not arrive, and the log ended",
         };
+
+    /// <summary>
+    /// Follow one service, across at most one container it is replaced by (DD258).
+    /// </summary>
+    /// <remarks>
+    /// A stream belongs to a container id and <c>compose up</c> recreates under a new one, so DD257
+    /// made a follow say when that happened. This crosses it instead, for the addresses that name a
+    /// role rather than a container: <c>svc:project/service</c>, and a name, which compose reuses.
+    /// An id prefix keeps ending, because a caller who named one container meant that one.
+    ///
+    /// <para><b>Once.</b> A service in a crash loop is recreated over and over, and a follow that
+    /// chased every one of them would be bounded only by the deadline it shares with the first. One
+    /// crossing covers the recreate a caller just caused; a second replacement is reported the way
+    /// DD257 reports the first.</para>
+    ///
+    /// <para>The seam is a row in the payload, not a line in the report, because a reader scanning
+    /// the log is the one who needs to know that the lines above and below came from different
+    /// containers. The replacement is read from its beginning rather than from now: it started while
+    /// this was noticing, and its first lines are the ones a caller following a recreate wants.</para>
+    /// </remarks>
+    private static FollowEnd Followed(
+        IEngineReads engine,
+        Core.Agent.Address address,
+        ContainerSummary container,
+        LogTally tally,
+        LogArguments asked)
+    {
+        var deadline = DateTimeOffset.UtcNow + asked.Timeout;
+        var ceiling = asked.OutPath is null;
+        var tail = asked.Query.Since is null ? 0 : 2000;
+        var following = container;
+
+        // Two passes at most: the first container, and the one that replaced it.
+        for (var attach = 0; attach < 2; attach++)
+        {
+            FollowEnd end;
+            using (var stream = engine.LogsAsync(
+                following.Id, tail: tail, follow: true, timestamps: true, since: asked.Query.Since)
+                .GetAwaiter().GetResult())
+            {
+                end = Follow(stream, tally, asked.Query, asked.Until, deadline, ceiling);
+            }
+
+            if (end != FollowEnd.Ended)
+            {
+                return end;
+            }
+
+            // A stream that ran out is three endings, and only the daemon can say which: ask it once
+            // per attach, and on no other ending, because those already know what they were (DD257).
+            var now = Match(engine.ContainersAsync().GetAwaiter().GetResult(), address);
+            var settled = Resettled(now, following.Id);
+            if (settled != FollowEnd.Replaced || attach == 1 || !Names(address, now!))
+            {
+                return settled;
+            }
+
+            tally.Note($"--- {address} was replaced: {Short(following.Id)} -> {Short(now!.Id)} ---");
+            following = now;
+            tail = 2000;
+        }
+
+        // Unreachable: the second pass returns whatever it ended on.
+        return FollowEnd.Ended;
+    }
+
+    /// <summary>Whether this address named a role, which a replacement can still answer.</summary>
+    /// <remarks>
+    /// A service address always does. A container address does where the replacement carries the same
+    /// name, which compose arranges; where it matched on an id prefix instead, it named one container
+    /// and no other container is it.
+    /// </remarks>
+    private static bool Names(Core.Agent.Address address, ContainerSummary now) =>
+        address.Kind == Core.Agent.AddressKind.Service
+        || string.Equals(now.DisplayName, address.Name, StringComparison.Ordinal);
+
+    /// <summary>An id as a reader recognises it, which is the first twelve.</summary>
+    private static string Short(string id) => id.Length <= 12 ? id : id[..12];
 
     /// <summary>
     /// Which of the three endings a stream that ran out actually was (DD257).

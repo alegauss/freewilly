@@ -87,6 +87,21 @@ public sealed class AgentFollowTests
     private static LogQuery Query(int? budget = null) =>
         new(BudgetTokens: budget ?? LogDigest.DefaultBudgetTokens);
 
+    /// <summary>One follow, with the tally the surface now owns, so a test reads both halves.</summary>
+    private readonly record struct Ran(IReadOnlyList<LogLine> Lines, AgentSurface.FollowEnd End)
+    {
+        internal bool Matched => End == AgentSurface.FollowEnd.Matched;
+    }
+
+    private static Ran Followed(
+        Stream stream, LogQuery query, string? until, TimeSpan timeout, bool ceiling)
+    {
+        var tally = new LogTally(query);
+        var end = AgentSurface.Follow(
+            stream, tally, query, until, DateTimeOffset.UtcNow + timeout, ceiling);
+        return new Ran(tally.Lines, end);
+    }
+
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(5);
 
     // ---- the line the caller named ---------------------------------------------------------------
@@ -97,7 +112,7 @@ public sealed class AgentFollowTests
         using var stream = Live("migrating\n", "seed complete\n", "still going\n");
 
         var started = DateTimeOffset.UtcNow;
-        var followed = AgentSurface.Follow(stream, Query(), "seed complete", Patience, ceiling: true);
+        var followed = Followed(stream, Query(), "seed complete", Patience, ceiling: true);
 
         Assert.True(followed.Matched);
 
@@ -110,7 +125,7 @@ public sealed class AgentFollowTests
     {
         using var stream = Live("Listening on :8080\n");
 
-        Assert.True(AgentSurface.Follow(stream, Query(), "listening on", Patience, ceiling: true).Matched);
+        Assert.True(Followed(stream, Query(), "listening on", Patience, ceiling: true).Matched);
     }
 
     [Fact]
@@ -118,7 +133,7 @@ public sealed class AgentFollowTests
     {
         var stream = new LiveStream([.. Frame(1, "migrating\n")]);
 
-        var followed = AgentSurface.Follow(
+        var followed = Followed(
             stream, Query(), "seed complete", TimeSpan.FromMilliseconds(250), ceiling: true);
 
         Assert.False(followed.Matched);
@@ -135,7 +150,7 @@ public sealed class AgentFollowTests
         // per-frame match would miss.
         using var stream = new LiveStream([.. Frame(1, "seed com"), .. Frame(1, "plete\n")]);
 
-        Assert.True(AgentSurface.Follow(stream, Query(), "seed complete", Patience, ceiling: true).Matched);
+        Assert.True(Followed(stream, Query(), "seed complete", Patience, ceiling: true).Matched);
     }
 
     // ---- the bounds ------------------------------------------------------------------------------
@@ -145,7 +160,7 @@ public sealed class AgentFollowTests
     {
         var stream = new LiveStream([.. Frame(1, "one\n"), .. Frame(1, "two\n")]);
 
-        var followed = AgentSurface.Follow(
+        var followed = Followed(
             stream, Query(), until: null, TimeSpan.FromMilliseconds(250), ceiling: true);
 
         Assert.False(followed.Matched);
@@ -164,7 +179,7 @@ public sealed class AgentFollowTests
         using var stream = Live(chatty);
 
         var started = DateTimeOffset.UtcNow;
-        var followed = AgentSurface.Follow(stream, Query(budget: 60), until: null, Patience, ceiling: true);
+        var followed = Followed(stream, Query(budget: 60), until: null, Patience, ceiling: true);
 
         Assert.True(DateTimeOffset.UtcNow - started < Patience);
         Assert.True(followed.Lines.Count < chatty.Length);
@@ -180,7 +195,7 @@ public sealed class AgentFollowTests
             .ToArray();
         var stream = new LiveStream([.. chatty.SelectMany(l => Frame(1, l))]);
 
-        var followed = AgentSurface.Follow(
+        var followed = Followed(
             stream, Query(budget: 60), until: null, TimeSpan.FromMilliseconds(400), ceiling: false);
 
         Assert.Equal(chatty.Length, followed.Lines.Count);
@@ -194,7 +209,7 @@ public sealed class AgentFollowTests
         using var ended = new MemoryStream([.. Frame(1, "done\n")]);
 
         var started = DateTimeOffset.UtcNow;
-        var followed = AgentSurface.Follow(ended, Query(), until: null, Patience, ceiling: true);
+        var followed = Followed(ended, Query(), until: null, Patience, ceiling: true);
 
         Assert.Single(followed.Lines);
         Assert.True(DateTimeOffset.UtcNow - started < Patience);
@@ -226,32 +241,77 @@ public sealed class AgentFollowTests
     }
 
     [Fact]
-    public async Task A_replaced_container_is_not_reported_as_a_log_that_ended()
+    public async Task A_follow_crosses_one_recreate_without_being_run_again()
     {
         await using var daemon = Printing("migrating\n")
-            .Then(ApiPath("containers/json?all=1"), Recreated);
+            .Then(ApiPath("containers/json?all=1"), Recreated)
+            .Raw(LogsFor("bbbbbbbbbbbb1111", tail: 2000), Framed("listening\n", "seed complete\n"));
         var output = new StringWriter();
 
         var code = Logs(daemon, output, "shop-api-1", "--follow", "--until", "seed complete");
 
-        // The service is running and about to print the line; saying the log ended would be a
-        // confidently wrong answer in the shape of a right one.
-        Assert.Equal(1, code);
-        Assert.Contains("the container was replaced", output.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("the log ended", output.ToString(), StringComparison.Ordinal);
+        // One call, one answer. The line arrived on the container that replaced the one this
+        // started on, which is the flow `do compose up` creates every time.
+        Assert.Equal(0, code);
+        Assert.Contains("migrating", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("seed complete", output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task A_replacement_is_worth_saying_even_where_nothing_was_claimed()
+    public async Task The_seam_is_a_row_in_the_payload_and_not_a_line_in_the_report()
+    {
+        await using var daemon = Printing("migrating\n")
+            .Then(ApiPath("containers/json?all=1"), Recreated)
+            .Raw(LogsFor("bbbbbbbbbbbb1111", tail: 2000), Framed("listening\n", "seed complete\n"));
+        var output = new StringWriter();
+
+        Logs(daemon, output, "shop-api-1", "--follow", "--until", "seed complete");
+        var said = output.ToString();
+
+        // A reader scanning the log is the one who needs to know the lines above and below came
+        // from different containers, so the seam sits between them rather than under everything.
+        Assert.Contains("was replaced: aaaaaaaaaaaa -> bbbbbbbbbbbb", said, StringComparison.Ordinal);
+        Assert.True(
+            said.IndexOf("migrating", StringComparison.Ordinal)
+            < said.IndexOf("was replaced", StringComparison.Ordinal));
+        Assert.True(
+            said.IndexOf("was replaced", StringComparison.Ordinal)
+            < said.IndexOf("listening", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_second_replacement_is_reported_rather_than_chased()
+    {
+        // A service in a crash loop is recreated over and over, and a follow chasing every one of
+        // them would be bounded only by the deadline it shares with the first.
+        await using var daemon = Printing("migrating\n")
+            .Then(ApiPath("containers/json?all=1"), Recreated)
+            .Then(ApiPath("containers/json?all=1"), """
+                [{"Id":"cccccccccccc2222","Names":["/shop-api-1"],"Image":"shop/api:latest",
+                  "State":"running","Status":"Up 1 second","Ports":[]}]
+                """)
+            .Raw(LogsFor("bbbbbbbbbbbb1111", tail: 2000), Framed("starting again\n"));
+        var output = new StringWriter();
+
+        Assert.Equal(1, Logs(daemon, output, "shop-api-1", "--follow", "--until", "seed complete"));
+        Assert.Contains("the container was replaced", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_id_address_names_one_container_so_a_replacement_ends_it()
     {
         await using var daemon = Printing("migrating\n")
             .Then(ApiPath("containers/json?all=1"), Recreated);
         var output = new StringWriter();
 
-        // No --until, so nothing failed and the code is 0. The payload still stops for a reason the
-        // reader cannot see in it.
-        Assert.Equal(0, Logs(daemon, output, "shop-api-1", "--follow"));
-        Assert.Contains("the container was replaced", output.ToString(), StringComparison.Ordinal);
+        var code = Logs(daemon, output, "aaaaaaaaaaaa", "--follow", "--until", "seed complete");
+
+        // Addressed by id prefix rather than by name: no other container is the one that was named,
+        // however well it fills the same role. Nothing answers that address any more, so the honest
+        // word is gone rather than replaced, and the follow does not cross.
+        Assert.Equal(1, code);
+        Assert.Contains("the container is gone", output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("was replaced", output.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -302,10 +362,10 @@ public sealed class AgentFollowTests
 
         Assert.Equal(
             AgentSurface.FollowEnd.Deadline,
-            AgentSurface.Follow(waiting, Query(), "seed", TimeSpan.FromMilliseconds(250), true).End);
+            Followed(waiting, Query(), "seed", TimeSpan.FromMilliseconds(250), true).End);
         Assert.Equal(
             AgentSurface.FollowEnd.Ended,
-            AgentSurface.Follow(over, Query(), "seed", Patience, ceiling: true).End);
+            Followed(over, Query(), "seed", Patience, ceiling: true).End);
     }
 
     [Fact]
@@ -316,7 +376,7 @@ public sealed class AgentFollowTests
             .ToArray();
         using var stream = Live(chatty);
 
-        var followed = AgentSurface.Follow(stream, Query(budget: 60), "seed", Patience, ceiling: true);
+        var followed = Followed(stream, Query(budget: 60), "seed", Patience, ceiling: true);
 
         // The reader's next move is to raise --budget or write to a file, which is a different move
         // from raising --timeout.
@@ -398,11 +458,11 @@ public sealed class AgentFollowTests
                 .ToArray();
 
             // Warm first, so the measurement is the work rather than the first-call JIT.
-            AgentSurface.Follow(
+            Followed(
                 new MemoryStream(body), new LogQuery(), "never arrives", Patience, ceiling: false);
 
             var started = System.Diagnostics.Stopwatch.StartNew();
-            AgentSurface.Follow(
+            Followed(
                 new MemoryStream(body), new LogQuery(), "never arrives", Patience, ceiling: false);
             return started.Elapsed;
         }
@@ -491,17 +551,21 @@ public sealed class AgentFollowTests
     /// on the stream. That is the container exiting, which is one of the endings a follow has, and it
     /// is the one a test can reach without teaching the fake to write half a body and pause.
     /// </remarks>
-    private static FakeDockerDaemon Printing(params string[] lines)
+    private static string LogsFor(string id, int tail) => ApiPath(
+        $"containers/{id}/logs?stdout=1&stderr=1&tail={tail}&follow=1&timestamps=1");
+
+    /// <summary>A counted HTTP response carrying these lines as the daemon frames them.</summary>
+    private static byte[] Framed(params string[] lines)
     {
         var body = lines.SelectMany(l => Frame(1, l)).ToArray();
         var head = Encoding.ASCII.GetBytes(
             "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
             + $"Content-Length: {body.Length}\r\nApi-Version: 1.55\r\n\r\n");
-
-        return Daemon().Raw(
-            ApiPath("containers/aaaaaaaaaaaa0000/logs?stdout=1&stderr=1&tail=0&follow=1&timestamps=1"),
-            [.. head, .. body]);
+        return [.. head, .. body];
     }
+
+    private static FakeDockerDaemon Printing(params string[] lines) =>
+        Daemon().Raw(LogsFor("aaaaaaaaaaaa0000", tail: 0), Framed(lines));
 
     // ---- the exit code a session branches on (DD255) ---------------------------------------------
 
@@ -629,7 +693,7 @@ public sealed class AgentFollowTests
             "2024-01-01T00:00:02.000000000Z ERROR connect refused\n",
             "2024-01-01T00:00:03.000000000Z ready\n");
 
-        var followed = AgentSurface.Follow(stream, Query(), "ready", Patience, ceiling: true);
+        var followed = Followed(stream, Query(), "ready", Patience, ceiling: true);
         var rendered = LogDigest.Render(
             followed.Lines, Query() with { Dedup = true });
 
