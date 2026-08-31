@@ -358,13 +358,33 @@ def _serve(argv: list[str]) -> int:
     Probed (RK1214), because `execv` cannot be taken back: a broken engine here replaces this
     process and the harness reads the exit as a crashed server, in the projects where
     everything was installed correctly.
+
+    **And `execv` is POSIX's answer, not Windows'** (RK1446). There is no image to replace
+    there: the CRT's `_execv` *spawns* and lets the caller exit, and what the harness spawned
+    is the caller. Measured on Windows 11 from a project whose `.mcp.json` is the one `install`
+    writes — `roadkeep-launch.py mcp` returned 0 in under a second with both streams empty,
+    while the engine invoked directly was still serving at ten seconds. No server survived the
+    launcher, so the harness held a pipe nothing was on, reported `CONNECT_TIMEOUT` after
+    thirty seconds and dropped every tool; the hooks still fired, so the session was told to
+    call tools it had never been handed and a hand-edit was denied with a command it could not
+    run. The exit code is the sharpest part: a 2 would have surfaced as a failed server, and 0
+    in silence is indistinguishable from one that started and closed cleanly.
+
+    So there the child is run to completion with this process's stdio **inherited** — one
+    extra process in the chain, and still no pipe in the middle, which is the property the
+    `execv` was for. The parent does nothing but wait and hand back the exit code.
     """
     engine = _running()
     if engine is None:
         return _missing()
+    command = [sys.executable, str(engine), "mcp", *argv]
+    if os.name == "nt":
+        # `_forward`'s call exactly, and for the same reason it is spelled that way: no
+        # `stdout`, `stderr` or `stdin` argument, so all three are this process's own.
+        return subprocess.run(command, check=False).returncode
     # `execv`, so the server owns this process's stdio rather than talking through a pipe to a
     # parent that would have to shuttle every frame.
-    os.execv(sys.executable, [sys.executable, str(engine), "mcp", *argv])
+    os.execv(sys.executable, command)
 
 
 def _missing() -> int:
