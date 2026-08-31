@@ -14,28 +14,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-### §DD252 A refusal that names the opposite rule
-
-`TryTargetRequest` accepts `:8080/healthz` or a bare `/healthz`. A value that is neither
-falls through to the branch that refuses it, and the sentence there is `"{request} is
-not a path: it begins with a slash"` — reached only when the value does **not** begin
-with a slash.
-
-So `--request healthz` answers "healthz is not a path: it begins with a slash", which
-states the false half as a fact about what was typed. Every other refusal on this
-surface follows the same shape and gets it right: the clause after the colon says what a
-correct value looks like. Here the clause reads as a description of the wrong one.
-
-It costs a round trip and a paragraph of reasoning. The caller reads a sentence that
-contradicts what they can see in their own argv, and the cheapest resolution is to try
-the value again to find out which half is wrong.
-
-Nothing covers it. `AgentVerifyTests` drives the two-port and the own-port refusals but
-never a value that is neither, so the message has no test to have caught it.
-
-Acceptance: `read verify <name> --request healthz` refuses with a sentence that is true
-of the value it names, and a test asserts the refusal rather than only the exit code.
-
 ### §DD253 The cost of matching a pattern across frames
 
 `AgentSurface.Follow` tests `--until` by calling `LogDigest.Split` over every chunk

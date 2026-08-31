@@ -227,6 +227,60 @@ public sealed class AgentVerifyTests
         Assert.Contains(5432, probe.Asked);
     }
 
+    // ---- what a refusal says, and not only that it refused (DD252) -------------------------------
+
+    private static readonly IReadOnlyList<(int Host, string Container)> OnePort = [(8080, "8080/tcp")];
+
+    private static string Why(string request, IReadOnlyList<(int Host, string Container)>? published = null)
+    {
+        Assert.False(AgentSurface.TryTargetRequest(
+            request, published ?? OnePort, out _, out _, out var why));
+        return why;
+    }
+
+    [Fact]
+    public void A_value_that_is_neither_form_is_told_what_a_path_looks_like()
+    {
+        // It used to answer "healthz is not a path: it begins with a slash", which states the false
+        // half as a fact about what was typed and sends the reader back to try it again.
+        var why = Why("healthz");
+
+        Assert.Contains("a path begins with a slash", why, StringComparison.Ordinal);
+        Assert.DoesNotContain("it begins with a slash", why, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("healthz")]
+    [InlineData(":x/healthz")]
+    [InlineData(":8080")]
+    public void Every_request_refusal_says_what_a_correct_value_looks_like(string request)
+    {
+        // The shape, asserted over all of them: the value that was typed, and an example that would
+        // have been accepted. A refusal describing only the wrong value is the defect DD252 fixed.
+        var why = Why(request);
+
+        Assert.Contains(request, why, StringComparison.Ordinal);
+        Assert.Contains("/healthz", why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_container_publishing_nothing_says_so_rather_than_naming_a_path()
+    {
+        Assert.Contains(
+            "publishes no port", Why("/healthz", []), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Several_ports_are_refused_with_the_call_that_would_have_worked()
+    {
+        // Picking the lowest would answer confidently about the wrong service, so the refusal hands
+        // back the one thing that saves the round trip: the argument to type instead.
+        Assert.Contains(
+            "--request :5432/healthz",
+            Why("/healthz", [(5432, "5432/tcp"), (8080, "8080/tcp")]),
+            StringComparison.Ordinal);
+    }
+
     // ---- the status the caller named (DD250) ----------------------------------------------------
 
     [Fact]

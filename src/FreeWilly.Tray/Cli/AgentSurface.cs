@@ -1483,8 +1483,13 @@ public static class AgentSurface
     /// A container publishing one port needs no <c>:port</c> and a container publishing several cannot
     /// have one guessed for it: picking the lowest would answer confidently about the wrong service,
     /// which is the failure mode this whole verb exists to remove.
+    ///
+    /// <para>Every refusal here is one sentence in the same shape: the value that was typed, what it is
+    /// not, then a colon and what a correct value looks like (DD252). The clause after the colon
+    /// describes the <i>right</i> value, never the wrong one, because a caller reading a sentence that
+    /// contradicts their own argv has to run the command again to find out which half is true.</para>
     /// </remarks>
-    private static bool TryTargetRequest(
+    internal static bool TryTargetRequest(
         string request,
         IReadOnlyList<(int Host, string Container)> published,
         out int port,
@@ -1512,7 +1517,7 @@ public static class AgentSurface
 
         if (!request.StartsWith('/'))
         {
-            why = $"{request} is not a path: it begins with a slash";
+            why = $"{request} is not a path: a path begins with a slash, as /healthz";
             return false;
         }
 
