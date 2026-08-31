@@ -16,6 +16,9 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
+- 📋 **DD255** (deps: —) **a follow's exit code is decided at the surface and asserted a layer below it, so what a session branches on is untested** — Every test drives the follow with a stream, and the one reaching the daemon reads an empty body, so a missed pattern never becomes a return value. → §DD255
+- 📋 **DD256** (deps: —) **a follow stopped by Ctrl+C reports the deadline it never reached, so the transcript names a wait that did not happen** — The deadline and the interrupt cancel the same source and arrive as the same exception, and the one line the follow has for an unmatched pattern names a duration. → §DD256
+
 ## Block H — The public surface (the site a reader and an agent both read)
 
 ## Non-goals
