@@ -255,6 +255,9 @@ public sealed class LiveMachineReport(
 
         public string? LastWords => null;
 
+        /// <summary>Null, because nothing was launched here and so nothing exited (DD265).</summary>
+        public int? ExitCode => null;
+
         public void Launch() => throw new NotSupportedException("the report does not start anything");
 
         public void Stop()

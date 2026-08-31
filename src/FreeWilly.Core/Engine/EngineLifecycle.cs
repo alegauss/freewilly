@@ -21,6 +21,20 @@ public interface IDaemonProcess : IDisposable
     /// </remarks>
     string? LastWords { get; }
 
+    /// <summary>
+    /// The code the launcher exited with, or <see langword="null"/> while it is still up (DD265).
+    /// </summary>
+    /// <remarks>
+    /// The raw number, beside <see cref="LastWords"/> rather than inside it. A start has one decision
+    /// to make about a launch that died — whether it is worth making again — and a sentence written
+    /// for a person to read is not the thing to make it on.
+    ///
+    /// <para>Unlike <see cref="LastWords"/> this is not silenced by an ending that was asked for. A
+    /// stop is not followed by a start deciding anything, so there is nothing for the silence to
+    /// protect, and a number that disappears is a number a caller has to cache.</para>
+    /// </remarks>
+    int? ExitCode { get; }
+
     /// <summary>Start it. Returns once launched, which is long before the socket exists.</summary>
     void Launch();
 
@@ -43,6 +57,32 @@ public sealed class EngineLifecycle : IAsyncDisposable
 
     /// <summary>Where the daemon's own log is kept inside the distribution.</summary>
     public const string LogPath = "/var/log/dockerd.log";
+
+    /// <summary>What a shell exits with when it found the daemon and could not execute it.</summary>
+    /// <remarks>
+    /// 126 is the shell's own code for that, and 127 is the one for a file that is not there, so this
+    /// is already narrower than "the launch failed". It is not narrow enough to be only the transient
+    /// case: a daemon whose bytes are wrong or whose permission bits are would exit the same way. The
+    /// cost of being wrong about it is <see cref="MostRelaunches"/> pauses before the same failure is
+    /// reported, which is why the code is enough to act on and the log is not read here (DD266).
+    /// </remarks>
+    private const int CouldNotExec = 126;
+
+    /// <summary>How many times a start will launch a daemon it could not execute (DD265).</summary>
+    /// <remarks>
+    /// Three, which is not a tuned number. The condition it exists for is a file held open by an
+    /// installer that has already finished everything else, so it clears in one pause or it was never
+    /// the condition at all, and the second and third attempt are there because a slow disk is not a
+    /// different failure.
+    /// </remarks>
+    internal const int MostRelaunches = 3;
+
+    /// <summary>How long a start waits before launching the daemon again (DD265).</summary>
+    /// <remarks>
+    /// Flat and short. There is nothing to be polite to here: the file is either still held or it is
+    /// not, and every second spent waiting is one where the engine somebody just upgraded is down.
+    /// </remarks>
+    private static readonly TimeSpan BeforeRelaunching = TimeSpan.FromMilliseconds(700);
 
     private readonly IWsl _wsl;
     private readonly IDaemonProcess _daemon;
@@ -294,12 +334,26 @@ public sealed class EngineLifecycle : IAsyncDisposable
         // timeout where the real answer is in its log.
         var deadline = DateTimeOffset.UtcNow + budget;
         var lastDetail = already.Detail;
+        var relaunched = 0;
         while (DateTimeOffset.UtcNow < deadline)
         {
             cancellation.ThrowIfCancellationRequested();
 
             if (!_daemon.Alive)
             {
+                if (relaunched < MostRelaunches && _daemon.ExitCode == CouldNotExec)
+                {
+                    // DD265. The launch is tried again rather than reported, because the one
+                    // condition that produces this code on this machine passes on its own: an
+                    // upgrade writes the daemon into the distribution, and a shell cannot exec a
+                    // file somebody else still holds open for writing. Measured on 31 August 2026,
+                    // five seconds after the previous daemon had logged its shutdown.
+                    relaunched++;
+                    await Task.Delay(BeforeRelaunching, cancellation).ConfigureAwait(false);
+                    _daemon.Launch();
+                    continue;
+                }
+
                 return new EngineStatus(
                     EngineState.Stopped, $"the daemon exited while starting: {WhyItDied()}");
             }
@@ -309,8 +363,14 @@ public sealed class EngineLifecycle : IAsyncDisposable
             if (ping.Answered)
             {
                 _found = null;
+
+                // The relaunch is in the sentence where there was one, and absent where there was
+                // not (DD265). A retry that made a failure invisible should not also make itself
+                // invisible: an upgrade that needs one every time is worth knowing about, and the
+                // journal is where a reader would find it.
                 return new EngineStatus(EngineState.Running,
-                    $"the engine answered on \\\\.\\pipe\\{_pipeName}", ping.ApiVersion);
+                    $"the engine answered on \\\\.\\pipe\\{_pipeName}{Relaunches(relaunched)}",
+                    ping.ApiVersion);
             }
 
             lastDetail = ping.Detail;
@@ -651,6 +711,16 @@ public sealed class EngineLifecycle : IAsyncDisposable
         return daemon.Succeeded ? "the daemon is running" : "the daemon is not running";
     }
 
+    /// <summary>The clause a start adds where it had to launch the daemon again (DD265).</summary>
+    /// <param name="relaunched">How many extra launches it took.</param>
+    /// <returns>The clause, or empty where the first launch was enough.</returns>
+    private static string Relaunches(int relaunched) => relaunched switch
+    {
+        <= 0 => "",
+        1 => ", after 1 relaunch",
+        _ => $", after {relaunched} relaunches",
+    };
+
     /// <summary>
     /// Why a daemon that was launched is no longer there, said as well as it can be (DD162).
     /// </summary>
@@ -779,6 +849,9 @@ public sealed class WslDaemonProcess : IDaemonProcess
 
     /// <inheritdoc/>
     public bool Alive => _process is { HasExited: false };
+
+    /// <inheritdoc/>
+    public int? ExitCode => _process is { HasExited: true } exited ? exited.ExitCode : null;
 
     /// <inheritdoc/>
     /// <remarks>

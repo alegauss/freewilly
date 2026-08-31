@@ -254,10 +254,19 @@ internal sealed class FakeDaemon(bool aliveWhenLaunched = true) : IDaemonProcess
     /// <summary>What the launcher is to be found saying, if anything (DD162).</summary>
     public string? LastWords { get; set; }
 
+    /// <summary>What the launcher is to be found having exited with (DD265).</summary>
+    public int? ExitCode { get; set; }
+
+    /// <summary>
+    /// How many launches stay dead before one lives, which is how a transient exec failure is
+    /// driven (DD265).
+    /// </summary>
+    internal int DeadLaunches { get; set; }
+
     public void Launch()
     {
         Launches++;
-        Alive = aliveWhenLaunched;
+        Alive = aliveWhenLaunched && Launches > DeadLaunches;
     }
 
     /// <summary>Run at the moment the kill happens, so a test can see what came before it (DD189).</summary>
@@ -454,6 +463,75 @@ public sealed class EngineLifecycleTests
 
         Assert.Equal(EngineState.Stopped, status.State);
         Assert.Contains(EngineLifecycle.LogPath, status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_daemon_that_could_not_be_executed_yet_is_launched_again()
+    {
+        // DD265, measured on 31 August 2026 upgrading 1.0.10 to 1.0.11. The installer was still
+        // writing /usr/local/bin/dockerd into the distribution when the new tray asked for a start,
+        // and a shell cannot exec a file another process holds open for writing: it exits 126 and
+        // the journal read "wsl.exe exited 126 without a word". Nothing tried again, so the engine
+        // stayed down until it was started by hand.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var daemon = new FakeDaemon
+        {
+            ExitCode = 126,
+
+            // The first launch dies and the second lives, which is the condition passing.
+            DeadLaunches = 1,
+        };
+
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(EngineState.Running, status.State);
+        Assert.Equal(2, daemon.Launches);
+
+        // And it says so. A retry that hides a failure must not hide itself: an upgrade needing one
+        // every time is worth seeing, and the journal is where a reader would look.
+        Assert.Contains("after 1 relaunch", status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_daemon_that_keeps_refusing_to_execute_is_reported_rather_than_retried_forever()
+    {
+        // The bound, because the code above cannot tell the transient case from a daemon whose bytes
+        // or permission bits are wrong, and that one never clears. What it costs to be wrong is the
+        // pauses, and this is the assertion that the cost is finite.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var daemon = new FakeDaemon(aliveWhenLaunched: false) { ExitCode = 126 };
+
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(null), Pipe(), Owned);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(EngineState.Stopped, status.State);
+        Assert.Equal(1 + EngineLifecycle.MostRelaunches, daemon.Launches);
+    }
+
+    [Fact]
+    public async Task A_daemon_that_died_for_any_other_reason_is_not_launched_again()
+    {
+        // The half that keeps the retry honest. Every other way a launch dies is a state that does
+        // not pass, so retrying them all would only make the report of a real failure arrive four
+        // times later — which is the opposite of what DD162 spent a task achieving.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var daemon = new FakeDaemon(aliveWhenLaunched: false) { ExitCode = 1 };
+
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(null), Pipe(), Owned);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(EngineState.Stopped, status.State);
+        Assert.Equal(1, daemon.Launches);
     }
 
     /// <summary>

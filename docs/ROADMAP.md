@@ -4,8 +4,7 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD265** (deps: —) **an upgrade that replaces dockerd while a start is asked for leaves the engine down until somebody asks again** — The exec hits Text file busy while the installer still holds the file, and a start that failed once is not retried, so the engine stays down until a person starts it. → §DD265
-- 📋 **DD266** (deps: DD265) **the journal says wsl.exe exited without a word when the words are in the log the launch redirected them to** — The launch appends the shell's stderr to the daemon's log inside the distribution, so an exec failure is written there and the sentence sends nobody to it. → §DD266
+- 📋 **DD266** (deps: DD265 ✅) **the journal says wsl.exe exited without a word when the words are in the log the launch redirected them to** — The launch appends the shell's stderr to the daemon's log inside the distribution, so an exec failure is written there and the sentence sends nobody to it. → §DD266
 
 ## Block B — The daemon client (talk to the engine)
 

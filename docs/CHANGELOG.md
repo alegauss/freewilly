@@ -93,6 +93,7 @@
 - ✅ **DD262** **docker logs -f, attach and the websocket endpoints are upgraded connections the live drill never drives** — A live drill drives an attach and a follow ended from either side, asserting the abandoned one takes its channel with it; the websocket path is the same branch, so it needs no case.
 - ✅ **DD263** **the relay's figures cannot say how many connections are open, so a channel it never released is invisible** — Figures carries a fourth clause only when it is not zero, so a quiet engine holding channels reads differently from one holding none, and the count comes back down.
 - ✅ **DD264** **nothing drives a client that stops reading without hanging up, so the drain deadline has never run** — The state the deadline guards cannot occur while the listeners reserve no buffers, so a test pins the mechanism and the count that would notice the buffers changing.
+- ✅ **DD265** **an upgrade that replaces dockerd while a start is asked for leaves the engine down until somebody asks again** — A start launches the daemon again up to three times where the launcher exited 126, pausing between, and says how many relaunches it took where there was one.
 
 ## Block B — The daemon client (talk to the engine)
 

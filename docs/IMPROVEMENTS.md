@@ -2,33 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD265 The upgrade that races its own daemon
-
-Measured on 31 August 2026, upgrading 1.0.10 to 1.0.11 on the maintainer's machine. The
-journal reads:
-
-```
-12:02:39  host  serving as pid 53308 (FreeWilly 1.0.11)
-12:02:42  Stopped  the daemon exited while starting: wsl.exe exited 126 without a word
-12:03:54  tray  the engine did not answer within 75s.
-```
-
-The daemon's own log holds the sentence: `/bin/sh: exec: line 0: /usr/local/bin/dockerd:
-Text file busy`. The old daemon had logged `Daemon shutdown complete` five seconds
-earlier, and the installer was still writing the engine binaries into the distribution,
-so the file the launch tried to exec was open for writing by somebody else. ETXTBSY is
-126 from a shell, which is why the code was the only thing that reached the journal.
-
-Nothing tried again. The host exited, the tray reported a timeout, and the engine stayed
-down until it was started by hand four minutes later. The revival in the supervisor is
-no help here because it lives inside the host that just died.
-
-The condition clears on its own in seconds, which is what makes this worth fixing rather
-than reporting: one retry would have made the whole event invisible. Text file busy is
-also the one exec failure that is definitionally transient, so it can be told apart from
-a dockerd that is genuinely missing or not executable, and retried on its own terms
-rather than by retrying everything.
-
 ### §DD266 The words the launcher did not keep
 
 DD162 split the account of a dead daemon in two: where the launcher exited with
