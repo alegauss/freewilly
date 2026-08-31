@@ -43,6 +43,11 @@ internal sealed class WindowsElevation : IElevated
             // like something had gone wrong.
             WindowStyle = ProcessWindowStyle.Hidden,
             CreateNoWindow = true,
+
+            // Named and not inherited (DD261). The elevated child is often a compaction or a
+            // repair, and the directory it would otherwise hold is whichever one the tray was
+            // started from — which is exactly the sort of thing an update wants to replace.
+            WorkingDirectory = Environment.SystemDirectory,
         };
 
         try

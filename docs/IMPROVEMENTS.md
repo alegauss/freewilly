@@ -2,30 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD261 The working directory a child inherits
-
-Found while DD260 was being written, and not by reasoning about it. A test that points
-the process working directory at its own scratch directory could no longer delete it,
-because the live drill's relay had opened a channel per connection and every `wsl.exe`
-inherited that directory and locked it. DD260 gave `WslSocatBackend` a working directory
-of its own, because that was the one standing in the way.
-
-The rest are still open, and one of them is worse than the one that was fixed: `VmHold`
-starts a hold that lives for as long as the hold does. `EngineLifecycle`'s launcher,
-`ProcessOutput` and `BuildHistory` start children with no working directory either, each
-short-lived but each able to hold a directory at the moment somebody is trying to remove
-it.
-
-In production the directory being held is wherever the engine host was launched from,
-which for an update or an uninstall is the directory being replaced. That is a failure
-that reads as "the installer could not write" and says nothing about a child process.
-
-So: an explicit working directory on every process this product starts, and an assertion
-that says so rather than a habit that has to be remembered.
-`Environment.SystemDirectory` is what DD260 used and is nobody's project. A test that
-walks the starters and refuses one without a working directory is the form that survives
-the next process being added.
-
 ### §DD262 The upgraded endpoints the drill leaves out
 
 DD259 broke every connection a client upgraded, and DD260 drives the three the report

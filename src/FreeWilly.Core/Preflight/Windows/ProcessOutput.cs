@@ -57,6 +57,12 @@ internal static class ConsoleTool
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+
+            // Named and not inherited (DD261). This runner is the widest one in the product, and
+            // every caller passes absolute paths — the distribution's, the downloads' — so nothing
+            // here resolves against a directory. Naming one also settles what `wsl.exe` translates
+            // its initial directory from, which an inherited UNC path would have made a warning.
+            WorkingDirectory = Environment.SystemDirectory,
         };
         foreach (var argument in arguments)
         {

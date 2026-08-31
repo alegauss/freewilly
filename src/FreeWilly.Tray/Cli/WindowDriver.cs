@@ -438,6 +438,10 @@ internal static class WindowDriver
         using (Process.Start(new ProcessStartInfo(exe, CommandLine.WindowVerb)
         {
             UseShellExecute = true,
+
+            // Named and not inherited (DD261). This child is meant to outlive the driver, and an
+            // inherited working directory is one the window would then hold for its whole life.
+            WorkingDirectory = Environment.SystemDirectory,
         }))
         {
             Say("launch", "no window was open, so one was started and is being left up");

@@ -137,6 +137,11 @@ public sealed class ReleaseUpdate
         {
             Arguments = SilentArguments,
             UseShellExecute = true,
+
+            // Named and not inherited, and here it is the point rather than the precaution (DD261).
+            // This child outlives the process starting it in order to replace the install, and a
+            // directory it inherited and held is one the install could then not write over.
+            WorkingDirectory = Environment.SystemDirectory,
         });
     }
 }

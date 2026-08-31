@@ -241,7 +241,13 @@ internal partial class ContainersPage : System.Windows.Controls.UserControl
         {
             // The whole reason ports are links: making somebody retype localhost:8080 is a small
             // daily tax a GUI exists to remove.
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
+            // The working directory is named and not inherited (DD261): what opens a link is the
+            // user's browser, and it is not something to hand a lock on this window's directory.
+            Process.Start(new ProcessStartInfo(url)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = Environment.SystemDirectory,
+            })?.Dispose();
         }
     }
 
@@ -319,7 +325,13 @@ internal partial class ContainersPage : System.Windows.Controls.UserControl
             var launch = ContainerShell.LaunchFor(
                 Terminals.Choose(File.Exists), new EnginePaths().DockerCli, row.Id, shell);
 
-            var start = new ProcessStartInfo(launch.FileName) { UseShellExecute = false };
+            // Named and not inherited (DD261). This is a terminal somebody is about to work in, so
+            // it lives as long as they do, and its own directory is inside the container anyway.
+            var start = new ProcessStartInfo(launch.FileName)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Environment.SystemDirectory,
+            };
             foreach (var argument in launch.Arguments)
             {
                 start.ArgumentList.Add(argument);

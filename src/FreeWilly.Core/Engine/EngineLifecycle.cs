@@ -886,6 +886,11 @@ public sealed class WslDaemonProcess : IDaemonProcess
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+
+            // Named and not inherited (DD261). This launcher lives for as long as the daemon does,
+            // which is the whole session, and the directory it would hold is the one the engine
+            // host was started from — the install's own, for an update or an uninstall.
+            WorkingDirectory = Environment.SystemDirectory,
         };
         foreach (var argument in new[]
                  {

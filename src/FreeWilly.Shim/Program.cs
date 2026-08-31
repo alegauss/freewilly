@@ -56,6 +56,12 @@ internal static class Program
             // `docker build` keeps its progress rendering, colour survives, and a pipeline behaves
             // exactly as it did before this file existed. Reading docker's stderr to match on its
             // wording would cost all of that, which is why the check below asks the machine instead.
+            //
+            // The working directory is inherited for the same reason, and it is the one place in
+            // this product where that is deliberate (DD261). `docker build .`, `-f compose.yaml`
+            // and `-v .\data:/data` all resolve against the directory the user typed in, so naming
+            // one here would change what those arguments mean. Everything else this product starts
+            // names its own, because a child holds a lock on whichever directory it is given.
             UseShellExecute = false,
         };
 

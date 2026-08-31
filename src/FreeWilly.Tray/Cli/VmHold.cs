@@ -58,6 +58,11 @@ internal sealed class VmHold : IDisposable
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+
+            // Named and not inherited (DD261). This is the longest-lived child in the product: the
+            // hold exists to keep the machine up for minutes at a time, and for all of them it
+            // would otherwise be locking whatever directory the caller happened to be in.
+            WorkingDirectory = Environment.SystemDirectory,
         };
         foreach (var argument in new[]
                  {

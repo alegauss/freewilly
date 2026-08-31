@@ -89,6 +89,7 @@
 - ✅ **DD247** **the elevated route has no rehearsal, and it is the one that shipped broken twice against a real disk** — --compact-drill --as-administrator points the same sequence at the scratch distribution, so the diskpart route is answered over half a gigabyte of wasted disk.
 - ✅ **DD259** **docker compose run, start -a and exec exit 1 with a broken pipe after the container has already succeeded** — The teardown drains and closes the handle instead of disconnecting it, so a client reading an upgraded stream to its end gets the broken pipe every client reads as the end.
 - ✅ **DD260** **the suite never drives an attach or an exec through the relay, so a broken teardown ships green** — A live drill runs compose run, start -a and exec through a relay served from the working tree and asserts the exit code each client reports, including a container that failed.
+- ✅ **DD261** **every process this product starts but one inherits the caller's working directory and holds a lock on it** — Every starter names the system directory but the shim, which inherits so a relative build context still resolves, and a source guard fails the next one written without it.
 
 ## Block B — The daemon client (talk to the engine)
 

@@ -95,6 +95,10 @@ public sealed class DetachedLauncher : IProcessLauncher
             {
                 UseShellExecute = true,
                 WindowStyle = ProcessWindowStyle.Hidden,
+
+                // Named and not inherited (DD261). This child outlives the click that started it,
+                // and a process holds a lock on its working directory for as long as it lives.
+                WorkingDirectory = Environment.SystemDirectory,
             });
             return null;
         }

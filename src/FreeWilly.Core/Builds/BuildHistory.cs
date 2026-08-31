@@ -304,6 +304,10 @@ public sealed class BuildHistory : IBuildHistory
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+
+            // Named and not inherited (DD261). Every argument this passes is absolute, so there is
+            // nothing for a caller's directory to resolve and nothing gained by locking it.
+            WorkingDirectory = Environment.SystemDirectory,
         };
 
         // The plugin sits under this install's own config directory and the CLI finds one nowhere
