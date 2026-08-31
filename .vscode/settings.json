@@ -1,3 +1,3 @@
 {
-"window.title": "FreeWilly ${separator} ${dirty}${activeEditorShort} ${separator} ${appName}",
+  "window.title": "FreeWilly ${separator} ${dirty}${activeEditorShort} ${separator} ${appName}"
 }
