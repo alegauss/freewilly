@@ -87,7 +87,7 @@ public static class AgentSurface
         new(AgentNamespace.Read, "ps", "read ps",
             "every container as one line each: name, state, image, ports"),
         new(AgentNamespace.Read, "verify", "read verify",
-            "<name> [--request [:port]/path] [--wait] [--timeout 30s] proof that it answers"),
+            "<name> [--request [:port]/path] [--expect n] [--wait] [--timeout 30s] it answers"),
         new(AgentNamespace.Do, "compose", "do compose up",
             "up [-f file]... bring the project up, stamped so `do reclaim` can take it back"),
         new(AgentNamespace.Do, "engine", "do engine",
@@ -1141,6 +1141,7 @@ public static class AgentSurface
         var wait = false;
         string? target = null;
         string? request = null;
+        IReadOnlyList<int>? expect = null;
         var timeout = TimeSpan.FromSeconds(30);
 
         for (var i = 0; i < rest.Length; i++)
@@ -1154,7 +1155,7 @@ public static class AgentSurface
                 case "--wait":
                     wait = true;
                     continue;
-                case "--request" or "--timeout":
+                case "--request" or "--expect" or "--timeout":
                     if (i + 1 >= rest.Length)
                     {
                         return Refuse($"{argument} needs a value after it");
@@ -1164,6 +1165,16 @@ public static class AgentSurface
                     if (string.Equals(argument, "--request", StringComparison.Ordinal))
                     {
                         request = value;
+                        continue;
+                    }
+
+                    if (string.Equals(argument, "--expect", StringComparison.Ordinal))
+                    {
+                        if (!TryParseStatuses(value, out expect))
+                        {
+                            return Refuse($"{value} is not a status: 404, or 404,410 for either");
+                        }
+
                         continue;
                     }
 
@@ -1177,7 +1188,7 @@ public static class AgentSurface
                     if (argument.StartsWith('-'))
                     {
                         return Refuse($"unexpected argument {argument}: read verify takes a name, "
-                            + "--request, --wait, --timeout and --json");
+                            + "--request, --expect, --wait, --timeout and --json");
                     }
 
                     if (target is not null)
@@ -1188,6 +1199,13 @@ public static class AgentSurface
                     target = argument;
                     continue;
             }
+        }
+
+        // An expectation with no request is a claim about a path nobody named, and passing it over in
+        // silence would leave a caller reading a green row that proved nothing it asked for.
+        if (expect is not null && request is null)
+        {
+            return Refuse("--expect needs --request: it names what that one path must answer");
         }
 
         if (!Core.Agent.Address.TryParse(target, out var address, out var refusal))
@@ -1247,7 +1265,7 @@ public static class AgentSurface
                 }
 
                 report = ServiceVerify.Verify(
-                    new VerifyFacts(address, summary, inspect, answers, answered));
+                    new VerifyFacts(address, summary, inspect, answers, answered, expect));
 
                 if (!wait || report.CanHostEngine || DateTimeOffset.UtcNow >= deadline)
                 {
@@ -1333,6 +1351,36 @@ public static class AgentSurface
                     + $": name one, as --request :{published[0].Host.ToString(System.Globalization.CultureInfo.InvariantCulture)}{request}";
                 return false;
         }
+    }
+
+    /// <summary>The statuses a <c>--expect</c> names, one or a comma-separated few.</summary>
+    /// <remarks>
+    /// Bounded to real HTTP status codes rather than to any integer, so <c>--expect 40</c> is refused
+    /// before a probe runs instead of becoming a row that could never pass.
+    /// </remarks>
+    private static bool TryParseStatuses(string value, out IReadOnlyList<int>? statuses)
+    {
+        statuses = null;
+        var parsed = new List<int>();
+        foreach (var part in value.Split(','))
+        {
+            if (!int.TryParse(
+                    part.Trim(), System.Globalization.CultureInfo.InvariantCulture, out var status)
+                || status is < 100 or > 599)
+            {
+                return false;
+            }
+
+            parsed.Add(status);
+        }
+
+        if (parsed.Count == 0)
+        {
+            return false;
+        }
+
+        statuses = parsed;
+        return true;
     }
 
     /// <summary>Seconds, written as a number or with an s after it.</summary>

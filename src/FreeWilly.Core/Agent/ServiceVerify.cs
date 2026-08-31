@@ -11,12 +11,18 @@ namespace FreeWilly.Core.Agent;
 /// <param name="Inspect">Its whole entity tree.</param>
 /// <param name="Ports">What Windows found when it tried each published port.</param>
 /// <param name="Request">What the service answered, where one was asked for.</param>
+/// <param name="Expect">
+/// The statuses the caller said that path must answer with, or null for the default of "any 2xx or
+/// 3xx". Empty counts as null, so a caller who filtered a list down to nothing does not silently get
+/// a row that can never pass.
+/// </param>
 public sealed record VerifyFacts(
     Address Address,
     ContainerSummary? Summary,
     ContainerInspect? Inspect,
     IReadOnlyList<PortAnswer> Ports,
-    RequestAnswer? Request);
+    RequestAnswer? Request,
+    IReadOnlyList<int>? Expect = null);
 
 /// <summary>
 /// Proof that a service answers, in text, because the agent cannot look.
@@ -225,20 +231,26 @@ public static class ServiceVerify
             };
         }
 
-        // 2xx and 3xx are answers. A 4xx or 5xx is also an answer and the caller may have asked for a
-        // path that legitimately 404s, so the verdict is what the status says and the remedy names the
-        // ambiguity rather than pretending it away.
-        var ok = status is >= 200 and < 400;
+        // DD250. Without an expectation, 2xx and 3xx are answers and anything else is not: the caller
+        // asked whether the path answers, and that is the only reading available. With one, the row is
+        // "it answered what I named", which is the shape a removal needs — the proof that a retired
+        // path is gone is a 404, and under the default reading its own proof prints red.
+        var expected = facts.Expect is { Count: > 0 } named ? named : null;
+        var ok = expected is null ? status is >= 200 and < 400 : expected.Contains(status);
+        var got = status.ToString(CultureInfo.InvariantCulture);
         return new PreflightCheck
         {
             Id = Rows.Request,
             Title = "request",
             Verdict = ok ? Verdict.Pass : Verdict.Fail,
-            Detail = $"{request.Target} → {status.ToString(CultureInfo.InvariantCulture)} "
+            Detail = $"{request.Target} → {got} "
                 + $"({request.Milliseconds.ToString(CultureInfo.InvariantCulture)}ms)",
             Remedy = ok
                 ? null
-                : "It answered, so the service is up and this path is not what was expected.",
+                : expected is null
+                    ? "It answered, so the service is up and this path is not what was expected."
+                    : $"It answered {got} and --expect named {Statuses(expected)}, so the served path "
+                        + "is not in the state this was proving.",
             Blocking = !ok,
         };
     }
@@ -369,6 +381,11 @@ public static class ServiceVerify
             return 1;
         }
     }
+
+    private static string Statuses(IReadOnlyList<int> expected) =>
+        string.Join(
+            " or ",
+            expected.Select(e => e.ToString(CultureInfo.InvariantCulture)));
 
     private static string Ports(IReadOnlyList<PortAnswer> answers) =>
         string.Join(

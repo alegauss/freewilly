@@ -26,6 +26,9 @@ public sealed class AgentVerifyTests
 
         internal string? Path { get; private set; }
 
+        /// <summary>What a GET answers, so a test can ask about a path that is meant to be gone.</summary>
+        internal int Status { get; init; } = 200;
+
         public PortAnswer Connect(int hostPort, string containerPort, TimeSpan timeout)
         {
             Connects++;
@@ -42,7 +45,7 @@ public sealed class AgentVerifyTests
             Requests++;
             Path = path;
             Asked.Add(hostPort);
-            return new RequestAnswer($"http://127.0.0.1:{hostPort}{path}", 200, 7, null);
+            return new RequestAnswer($"http://127.0.0.1:{hostPort}{path}", Status, 7, null);
         }
     }
 
@@ -222,6 +225,61 @@ public sealed class AgentVerifyTests
         Assert.Equal(0, code);
         Assert.Equal("/healthz", probe.Path);
         Assert.Contains(5432, probe.Asked);
+    }
+
+    // ---- the status the caller named (DD250) ----------------------------------------------------
+
+    [Fact]
+    public async Task A_path_that_had_to_be_gone_exits_zero_when_it_is()
+    {
+        await using var daemon = Daemon(RunningWithOnePort, InspectOnePort);
+        var probe = new ScriptedProbe(true) { Status = 404 };
+        var output = new StringWriter();
+
+        var code = Verify(
+            daemon, probe, ["shop-api-1", "--request", "/retired", "--expect", "404"], output);
+
+        // The whole of DD250: proving a removal used to be the run that printed red.
+        Assert.Equal(0, code);
+        Assert.Contains("[ok  ]", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_path_that_still_answers_fails_the_expectation_and_says_what_it_returned()
+    {
+        await using var daemon = Daemon(RunningWithOnePort, InspectOnePort);
+        var probe = new ScriptedProbe(true) { Status = 200 };
+        var output = new StringWriter();
+
+        var code = Verify(
+            daemon, probe, ["shop-api-1", "--request", "/retired", "--expect", "404"], output);
+
+        Assert.Equal(1, code);
+        Assert.Contains("200", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_expectation_with_no_request_is_refused_before_anything_is_probed()
+    {
+        await using var daemon = Daemon(RunningWithOnePort, InspectOnePort);
+        var probe = new ScriptedProbe(true);
+
+        Assert.Equal(2, Verify(daemon, probe, ["shop-api-1", "--expect", "404"], new StringWriter()));
+        Assert.Equal(0, probe.Connects);
+        Assert.Empty(daemon.Requested);
+    }
+
+    [Fact]
+    public async Task A_status_that_is_not_one_is_refused_before_anything_is_probed()
+    {
+        await using var daemon = Daemon(RunningWithOnePort, InspectOnePort);
+        var probe = new ScriptedProbe(true);
+
+        Assert.Equal(
+            2,
+            Verify(daemon, probe, ["shop-api-1", "--request", "/x", "--expect", "40"], new StringWriter()));
+        Assert.Equal(0, probe.Connects);
+        Assert.Empty(daemon.Requested);
     }
 
     [Fact]

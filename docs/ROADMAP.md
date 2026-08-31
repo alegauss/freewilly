@@ -16,7 +16,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-- 📋 **DD250** (deps: —) **`read verify --request` cannot assert a path is gone: a 404 is only ever a failure** — A removal is as much a claim as an arrival, and the page that must no longer answer has no passing check, so the session reads a red row and decides by hand that the red was right. → §DD250
 - 📋 **DD251** (deps: —) **`read logs` cannot follow, so watching a run live drops the session back to the docker CLI** — Every other diagnostic on this machine is a `freewilly read`, and a seed that prints for two minutes is the one thing that still sends a session to `docker compose logs -f`. → §DD251
 
 ## Block H — The public surface (the site a reader and an agent both read)

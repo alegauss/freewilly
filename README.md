@@ -99,7 +99,7 @@ freewilly read doctor <name> why one container is not answering
 freewilly read ps            every container, one line each; mutates nothing
 freewilly read logs <name>   --since --level --dedup --budget --out
 freewilly read ports [port]  what holds a host port, which Docker cannot say
-freewilly read verify <name> proof that it answers; --request --wait --timeout
+freewilly read verify <name> proof that it answers; --request --expect --wait
 freewilly read changes       what moved; --since for a delta, --session for mine
 freewilly do   engine start  brings the engine up
 freewilly do   reclaim       remove exactly that, and nothing else
@@ -184,6 +184,12 @@ closes, and a request that would appear in somebody's access log needs `--reques
 a GET. The mount row stops at the Windows side and says `unchecked` for the rest, because
 counting inside the container means an exec, which is a POST, and buying one row is not
 worth what it costs the guarantee that a read is a read.
+
+A removal is as much a claim as an arrival, so `--expect 404` (or `--expect 404,410` for
+either) turns the request row into "this path answered what I named". Proving a retired
+page is gone used to be the run that printed red, leaving the caller to decide by hand
+that this particular red was the green one. Without `--expect`, `--request` still means
+2xx or 3xx, and a missed expectation prints the status that arrived instead.
 
 `--wait --timeout 30s` is the same command as the readiness primitive. It returns the
 moment the condition holds, and on a timeout it prints the same report saying which rows

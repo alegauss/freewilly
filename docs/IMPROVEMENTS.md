@@ -14,30 +14,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-### §DD250 Proving a path is gone
-
-`read verify --request /path` answers one question: does this path answer. A 404 is
-therefore always `[FAIL]`, with the remedy "this path is not what was expected".
-
-Half the checks an agent runs after a change are the opposite claim. A page was removed,
-a route was renamed, an endpoint was retired: the proof of the work is that the path
-does **not** answer, and the run that proves it is the run that prints red. The session
-then has to hold in its head that this particular red is the green one — which is the
-failure mode the whole verdict-plus-remedy shape exists to avoid, and it costs a
-paragraph of reasoning in the transcript every time.
-
-Measured here: after six pages were removed from a WordPress project, `read verify` was
-called on four paths, two of which had to be gone. Both correct removals reported
-`[FAIL]`, and nothing distinguished them from the mapping being broken.
-
-The shape that fits is an expectation on the row: `--expect 404`, or a small set
-(`--expect 404,410`), turning the check into "this path answers with what I said" and
-letting the remedy line say which status arrived instead. `--request` with no `--expect`
-keeps meaning "2xx or 3xx", so nothing already written changes.
-
-Acceptance: a call naming the status a removed path must return exits 0 and prints
-`[ok]`, and one that gets a different status prints the status it got.
-
 ### §DD251 Following a log without leaving the surface
 
 `read logs` reads what a container has already printed: `--since`, `--level`, `--dedup`,

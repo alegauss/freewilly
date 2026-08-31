@@ -56,12 +56,14 @@ public sealed class ServiceVerifyTests
         ContainerSummary? summary = null,
         ContainerInspect? inspect = null,
         IReadOnlyList<PortAnswer>? ports = null,
-        RequestAnswer? request = null) => new(
+        RequestAnswer? request = null,
+        IReadOnlyList<int>? expect = null) => new(
             Address.Parse("shop-api-1"),
             summary ?? Summary(),
             inspect ?? Inspect(),
             ports ?? [],
-            request);
+            request,
+            expect);
 
     // ---- the fact the daemon cannot supply -----------------------------------------------------
 
@@ -189,6 +191,78 @@ public sealed class ServiceVerifyTests
         var row = report[ServiceVerify.Rows.Request];
         Assert.Equal(Verdict.Fail, row!.Verdict);
         Assert.Contains("rather than the mapping", row.Remedy!, StringComparison.Ordinal);
+    }
+
+    // ---- the status the caller named (DD250) ----------------------------------------------------
+
+    [Fact]
+    public void A_removed_path_passes_when_the_call_named_the_status_it_returns()
+    {
+        var report = ServiceVerify.Verify(Facts(
+            ports: [new PortAnswer(8080, "8080/tcp", true, 3, null)],
+            request: new RequestAnswer("http://127.0.0.1:8080/retired", 404, 7, null),
+            expect: [404]));
+
+        var row = report[ServiceVerify.Rows.Request];
+        Assert.Equal(Verdict.Pass, row!.Verdict);
+        Assert.Null(row.Remedy);
+        Assert.True(report.CanHostEngine);
+    }
+
+    [Fact]
+    public void An_expectation_that_missed_says_which_status_arrived()
+    {
+        var report = ServiceVerify.Verify(Facts(
+            ports: [new PortAnswer(8080, "8080/tcp", true, 3, null)],
+            request: new RequestAnswer("http://127.0.0.1:8080/retired", 200, 7, null),
+            expect: [404]));
+
+        var row = report[ServiceVerify.Rows.Request];
+        Assert.Equal(Verdict.Fail, row!.Verdict);
+
+        // The status is in the detail and the expectation is in the remedy, so the caller reads what
+        // it asked for beside what it got without going back to the command line it typed.
+        Assert.Contains("200", row.Detail, StringComparison.Ordinal);
+        Assert.Contains("--expect named 404", row.Remedy!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Naming_several_statuses_passes_on_any_one_of_them()
+    {
+        var report = ServiceVerify.Verify(Facts(
+            ports: [new PortAnswer(8080, "8080/tcp", true, 3, null)],
+            request: new RequestAnswer("http://127.0.0.1:8080/retired", 410, 7, null),
+            expect: [404, 410]));
+
+        Assert.Equal(Verdict.Pass, report[ServiceVerify.Rows.Request]!.Verdict);
+    }
+
+    [Fact]
+    public void An_expectation_names_a_status_and_not_a_connection()
+    {
+        // A request that never finished has no status to match, so naming one cannot turn a service
+        // that answered nothing into a pass.
+        var report = ServiceVerify.Verify(Facts(
+            ports: [new PortAnswer(8080, "8080/tcp", true, 3, null)],
+            request: new RequestAnswer("http://127.0.0.1:8080/retired", null, 2000, "timed out after 2s"),
+            expect: [404]));
+
+        var row = report[ServiceVerify.Rows.Request];
+        Assert.Equal(Verdict.Fail, row!.Verdict);
+        Assert.Contains("rather than the mapping", row.Remedy!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_empty_expectation_reads_as_none_at_all()
+    {
+        // A caller who filtered a list down to nothing gets the default reading rather than a row
+        // that no status could ever satisfy.
+        var report = ServiceVerify.Verify(Facts(
+            ports: [new PortAnswer(8080, "8080/tcp", true, 3, null)],
+            request: new RequestAnswer("http://127.0.0.1:8080/healthz", 204, 7, null),
+            expect: []));
+
+        Assert.Equal(Verdict.Pass, report[ServiceVerify.Rows.Request]!.Verdict);
     }
 
     // ---- the mount, as far as this side can see ------------------------------------------------

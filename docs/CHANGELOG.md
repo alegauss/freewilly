@@ -223,6 +223,7 @@
 - ✅ **DD148** **do compose up takes no arguments, so a project that names its own files cannot use the verb at all** — The verb takes -f the way compose does: given any, they are the project and no convention is consulted; given none, the directory answers as before.
 - ✅ **DD178** **the shaped surface figure moves with the calendar, so an exact gate goes red on a tree nobody touched** — The clock reaches read doctor through the machine seam and the shaped measurement pins it beside the fixtures, so the exact token figure is the fixtures' and no longer the calendar's.
 - ✅ **DD198** **the agent surface has no reading for the health of WSL, the distribution or the disk** — read health answers for the machine under the engine in one call, off the same report the window draws, at 138 tokens against a ceiling of 200.
+- ✅ **DD250** **`read verify --request` cannot assert a path is gone: a 404 is only ever a failure** — `read verify --request` now takes `--expect 404` (or a comma list), so a path that must be gone has a check that passes, and a missed expectation prints the status that arrived.
 
 ## Block H — The public surface (the site a reader and an agent both read)
 
