@@ -27,6 +27,7 @@ public sealed class EnginePipeRelay : IAsyncDisposable
     private readonly Lock _listeners = new();
     private Thread? _accepting;
     private NamedPipeServerStream? _listening;
+    private int _holding;
 
     /// <summary>
     /// The one free listener, held where both the accept thread and a dispose can reach it.
@@ -89,11 +90,41 @@ public sealed class EnginePipeRelay : IAsyncDisposable
     /// working, the stumbles say whether the machine was refusing instances, and the thread says
     /// whether there is still a loop to refill them — which between them name every way the Windows
     /// side of the pipe can be the reason a client got nothing.</para>
+    ///
+    /// <para>DD263 adds a fourth, and only where it is not zero. <see cref="Holding"/> is not a
+    /// figure about the pipe at all, so on its own it would not have earned a place here; what earns
+    /// it is where this sentence is read. The supervisor asks for the figures when the engine has
+    /// gone quiet, and a quiet engine holding forty channels is a different failure from a quiet
+    /// engine holding none — the first is this process, the second is the daemon. Silent at zero,
+    /// like the stumbles, so a healthy relay still reads as one.</para>
     /// </remarks>
     public string Figures =>
         $"the relay accepted {Accepted}"
         + (Stumbles > 0 ? $" over {Stumbles} stumbles" : "")
+        + (Holding > 0 ? $", holds {Holding} open" : "")
         + (Accepting ? " and is still accepting" : " and has stopped accepting");
+
+    /// <summary>
+    /// How many channels to the daemon this relay has opened and not yet released (DD263).
+    /// </summary>
+    /// <remarks>
+    /// Every one of them is a <c>wsl.exe</c> attached to the daemon's socket. A serve that never
+    /// finishes holds one for the rest of the host's life, and until this existed nothing in the
+    /// product could say so: the count of accepted connections only ever goes up, and a relay
+    /// holding forty channels reads exactly like one holding none.
+    ///
+    /// <para><b>Zero is not the healthy value, and that is the point.</b> A tray with a log window
+    /// open is legitimately holding one, and a compose run driving several clients holds several, so
+    /// no threshold here means anything on its own. What is worth reading is the number that stops
+    /// coming back down — which is why this is a figure the supervisor quotes when something else
+    /// has already gone wrong, and not a crossing it reports on its own.</para>
+    ///
+    /// <para>What it catches is a serve that stops making progress: the pumps never end, the finally
+    /// never runs, and the channel stays open. What it cannot catch is a future edit that removes
+    /// the release itself, because the count is kept beside it — that one is held by a test, which is
+    /// where DD262 put it.</para>
+    /// </remarks>
+    public int Holding => Volatile.Read(ref _holding);
 
     /// <summary>
     /// What ended the accept loop, where something other than a stop did (DD179).
@@ -300,6 +331,11 @@ public sealed class EnginePipeRelay : IAsyncDisposable
         {
             channel = _backend.Open();
 
+            // Counted from the moment there is something to release (DD263). Above the try's own
+            // work rather than inside it, so a pump that never ends is a channel this says is held —
+            // which is the reading the count exists for.
+            Interlocked.Increment(ref _holding);
+
             // Both directions, and the first one to end ends the pair: a response that completes
             // must close the client's read, and a client that hangs up must not leave the channel
             // holding a process.
@@ -323,7 +359,12 @@ public sealed class EnginePipeRelay : IAsyncDisposable
         }
         finally
         {
-            channel?.Dispose();
+            if (channel is not null)
+            {
+                channel.Dispose();
+                Interlocked.Decrement(ref _holding);
+            }
+
             await EndAsync(client).ConfigureAwait(false);
         }
     }

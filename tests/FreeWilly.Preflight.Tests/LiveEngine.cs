@@ -85,6 +85,15 @@ internal static class LiveEngine
         /// </remarks>
         internal int OpenChannels => _backend.Alive;
 
+        /// <summary>What the relay itself says it is holding (DD263).</summary>
+        /// <remarks>
+        /// Kept beside the count above rather than replacing it. They are deliberately different
+        /// measurements: this is the product's, reported to the supervisor, and the one above is
+        /// taken from outside and survives an edit that removed the release the product counts
+        /// beside. What they must do is agree.
+        /// </remarks>
+        internal int Holding => _relay.Holding;
+
         /// <summary>Run this install's own docker against this relay.</summary>
         /// <param name="workingDirectory">Where the client runs, which is where a project is.</param>
         /// <param name="arguments">What to ask it, after the host.</param>

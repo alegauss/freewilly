@@ -119,6 +119,11 @@ public sealed class RelayStreamEndTests
                 $"{engine.OpenChannels} channel(s) to the daemon are still open after the client "
                 + "that owned them was gone, so an abandoned follow leaves a wsl.exe attached to "
                 + "the daemon for the rest of the host's life");
+
+            // And the figure the supervisor reads agrees with the count taken from outside the
+            // relay (DD263). A number the host quotes during an outage is worth less than nothing
+            // if it can disagree with how many channels are actually open.
+            Assert.Equal(engine.OpenChannels, engine.Holding);
         }
         finally
         {

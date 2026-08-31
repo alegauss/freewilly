@@ -285,7 +285,12 @@ public sealed class PipeSurvivalTests
         relay.Start();
 
         Assert.True(await ReachableAsync(pipe));
-        Assert.True(await Reached(() => relay.Accepted == 1));
+
+        // Waited out rather than only counted, since DD263 put what the relay is holding into the
+        // sentence. A connection is accepted before it is served, so a client that has hung up can
+        // still have a serve in flight — and this asserts the whole string, which would then read
+        // "holds 1 open" for as long as that lasted.
+        Assert.True(await Reached(() => relay.Accepted == 1 && relay.Holding == 0));
 
         Assert.Equal("the relay accepted 1 and is still accepting", relay.Figures);
     }
@@ -324,7 +329,11 @@ public sealed class PipeSurvivalTests
 
         relay.Start();
         Assert.True(await ReachableAsync(pipe));
-        Assert.True(await Reached(() => relay.WhatEndedAccepting is not null));
+
+        // And the serve settled, for the reason the test above waits for it: this asserts the whole
+        // sentence, and DD263 gave the sentence a clause about what is still in flight.
+        Assert.True(
+            await Reached(() => relay.WhatEndedAccepting is not null && relay.Holding == 0));
 
         Assert.Equal("the relay accepted 1 and has stopped accepting", relay.Figures);
     }
@@ -338,6 +347,130 @@ public sealed class PipeSurvivalTests
             new FakeWsl(), new FakeDaemon(), new Answering());
 
         Assert.Null(lifecycle.RelayFigures);
+    }
+
+    /// <summary>A backend whose channel never says anything and never ends (DD263).</summary>
+    /// <remarks>
+    /// The serve that does not finish, which is the only failure the count can catch by itself. Both
+    /// pumps end up waiting — the daemon's because this never answers, the client's because a client
+    /// that connects and sends nothing has nothing to forward — so the connection is held open with
+    /// nothing wrong anywhere, exactly as an attach to an idle container is.
+    /// </remarks>
+    private sealed class Stalling : IEngineBackend
+    {
+        public IEngineChannel Open() => new Channel();
+
+        private sealed class Channel : IEngineChannel
+        {
+            private readonly MemoryStream _in = new();
+
+            public Stream ToEngine => _in;
+
+            public Stream FromEngine { get; } = new Waiting();
+
+            public void Dispose()
+            {
+                _in.Dispose();
+                FromEngine.Dispose();
+            }
+        }
+
+        /// <summary>A stream whose read is answered by cancellation and nothing else.</summary>
+        private sealed class Waiting : Stream
+        {
+            public override bool CanRead => true;
+
+            public override bool CanSeek => false;
+
+            public override bool CanWrite => false;
+
+            public override long Length => throw new NotSupportedException();
+
+            public override long Position
+            {
+                get => throw new NotSupportedException();
+                set => throw new NotSupportedException();
+            }
+
+            public override async ValueTask<int> ReadAsync(
+                Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+                return 0;
+            }
+
+            public override int Read(byte[] buffer, int offset, int count) =>
+                throw new NotSupportedException();
+
+            public override void Flush()
+            {
+            }
+
+            public override long Seek(long offset, SeekOrigin origin) =>
+                throw new NotSupportedException();
+
+            public override void SetLength(long value) => throw new NotSupportedException();
+
+            public override void Write(byte[] buffer, int offset, int count) =>
+                throw new NotSupportedException();
+        }
+    }
+
+    [Fact]
+    public async Task A_relay_whose_clients_have_all_gone_holds_nothing_and_says_nothing_about_it()
+    {
+        // The half that keeps the clause worth reading. Every relay is holding something some of the
+        // time — a log window, a compose run — so a figure that appeared at any non-zero value would
+        // be in every sentence this product writes, and the one reading worth acting on would be
+        // buried in the ones that are not.
+        var pipe = Pipe();
+
+        await using var relay = new EnginePipeRelay(new Answering(), pipe);
+        relay.Start();
+
+        Assert.True(await ReachableAsync(pipe));
+        Assert.True(await Reached(() => relay.Holding == 0));
+        Assert.DoesNotContain("holds", relay.Figures, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_relay_holding_a_channel_open_says_how_many_it_is_holding()
+    {
+        // The reading nothing in the product had. Before DD263 the figures said "accepted 1 and is
+        // still accepting" over a relay with a wsl.exe attached to the daemon and no client left to
+        // read it — indistinguishable from a relay holding nothing, which is what made an engine
+        // that leaks one channel per abandoned stream look healthy for the rest of its life.
+        var pipe = Pipe();
+
+        await using var relay = new EnginePipeRelay(new Stalling(), pipe);
+        relay.Start();
+
+        var client = new NamedPipeClientStream(
+            ".", pipe, PipeDirection.InOut, PipeOptions.Asynchronous);
+        await client.ConnectAsync(30000);
+
+        try
+        {
+            Assert.True(
+                await Reached(() => relay.Holding == 1),
+                $"the relay is serving a connection it opened a channel for and reports holding "
+                + $"{relay.Holding}");
+
+            Assert.Contains("holds 1 open", relay.Figures, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await client.DisposeAsync();
+        }
+
+        // And it comes back down, which is the property that makes a count that does not worth
+        // acting on. A number that only ever climbed would say the same thing about a relay serving
+        // a hundred connections properly as about one that had leaked a hundred.
+        Assert.True(
+            await Reached(() => relay.Holding == 0),
+            $"the client is gone and the relay still reports holding {relay.Holding}");
+
+        Assert.DoesNotContain("holds", relay.Figures, StringComparison.Ordinal);
     }
 
     private static System.IO.Pipes.PipeSecurity OnlyThisUser()
