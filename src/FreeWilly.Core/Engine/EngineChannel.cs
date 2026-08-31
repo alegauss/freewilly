@@ -67,6 +67,13 @@ public sealed class WslSocatBackend : IEngineBackend
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+
+            // Named rather than inherited, and it is not a detail. A child holds a lock on its
+            // working directory for as long as it lives, and this one lives for as long as a docker
+            // client's connection does — so whatever directory the host happened to be started from
+            // could not be renamed or removed while the engine served anything. The system
+            // directory is nobody's project and cannot be the thing somebody is trying to delete.
+            WorkingDirectory = Environment.SystemDirectory,
         };
         foreach (var argument in new[]
                  {
