@@ -363,26 +363,35 @@ public sealed class AgentSurfaceTests
     [Fact]
     public void A_summary_that_breaks_puts_the_second_line_under_the_first()
     {
-        // One verb has outgrown a line. A continuation in column 0 would read as a verb of its own,
+        // Some verbs have outgrown a line. A continuation in column 0 would read as a verb of its own,
         // which is the failure this exists to prevent.
         var lines = AgentSurface.HelpText.ReplaceLineEndings("\n").Split('\n');
 
         var broken = AgentSurface.All.Where(v => v.Summary.Contains('\n')).ToList();
         Assert.NotEmpty(broken);
 
-        foreach (var verb in broken)
+        foreach (var part in broken.SelectMany(v => v.Summary.Split('\n').Skip(1)))
         {
-            foreach (var part in verb.Summary.Split('\n').Skip(1))
-            {
-                Assert.Contains(lines, l => l == new string(' ', 20) + part);
-            }
+            Assert.Contains(lines, l => l == new string(' ', 20) + part);
+        }
+    }
 
-            // The reason for breaking it: neither half runs so wide that a terminal folds it
-            // somewhere the reader did not choose.
-            foreach (var part in verb.Summary.Split('\n'))
-            {
-                Assert.True(part.Length + 20 <= 100, $"help line is {part.Length + 20} columns: {part}");
-            }
+    [Fact]
+    public void No_help_row_runs_wider_than_the_terminal_it_is_read_in()
+    {
+        // Over every row, not only the ones that already declare a break (DD254). Guarding only the
+        // broken rows is what let `read context` and `do reclaim` grow past this unnoticed: a folded
+        // summary puts its tail in column 0, where a verb name goes, and the flag that fell off the
+        // end reads as belonging to whatever row follows.
+        //
+        // 100 columns, because the gutter is 20 and a summary that needs more than eighty declares a
+        // break rather than leaving the fold to somebody's window.
+        foreach (var line in AgentSurface.HelpText.ReplaceLineEndings("\n").Split('\n'))
+        {
+            Assert.True(
+                line.Length <= 100,
+                $"help row is {line.Length} columns and the bound is 100. Break its summary on a \\n, "
+                + $"which lands the second half under the first: {line}");
         }
     }
 

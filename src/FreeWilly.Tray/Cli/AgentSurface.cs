@@ -75,7 +75,8 @@ public static class AgentSurface
         new(AgentNamespace.Read, "changes", "read changes",
             "[--since t:..] what moved on this machine; [--session id] only what I made"),
         new(AgentNamespace.Read, "context", "read context",
-            "the whole machine in one budgeted payload; --as brief [--out path] for a project file"),
+            "the whole machine in one budgeted payload\n"
+            + "--as brief [--out path] for a project file"),
         new(AgentNamespace.Read, "doctor", "read doctor",
             "<name> why one container is not answering, as a verdict and a remedy"),
         new(AgentNamespace.Read, "health", "read health",
@@ -94,7 +95,8 @@ public static class AgentSurface
         new(AgentNamespace.Do, "engine", "do engine",
             "start | stop bring the engine up or take it down"),
         new(AgentNamespace.Do, "reclaim", "do reclaim",
-            "--session [id] [--volumes] [--confirm k:..] remove exactly what this session made"),
+            "--session [id] [--volumes] [--confirm k:..]\n"
+            + "remove exactly what this session made"),
     ];
 
     /// <summary>The verb these arguments name, or null.</summary>

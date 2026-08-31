@@ -227,6 +227,7 @@
 - ✅ **DD251** **`read logs` cannot follow, so watching a run live drops the session back to the docker CLI** — `read logs --follow` watches a run to a line (`--until`), a deadline (`--timeout`) or the token budget, so following a seed no longer sends the session to `docker compose logs -f`.
 - ✅ **DD252** **the `--request` refusal states the opposite of the rule: a bare path is told it begins with a slash when it does not** — Every `--request` refusal now says what a correct value looks like after the colon, so a bare path is no longer told it begins with a slash, and each one is asserted by name.
 - ✅ **DD253** **a follow re-splits its whole buffer per chunk, so `--follow --out` spends its deadline splitting rather than reading** — `LogTally` carries the split across chunks and counts the payload as it grows, so a follow costs what it reads and `--follow --out` spends its deadline reading.
+- ✅ **DD254** **two help rows run past the terminal's width, so a folded summary lands in the column a verb name goes in** — `read context` and `do reclaim` now break their summaries the way `read logs` does, and the width is asserted over every help row rather than only the rows that declare a break.
 
 ## Block H — The public surface (the site a reader and an agent both read)
 
