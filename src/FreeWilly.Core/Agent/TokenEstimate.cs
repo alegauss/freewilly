@@ -63,6 +63,20 @@ public static class TokenEstimate
         return (payload.Length + CharactersPerToken - 1) / CharactersPerToken;
     }
 
+    /// <summary>Estimate what a payload of this many characters costs.</summary>
+    /// <remarks>
+    /// For a caller counting a payload as it grows rather than measuring one it already holds, so the
+    /// arithmetic and its rounding stay in one place (DD253).
+    /// </remarks>
+    /// <param name="characters">How many characters the payload holds.</param>
+    /// <returns>The estimate, in tokens, rounded up.</returns>
+    public static int OfCharacters(int characters)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(characters);
+
+        return (characters + CharactersPerToken - 1) / CharactersPerToken;
+    }
+
     /// <summary>Estimate what reading every one of <paramref name="payloads"/> costs.</summary>
     /// <remarks>Not an overload of <see cref="Of(string?)"/>: a collection expression cannot choose between them.</remarks>
     /// <param name="payloads">The response bodies, one per round trip.</param>

@@ -185,62 +185,51 @@ public static class LogDigest
     {
         ArgumentNullException.ThrowIfNull(chunks);
 
-        var lines = new List<LogLine>();
-        var pending = new Dictionary<LogStream, StringBuilder>();
-
+        var tally = new LogTally(new LogQuery());
         foreach (var chunk in chunks)
         {
-            if (!pending.TryGetValue(chunk.Stream, out var buffer))
-            {
-                pending[chunk.Stream] = buffer = new StringBuilder();
-            }
-
-            buffer.Append(chunk.Text);
-            var text = buffer.ToString();
-            var start = 0;
-            int newline;
-            while ((newline = text.IndexOf('\n', start)) >= 0)
-            {
-                Add(lines, chunk.Stream, text[start..newline]);
-                start = newline + 1;
-            }
-
-            buffer.Clear();
-            buffer.Append(text[start..]);
+            tally.Add(chunk);
         }
 
-        // Whatever is left had no trailing newline, which is a line all the same.
-        foreach (var (stream, buffer) in pending)
-        {
-            if (buffer.Length > 0)
-            {
-                Add(lines, stream, buffer.ToString());
-            }
-        }
-
-        return lines;
+        tally.Flush();
+        return tally.Lines;
     }
 
-    private static void Add(List<LogLine> lines, LogStream stream, string raw)
+    /// <summary>One line, or nothing where the raw text was only a line ending.</summary>
+    internal static LogLine? Line(LogStream stream, string raw)
     {
         var text = raw.TrimEnd('\r');
         if (text.Length == 0)
         {
-            return;
+            return null;
         }
 
         // With timestamps=1 the daemon puts an RFC3339Nano stamp and a space in front of every line.
         var space = text.IndexOf(' ', StringComparison.Ordinal);
-        if (space > 0
+        return space > 0
             && DateTimeOffset.TryParse(
-                text[..space], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at))
+                text[..space], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at)
+            ? new LogLine(stream, at, text[(space + 1)..])
+            : new LogLine(stream, null, text);
+    }
+
+    /// <summary>Whether this line survives the query's filters.</summary>
+    internal static bool Keeps(LogLine line, LogQuery query)
+    {
+        if (query.Since is { } since && line.Timestamp is { } at && at <= since)
         {
-            lines.Add(new LogLine(stream, at, text[(space + 1)..]));
-            return;
+            return false;
         }
 
-        lines.Add(new LogLine(stream, null, text));
+        // A line whose level is unknown is always kept: it could not say what it was, and dropping it
+        // would be the filter hiding the answer rather than narrowing it.
+        return query.MinimumLevel == LogLevel.Unknown
+            || line.Level == LogLevel.Unknown
+            || line.Level >= query.MinimumLevel;
     }
+
+    /// <summary>What one kept line adds to the rendered payload.</summary>
+    internal static int Weight(LogLine line) => Format(line, 1).Length + Environment.NewLine.Length;
 
     /// <summary>Apply a query to a set of lines.</summary>
     /// <param name="lines">The lines, in order.</param>
@@ -280,30 +269,8 @@ public static class LogDigest
         return new LogResult(text, cursor, take, rendered.Count - take);
     }
 
-    private static List<LogLine> Filter(IReadOnlyList<LogLine> lines, LogQuery query)
-    {
-        var kept = new List<LogLine>();
-        foreach (var line in lines)
-        {
-            if (query.Since is { } since && line.Timestamp is { } at && at <= since)
-            {
-                continue;
-            }
-
-            // A line whose level is unknown is always kept: it could not say what it was, and dropping
-            // it would be the filter hiding the answer rather than narrowing it.
-            if (query.MinimumLevel != LogLevel.Unknown
-                && line.Level != LogLevel.Unknown
-                && line.Level < query.MinimumLevel)
-            {
-                continue;
-            }
-
-            kept.Add(line);
-        }
-
-        return kept;
-    }
+    private static List<LogLine> Filter(IReadOnlyList<LogLine> lines, LogQuery query) =>
+        [.. lines.Where(line => Keeps(line, query))];
 
     /// <summary>
     /// Collapse identical lines to one and a count.
@@ -430,5 +397,114 @@ public static class LogDigest
         refusal = $"{text} is not a log cursor: it is {CursorPrefix} and a timestamp, as this command "
             + "printed it.";
         return false;
+    }
+}
+
+/// <summary>
+/// A digest built as the chunks arrive, for a read that follows rather than one that ends (DD253).
+/// </summary>
+/// <remarks>
+/// <see cref="LogDigest.Split"/> and <see cref="LogDigest.Render"/> are whole-buffer functions, which is
+/// right for a read that fetches once. A follow calls them per chunk, and re-splitting from byte zero
+/// each time is quadratic in what it reads: under the token ceiling the buffer stays small enough to
+/// hide it, and <c>--out</c> lifts that ceiling on purpose.
+///
+/// <para>So the carry that <see cref="LogDigest.Split"/> builds internally and throws away is kept here
+/// instead, and each chunk costs its own length. <see cref="Tokens"/> is the same idea for the ceiling:
+/// counting what a kept line adds is O(1), where rendering the payload to measure it is O(n).</para>
+///
+/// <para><b>It is an estimate, and only a stop condition.</b> Under <c>Dedup</c> a repeat is counted as
+/// nothing, though the <c>× N</c> it puts on the first occurrence costs a few characters. The exact
+/// truncation is still <see cref="LogDigest.Render"/>'s, which runs once at the end over these same
+/// lines.</para>
+/// </remarks>
+public sealed class LogTally
+{
+    private readonly LogQuery _query;
+    private readonly Dictionary<LogStream, StringBuilder> _pending = [];
+    private readonly HashSet<(LogStream, string)> _seen = [];
+    private readonly List<LogLine> _lines = [];
+    private int _characters;
+
+    /// <summary>Start a tally.</summary>
+    /// <param name="query">What was asked, whose filters decide what counts toward the ceiling.</param>
+    public LogTally(LogQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        _query = query;
+    }
+
+    /// <summary>Every line read so far, in order and unfiltered, as <c>Split</c> would return them.</summary>
+    public IReadOnlyList<LogLine> Lines => _lines;
+
+    /// <summary>What the payload would cost, estimated as it grows.</summary>
+    public int Tokens => TokenEstimate.OfCharacters(_characters);
+
+    /// <summary>Take one chunk.</summary>
+    /// <param name="chunk">What just arrived.</param>
+    /// <returns>Only the lines this chunk completed, for a caller matching as it reads.</returns>
+    public IReadOnlyList<LogLine> Add(LogChunk chunk)
+    {
+        ArgumentNullException.ThrowIfNull(chunk);
+
+        if (!_pending.TryGetValue(chunk.Stream, out var buffer))
+        {
+            _pending[chunk.Stream] = buffer = new StringBuilder();
+        }
+
+        buffer.Append(chunk.Text);
+        var text = buffer.ToString();
+        var start = 0;
+        List<LogLine> fresh = [];
+        int newline;
+        while ((newline = text.IndexOf('\n', start)) >= 0)
+        {
+            Count(fresh, chunk.Stream, text[start..newline]);
+            start = newline + 1;
+        }
+
+        buffer.Clear();
+        buffer.Append(text[start..]);
+        return fresh;
+    }
+
+    /// <summary>End the tally, so a last line with no newline after it is still a line.</summary>
+    /// <returns>Whatever was still carried, now counted.</returns>
+    public IReadOnlyList<LogLine> Flush()
+    {
+        List<LogLine> fresh = [];
+        foreach (var (stream, buffer) in _pending)
+        {
+            if (buffer.Length > 0)
+            {
+                Count(fresh, stream, buffer.ToString());
+                buffer.Clear();
+            }
+        }
+
+        return fresh;
+    }
+
+    private void Count(List<LogLine> fresh, LogStream stream, string raw)
+    {
+        if (LogDigest.Line(stream, raw) is not { } line)
+        {
+            return;
+        }
+
+        _lines.Add(line);
+        fresh.Add(line);
+
+        if (!LogDigest.Keeps(line, _query))
+        {
+            return;
+        }
+
+        // Under Dedup a repeat collapses into the first occurrence's count, so it adds nothing to
+        // the payload. Without it, every kept line is its own row.
+        if (!_query.Dedup || _seen.Add((line.Stream, line.Text)))
+        {
+            _characters += LogDigest.Weight(line);
+        }
     }
 }

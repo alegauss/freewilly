@@ -125,7 +125,7 @@ public sealed class AgentFollowTests
         Assert.True(stream.Waited);
 
         // What was read still counts: the caller gets the lines that did arrive, not an empty payload.
-        Assert.Single(followed.Chunks);
+        Assert.Single(followed.Lines);
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public sealed class AgentFollowTests
 
         Assert.False(followed.Matched);
         Assert.True(stream.Waited);
-        Assert.Equal(2, followed.Chunks.Count);
+        Assert.Equal(2, followed.Lines.Count);
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed class AgentFollowTests
         var followed = AgentSurface.Follow(stream, Query(budget: 60), until: null, Patience, ceiling: true);
 
         Assert.True(DateTimeOffset.UtcNow - started < Patience);
-        Assert.True(followed.Chunks.Count < chatty.Length);
+        Assert.True(followed.Lines.Count < chatty.Length);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public sealed class AgentFollowTests
         var followed = AgentSurface.Follow(
             stream, Query(budget: 60), until: null, TimeSpan.FromMilliseconds(400), ceiling: false);
 
-        Assert.Equal(chatty.Length, followed.Chunks.Count);
+        Assert.Equal(chatty.Length, followed.Lines.Count);
         Assert.True(stream.Waited);
     }
 
@@ -196,8 +196,92 @@ public sealed class AgentFollowTests
         var started = DateTimeOffset.UtcNow;
         var followed = AgentSurface.Follow(ended, Query(), until: null, Patience, ceiling: true);
 
-        Assert.Single(followed.Chunks);
+        Assert.Single(followed.Lines);
         Assert.True(DateTimeOffset.UtcNow - started < Patience);
+    }
+
+    // ---- what a follow costs (DD253) -------------------------------------------------------------
+
+    [Fact]
+    public void A_follow_costs_what_it_reads_rather_than_the_square_of_it()
+    {
+        // `--out` lifts the ceiling on purpose, so the only bounds left are the deadline and the
+        // pattern. Re-splitting the whole buffer per chunk spent the deadline splitting; doubling the
+        // input has to roughly double the time, not quadruple it.
+        static TimeSpan Cost(int lines)
+        {
+            var body = Enumerable.Range(0, lines)
+                .Select(i => $"2024-01-01T00:00:00.000000000Z line {i} of a service that does not stop\n")
+                .SelectMany(l => Frame(1, l))
+                .ToArray();
+
+            // Warm first, so the measurement is the work rather than the first-call JIT.
+            AgentSurface.Follow(
+                new MemoryStream(body), new LogQuery(), "never arrives", Patience, ceiling: false);
+
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            AgentSurface.Follow(
+                new MemoryStream(body), new LogQuery(), "never arrives", Patience, ceiling: false);
+            return started.Elapsed;
+        }
+
+        var small = Cost(4_000);
+        var large = Cost(16_000);
+
+        // Four times the input. Linear lands near 4x, quadratic near 16x; the bar is deliberately
+        // slack because this is wall clock on a shared machine, and it still separates the two.
+        var ratio = large.TotalMilliseconds / Math.Max(small.TotalMilliseconds, 1);
+        Assert.True(ratio < 9, $"four times the input cost {ratio:F1} times the time, which is not linear.");
+    }
+
+    [Fact]
+    public void The_tally_counts_only_what_the_query_would_keep()
+    {
+        var tally = new LogTally(new LogQuery(MinimumLevel: LogLevel.Error));
+        tally.Add(new LogChunk(LogStream.StdOut, "INFO warming up\n"));
+        var quiet = tally.Tokens;
+
+        tally.Add(new LogChunk(LogStream.StdOut, "ERROR connect refused\n"));
+
+        // Both lines are read, and only the one the filter keeps is charged for.
+        Assert.Equal(0, quiet);
+        Assert.True(tally.Tokens > 0);
+        Assert.Equal(2, tally.Lines.Count);
+    }
+
+    [Fact]
+    public void The_tally_charges_a_deduped_repeat_nothing()
+    {
+        var tally = new LogTally(new LogQuery(Dedup: true));
+        tally.Add(new LogChunk(LogStream.StdOut, "connect ECONNREFUSED\n"));
+        var once = tally.Tokens;
+
+        for (var i = 0; i < 50; i++)
+        {
+            tally.Add(new LogChunk(LogStream.StdOut, "connect ECONNREFUSED\n"));
+        }
+
+        // A restart loop is the case `--dedup` exists for, and it must not walk into the ceiling on
+        // the strength of lines that collapse into one row.
+        Assert.Equal(once, tally.Tokens);
+        Assert.Equal(51, tally.Lines.Count);
+    }
+
+    [Fact]
+    public void The_tally_hands_back_only_the_lines_a_chunk_completed()
+    {
+        var tally = new LogTally(new LogQuery());
+
+        Assert.Empty(tally.Add(new LogChunk(LogStream.StdOut, "half a li")));
+
+        // Both of these, and not the whole buffer again: matching only the fresh lines is what makes
+        // the follow linear.
+        var fresh = tally.Add(new LogChunk(LogStream.StdOut, "ne\nand another\n"));
+        Assert.Equal(["half a line", "and another"], fresh.Select(l => l.Text));
+        Assert.Equal(2, tally.Lines.Count);
+
+        // The carry is a line all the same, once nothing more is coming.
+        Assert.Empty(tally.Flush());
     }
 
     // ---- what the surface refuses ----------------------------------------------------------------
@@ -280,7 +364,7 @@ public sealed class AgentFollowTests
 
         var followed = AgentSurface.Follow(stream, Query(), "ready", Patience, ceiling: true);
         var rendered = LogDigest.Render(
-            LogDigest.Split(followed.Chunks), Query() with { Dedup = true });
+            followed.Lines, Query() with { Dedup = true });
 
         // Collecting and then rendering is what keeps the dedup, the level filter and the cursor
         // working; a line-at-a-time print would have none of the three.

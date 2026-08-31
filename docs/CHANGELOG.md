@@ -226,6 +226,7 @@
 - ✅ **DD250** **`read verify --request` cannot assert a path is gone: a 404 is only ever a failure** — `read verify --request` now takes `--expect 404` (or a comma list), so a path that must be gone has a check that passes, and a missed expectation prints the status that arrived.
 - ✅ **DD251** **`read logs` cannot follow, so watching a run live drops the session back to the docker CLI** — `read logs --follow` watches a run to a line (`--until`), a deadline (`--timeout`) or the token budget, so following a seed no longer sends the session to `docker compose logs -f`.
 - ✅ **DD252** **the `--request` refusal states the opposite of the rule: a bare path is told it begins with a slash when it does not** — Every `--request` refusal now says what a correct value looks like after the colon, so a bare path is no longer told it begins with a slash, and each one is asserted by name.
+- ✅ **DD253** **a follow re-splits its whole buffer per chunk, so `--follow --out` spends its deadline splitting rather than reading** — `LogTally` carries the split across chunks and counts the payload as it grows, so a follow costs what it reads and `--follow --out` spends its deadline reading.
 
 ## Block H — The public surface (the site a reader and an agent both read)
 

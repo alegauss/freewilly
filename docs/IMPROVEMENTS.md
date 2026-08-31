@@ -14,30 +14,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-### §DD253 The cost of matching a pattern across frames
-
-`AgentSurface.Follow` tests `--until` by calling `LogDigest.Split` over every chunk
-collected so far, once per arriving chunk. A match can straddle a frame boundary, so the
-whole buffer is the only correct thing to match against, and re-splitting it is the
-obvious way to get there.
-
-Under the token ceiling that is fine: the follow stops near the budget, so the buffer
-never grows past a few hundred lines and the quadratic term never shows. `--out` is
-where it stops being fine. Writing to a file deliberately lifts the ceiling, for the
-same reason the plain read does, so the only bounds left are the deadline and the
-pattern. A container printing steadily for ninety seconds then has a buffer measured in
-megabytes, re-split from byte zero on every chunk, and the follow spends its deadline
-splitting rather than reading.
-
-The shape that fits is incremental: keep the per-stream carry `Split` already maintains,
-hand each chunk to it, and match only the lines that chunk completed. That is the same
-state `Split` builds internally and throws away, so the fix is to expose it rather than
-to write a second de-framer.
-
-Acceptance: a follow's cost is linear in what it reads, and `--follow --out --until`
-over a stream large enough to show the difference finishes in time proportional to the
-bytes.
-
 ### §DD254 The two help rows that outgrew the width
 
 `AgentSurface.HelpText` prints one row per verb: two spaces, the verb padded to

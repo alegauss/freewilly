@@ -681,7 +681,7 @@ public static class AgentSurface
             // for "and what came before", and it is the cursor the last read handed back.
             var tail = follow && query.Since is null ? 0 : 2000;
             var matched = false;
-            List<LogChunk> chunks = [];
+            IReadOnlyList<LogLine> lines;
             using (var stream = engine.LogsAsync(
                 container.Id, tail: tail, follow: follow, timestamps: true, since: query.Since)
                 .GetAwaiter().GetResult())
@@ -689,20 +689,22 @@ public static class AgentSurface
                 if (follow)
                 {
                     var followed = Follow(stream, query, until, timeout, ceiling: outPath is null);
-                    chunks.AddRange(followed.Chunks);
+                    lines = followed.Lines;
                     matched = followed.Matched;
                 }
                 else
                 {
+                    List<LogChunk> chunks = [];
                     var frames = new LogFrames(stream, framed: true);
                     while (frames.ReadAsync().GetAwaiter().GetResult() is { } chunk)
                     {
                         chunks.Add(chunk);
                     }
+
+                    lines = LogDigest.Split(chunks);
                 }
             }
 
-            var lines = LogDigest.Split(chunks);
             var missed = until is not null && !matched;
 
             if (outPath is null)
@@ -878,9 +880,9 @@ public static class AgentSurface
     }
 
     /// <summary>What a follow collected, and whether the line it was waiting for arrived.</summary>
-    /// <param name="Chunks">Everything read, for the digest to split and filter as usual.</param>
+    /// <param name="Lines">Everything read, split as usual, for the digest to filter and render.</param>
     /// <param name="Matched">Whether <c>--until</c> was named and arrived.</param>
-    internal readonly record struct FollowedLog(IReadOnlyList<LogChunk> Chunks, bool Matched);
+    internal readonly record struct FollowedLog(IReadOnlyList<LogLine> Lines, bool Matched);
 
     /// <summary>
     /// Read a log stream until the line the caller named, the deadline, or the ceiling (DD251).
@@ -912,9 +914,10 @@ public static class AgentSurface
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(query);
 
-        List<LogChunk> chunks = [];
+        // The tally carries the split across chunks and counts the payload as it grows, so a follow
+        // costs what it reads rather than the square of it (DD253).
+        var tally = new LogTally(query);
         var matched = false;
-        var characters = 0;
 
         using var stopping = new CancellationTokenSource(timeout);
         ConsoleCancelEventHandler interrupt = (_, e) =>
@@ -929,23 +932,17 @@ public static class AgentSurface
             var frames = new LogFrames(stream, framed: true);
             while (frames.ReadAsync(stopping.Token).GetAwaiter().GetResult() is { } chunk)
             {
-                chunks.Add(chunk);
-                characters += chunk.Text.Length;
-
+                // Only the lines this chunk completed. A pattern straddling a frame boundary is still
+                // matched, because the carry that joins them is the tally's.
+                var fresh = tally.Add(chunk);
                 if (until is not null
-                    && LogDigest.Split(chunks).Any(
-                        l => l.Text.Contains(until, StringComparison.OrdinalIgnoreCase)))
+                    && fresh.Any(l => l.Text.Contains(until, StringComparison.OrdinalIgnoreCase)))
                 {
                     matched = true;
                     break;
                 }
 
-                // Only asked once the raw text could possibly fill the ceiling, because rendering is
-                // the expensive way to measure and every chunk before that cannot have reached it.
-                if (ceiling
-                    && query.BudgetTokens is { } budget
-                    && characters >= budget * TokenEstimate.CharactersPerToken
-                    && LogDigest.Render(LogDigest.Split(chunks), query).Dropped > 0)
+                if (ceiling && query.BudgetTokens is { } budget && tally.Tokens >= budget)
                 {
                     break;
                 }
@@ -960,7 +957,8 @@ public static class AgentSurface
             Console.CancelKeyPress -= interrupt;
         }
 
-        return new FollowedLog(chunks, matched);
+        tally.Flush();
+        return new FollowedLog(tally.Lines, matched);
     }
 
     /// <summary>The last line of a follow whose pattern never arrived.</summary>

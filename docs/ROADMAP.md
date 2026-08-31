@@ -16,7 +16,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-- 📋 **DD253** (deps: —) **a follow re-splits its whole buffer per chunk, so `--follow --out` spends its deadline splitting rather than reading** — `--out` lifts the ceiling that keeps the buffer small, and the quadratic term the ceiling was hiding is what is left. → §DD253
 - 📋 **DD254** (deps: —) **two help rows run past the terminal's width, so a folded summary lands in the column a verb name goes in** — The mechanism that breaks a long summary exists and is tested, but the guard only holds the rows that already declare a break, so these two were never found. → §DD254
 
 ## Block H — The public surface (the site a reader and an agent both read)
