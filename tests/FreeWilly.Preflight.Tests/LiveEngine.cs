@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FreeWilly.Core.Agent;
 using FreeWilly.Core.Engine;
 using Xunit;
@@ -55,18 +56,34 @@ internal static class LiveEngine
     internal sealed class Served : IAsyncDisposable
     {
         private readonly EnginePipeRelay _relay;
-        private readonly BundledComposeCli _cli = new(new EnginePaths());
+        private readonly Counted _backend = new(new WslSocatBackend());
+        private readonly EnginePaths _paths = new();
+        private readonly BundledComposeCli _cli;
 
         /// <summary>Serve one.</summary>
         internal Served()
         {
             Pipe = $"freewilly-live-{Guid.NewGuid():N}";
-            _relay = new EnginePipeRelay(new WslSocatBackend(), Pipe);
+            _cli = new BundledComposeCli(_paths);
+            _relay = new EnginePipeRelay(_backend, Pipe);
             _relay.Start();
         }
 
         /// <summary>The pipe this is serving, which is not the one the install owns.</summary>
         internal string Pipe { get; }
+
+        /// <summary>The endpoint a client is pointed at with <c>-H</c>.</summary>
+        internal string Host => $"npipe:////./pipe/{Pipe}";
+
+        /// <summary>
+        /// How many channels to the daemon are open — opened and not yet disposed (DD262).
+        /// </summary>
+        /// <remarks>
+        /// Each one is a <c>wsl.exe</c>. Counted at the seam rather than by looking for the process,
+        /// because a machine running this suite has several <c>wsl.exe</c> of its own and a count of
+        /// them would answer about the machine instead of about the relay.
+        /// </remarks>
+        internal int OpenChannels => _backend.Alive;
 
         /// <summary>Run this install's own docker against this relay.</summary>
         /// <param name="workingDirectory">Where the client runs, which is where a project is.</param>
@@ -78,10 +95,109 @@ internal static class LiveEngine
         /// that has to keep coming from the install, or <c>compose</c> is not a subcommand.
         /// </remarks>
         internal ComposeResult Run(string workingDirectory, params string[] arguments) =>
-            _cli.Run(workingDirectory, ["-H", $"npipe:////./pipe/{Pipe}", .. arguments]);
+            _cli.Run(workingDirectory, ["-H", Host, .. arguments]);
+
+        /// <summary>
+        /// Start a client, wait for it to write a line, then end it the way a user does (DD262).
+        /// </summary>
+        /// <param name="arguments">What to ask it, after the host.</param>
+        /// <param name="patience">How long to wait for the first line before giving up.</param>
+        /// <returns>The first line it wrote, or empty where it wrote none in time.</returns>
+        /// <remarks>
+        /// The shipped runner cannot do this: it waits for the process to exit, and the whole point
+        /// of a follow is that it does not. So the process is started here — and this is a test, so
+        /// DD261's rule about naming a working directory is met rather than enforced.
+        ///
+        /// <para>Killed and not signalled. Ctrl+C is what a user presses and there is no way to send
+        /// one to a child without sharing a console group with it, which would deliver it to the
+        /// test host too. What reaches the relay is the same either way: the client's end of the pipe
+        /// closes with the connection still live, which is the ending being asserted.</para>
+        /// </remarks>
+        internal string ReadALineThenEnd(string[] arguments, TimeSpan patience)
+        {
+            var startInfo = new ProcessStartInfo(_paths.DockerCli)
+            {
+                WorkingDirectory = Anywhere,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            startInfo.Environment[BundledComposeCli.ConfigVariable] = _paths.ConfigDirectory;
+            foreach (var argument in new[] { "-H", Host }.Concat(arguments))
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            using var client = Process.Start(startInfo)
+                ?? throw new InvalidOperationException($"{_paths.DockerCli} could not be started");
+
+            try
+            {
+                var line = client.StandardOutput.ReadLineAsync();
+                return line.Wait(patience) ? line.Result ?? "" : "";
+            }
+            finally
+            {
+                try
+                {
+                    client.Kill(entireProcessTree: true);
+                }
+                catch (Exception exception) when (exception is InvalidOperationException
+                    or System.ComponentModel.Win32Exception or NotSupportedException)
+                {
+                    // It ended on its own, which is one of the two endings being asserted.
+                }
+
+                client.WaitForExit((int)TimeSpan.FromSeconds(30).TotalMilliseconds);
+            }
+        }
 
         /// <inheritdoc/>
         public ValueTask DisposeAsync() => _relay.DisposeAsync();
+    }
+
+    /// <summary>A backend that says how many of its channels are still open (DD262).</summary>
+    /// <remarks>
+    /// The claim it exists to support is that a client hanging up mid-stream is an ending the relay
+    /// acts on: a follow that leaked its channel would leave a <c>wsl.exe</c> attached to the daemon
+    /// for the rest of the host's life, one per abandoned follow, and nothing in the product would
+    /// say so. Wrapped around the real backend rather than replacing it, because what is being
+    /// measured is the live path.
+    /// </remarks>
+    private sealed class Counted(IEngineBackend inner) : IEngineBackend
+    {
+        private int _opened;
+        private int _closed;
+
+        /// <summary>Opened and not yet disposed.</summary>
+        internal int Alive => Volatile.Read(ref _opened) - Volatile.Read(ref _closed);
+
+        /// <inheritdoc/>
+        public IEngineChannel Open()
+        {
+            Interlocked.Increment(ref _opened);
+            return new Channel(inner.Open(), () => Interlocked.Increment(ref _closed));
+        }
+
+        private sealed class Channel(IEngineChannel inner, Action closed) : IEngineChannel
+        {
+            private bool _done;
+
+            public Stream ToEngine => inner.ToEngine;
+
+            public Stream FromEngine => inner.FromEngine;
+
+            public void Dispose()
+            {
+                inner.Dispose();
+                if (!_done)
+                {
+                    _done = true;
+                    closed();
+                }
+            }
+        }
     }
 
     private static string? Look()

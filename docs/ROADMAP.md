@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD262** (deps: DD260 ✅) **docker logs -f, attach and the websocket endpoints are upgraded connections the live drill never drives** — DD259 broke every upgraded connection and DD260 asserts three of them, so the shapes left out are the ones the next teardown change can break unnoticed. → §DD262
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
