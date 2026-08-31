@@ -4,6 +4,9 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD263** (deps: —) **the relay's figures cannot say how many connections are open, so a channel it never released is invisible** — One wsl.exe per abandoned stream accumulates for the host's life, and the supervisor reads three figures, none of which moves when one leaks. → §DD263
+- 📋 **DD264** (deps: DD262 ✅) **nothing drives a client that stops reading without hanging up, so the drain deadline has never run** — DD262 was filed saying its follow would exercise it, and a killed client closes its handle instead, so the five-second wait and the thread it holds are untested. → §DD264
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
