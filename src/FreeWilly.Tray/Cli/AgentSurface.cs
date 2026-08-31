@@ -957,7 +957,7 @@ public static class AgentSurface
     /// </param>
     /// <param name="query">What was asked, whose budget is the ceiling.</param>
     /// <param name="until">The line to wait for, or null to read to the deadline.</param>
-    /// <param name="until_when">
+    /// <param name="deadline">
     /// When the whole follow runs out, absolute rather than a duration, because a second attach
     /// continues one deadline instead of starting another.
     /// </param>
@@ -968,7 +968,7 @@ public static class AgentSurface
         LogTally tally,
         LogQuery query,
         string? until,
-        DateTimeOffset until_when,
+        DateTimeOffset deadline,
         bool ceiling)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -976,15 +976,15 @@ public static class AgentSurface
         ArgumentNullException.ThrowIfNull(query);
 
         var end = FollowEnd.Ended;
-        var left = until_when - DateTimeOffset.UtcNow;
+        var left = deadline - DateTimeOffset.UtcNow;
 
         // Two sources rather than one, linked rather than merged, because both arrive as the same
         // exception and only the source that fired says which happened (DD256). DockerApi draws the
         // same distinction between its budget and its caller, for the same reason.
         using var asked = new CancellationTokenSource();
-        using var deadline = new CancellationTokenSource(left > TimeSpan.Zero ? left : TimeSpan.Zero);
+        using var expiry = new CancellationTokenSource(left > TimeSpan.Zero ? left : TimeSpan.Zero);
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(
-            asked.Token, deadline.Token);
+            asked.Token, expiry.Token);
 
         ConsoleCancelEventHandler interrupt = (_, e) =>
         {
