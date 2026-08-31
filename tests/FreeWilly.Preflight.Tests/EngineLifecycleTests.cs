@@ -534,6 +534,94 @@ public sealed class EngineLifecycleTests
         Assert.Equal(1, daemon.Launches);
     }
 
+    /// <summary>What the daemon's log is to be found ending with, for DD266's tests.</summary>
+    private const string Busy =
+        "/bin/sh: exec: line 0: /usr/local/bin/dockerd: Text file busy";
+
+    /// <summary>A wsl whose distribution is registered and whose daemon log ends as given.</summary>
+    private static FakeWsl LoggingTail(string tail)
+    {
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        return wsl.AnswerWhen(
+            argv => argv.Any(a => a.Contains("tail -n 1", StringComparison.Ordinal)), 0, tail);
+    }
+
+    [Fact]
+    public async Task A_launcher_that_exited_silently_quotes_what_the_daemon_log_ends_with()
+    {
+        // DD266. Measured on 31 August 2026: the journal said "wsl.exe exited 126 without a word"
+        // and the cause was sitting in the daemon's log, because the launch command redirects the
+        // shell's own stderr into it. So a silent launcher is the case where the log has the words,
+        // and it was the one case DD162's split declined to name the log for.
+        var daemon = new FakeDaemon(aliveWhenLaunched: false)
+        {
+            ExitCode = 126,
+            LastWords = "wsl.exe exited 126" + WslDaemonProcess.WithoutAWord,
+        };
+
+        await using var engine = new EngineLifecycle(
+            LoggingTail(Busy), daemon, new FakeBackend(null), Pipe(), Owned);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(EngineState.Stopped, status.State);
+        Assert.Contains("Text file busy", status.Detail, StringComparison.Ordinal);
+        Assert.Contains(EngineLifecycle.LogPath, status.Detail, StringComparison.Ordinal);
+
+        // And the claim that there was nothing to read is withdrawn, because there was.
+        Assert.DoesNotContain(
+            WslDaemonProcess.WithoutAWord, status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_launcher_that_exited_silently_over_an_unreadable_log_still_names_the_file()
+    {
+        // The fallback, and it is the old sentence exactly. A log that cannot be read is still a
+        // log, and this still cannot quote it, so the reader is sent where the answer is.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        wsl.AnswerWhen(
+            argv => argv.Any(a => a.Contains("tail -n 1", StringComparison.Ordinal)), 1);
+
+        var daemon = new FakeDaemon(aliveWhenLaunched: false)
+        {
+            ExitCode = 126,
+            LastWords = "wsl.exe exited 126" + WslDaemonProcess.WithoutAWord,
+        };
+
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(null), Pipe(), Owned);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(EngineState.Stopped, status.State);
+        Assert.Contains(EngineLifecycle.LogPath, status.Detail, StringComparison.Ordinal);
+        Assert.Contains("read", status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_launcher_that_named_its_own_cause_is_still_not_sent_to_the_log()
+    {
+        // DD162's property, held while DD266 moves the other branch. A reader handed a cause and a
+        // file goes and opens the file, and that is the hour this pair of tasks is about.
+        var daemon = new FakeDaemon(aliveWhenLaunched: false)
+        {
+            ExitCode = 1,
+            LastWords = "wsl.exe exited 1: The Windows Subsystem for Linux instance has terminated.",
+        };
+
+        await using var engine = new EngineLifecycle(
+            LoggingTail(Busy), daemon, new FakeBackend(null), Pipe(), Owned);
+
+        var status = await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(EngineState.Stopped, status.State);
+        Assert.Contains("has terminated", status.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain(EngineLifecycle.LogPath, status.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text file busy", status.Detail, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// The half of that failure the daemon's log cannot hold, since DD162.
     /// </summary>

@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD266** (deps: DD265 ✅) **the journal says wsl.exe exited without a word when the words are in the log the launch redirected them to** — The launch appends the shell's stderr to the daemon's log inside the distribution, so an exec failure is written there and the sentence sends nobody to it. → §DD266
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

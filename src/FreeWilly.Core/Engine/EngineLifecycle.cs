@@ -738,6 +738,20 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// first one already named the cause is how the previous sentence wasted an hour. Where it went
     /// quietly, the pointer stands exactly as it did, because then the daemon really is the thing
     /// that died.</para>
+    ///
+    /// <para><b>DD266 corrects where that split falls.</b> It asked whether <c>wsl.exe</c> wrote
+    /// anything, and the launch command ends in <c>&gt;&gt;/var/log/dockerd.log 2&gt;&amp;1</c>: the
+    /// shell's own failures are written into that log by construction and can never reach the
+    /// launcher's streams. So a launch that failed to exec the daemon was <i>always</i> silent and
+    /// always had its sentence in the file this declined to name. Measured on 31 August 2026, the
+    /// journal said <c>wsl.exe exited 126 without a word</c> while the log said
+    /// <c>/bin/sh: exec: line 0: /usr/local/bin/dockerd: Text file busy</c>, which is the cause
+    /// exactly, and finding it took the hour DD162 exists to save.</para>
+    ///
+    /// <para>The log is therefore read rather than pointed at, and DD162's argument is untouched:
+    /// it was about not naming a second file when the first one had answered, and a launcher that
+    /// said only a number has not answered. Where the log cannot be read the pointer stands, because
+    /// then there is still a file and this still cannot quote it.</para>
     /// </remarks>
     private string WhyItDied()
     {
@@ -746,12 +760,63 @@ public sealed class EngineLifecycle : IAsyncDisposable
             return $"read {LogPath} inside {Distribution}";
         }
 
+        if (said.EndsWith(WslDaemonProcess.WithoutAWord, StringComparison.Ordinal))
+        {
+            // DD266. The exit code rather than the sentence, because the sentence's own tail is the
+            // claim being withdrawn: there were words, and they are in the log.
+            var code = _daemon.ExitCode is { } number
+                ? $"wsl.exe exited {number}"
+                : "the launcher exited";
+
+            return LastLineOfTheDaemonLog() is { } ended
+                ? $"{code}, and {LogPath} ends: {ended}"
+                : $"{said}: read {LogPath} inside {Distribution}";
+        }
+
         // DD190. The launcher's own words are kept and the reading is added after them, never
         // instead: "getpwnam(root) failed 5" is the evidence and has to survive into the journal,
         // and what it means is the half a reader could not have supplied.
         return WslFailure.Of(said, Distribution, _basePath) is { } read
             ? $"{said} ({read.Meaning})"
             : said;
+    }
+
+    /// <summary>How much of the daemon log's last line a journal line will carry (DD266).</summary>
+    /// <remarks>
+    /// Enough for the shell's own failures, which are the case this exists for and run to about
+    /// seventy characters. A line from <c>dockerd</c> itself is structured logging and runs to
+    /// several hundred, and the journal is read as a column of stamped lines: one entry wide enough
+    /// to wrap costs the shape of every line around it.
+    /// </remarks>
+    private const int KeptOfTheLastLine = 200;
+
+    /// <summary>The last thing written to the daemon's log inside the distribution (DD266).</summary>
+    /// <returns>That line, or <see langword="null"/> where there is nothing to quote.</returns>
+    /// <remarks>
+    /// A subprocess on a path that has already failed, which is the only reason it is affordable:
+    /// this runs once per dead launch and not on a poll, and the alternative is the reader running
+    /// the same command by hand after being told to.
+    /// </remarks>
+    private string? LastLineOfTheDaemonLog()
+    {
+        var read = _wsl.Run(
+            "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", $"tail -n 1 {LogPath}");
+
+        if (!read.Succeeded)
+        {
+            return null;
+        }
+
+        var last = read.Output
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .LastOrDefault();
+
+        if (string.IsNullOrEmpty(last))
+        {
+            return null;
+        }
+
+        return last.Length > KeptOfTheLastLine ? last[..KeptOfTheLastLine] : last;
     }
 
     /// <summary>The same question, for a daemon that was up and is not (DD162).</summary>
@@ -809,6 +874,15 @@ public sealed class WslDaemonProcess : IDaemonProcess
     /// deciding how much of stdout survives.</para>
     /// </remarks>
     public const int KeptBytes = 4 * 1024;
+
+    /// <summary>How a sentence ends where the launcher exited and wrote nothing (DD266).</summary>
+    /// <remarks>
+    /// A constant because it is read as well as written. It is the whole of what tells a launcher
+    /// that failed silently from one that named its own cause, and the two get different answers:
+    /// the silent one has its words in the daemon's log, put there by the launch command's own
+    /// redirection, and a caller that could not recognise the case would send nobody to them.
+    /// </remarks>
+    internal const string WithoutAWord = " without a word";
 
     /// <summary>How long <see cref="LastWords"/> waits for the streams to finish closing.</summary>
     /// <remarks>
@@ -925,7 +999,7 @@ public sealed class WslDaemonProcess : IDaemonProcess
         var line = string.Join(" ", Flatten(wroteOut).Concat(Flatten(wroteErr)));
 
         return line.Length == 0
-            ? $"wsl.exe exited {exitCode} without a word"
+            ? $"wsl.exe exited {exitCode}{WithoutAWord}"
             : $"wsl.exe exited {exitCode}: {line}";
     }
 

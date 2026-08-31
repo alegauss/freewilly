@@ -20,10 +20,28 @@ internal sealed class FakeWsl : IWsl
     /// <summary>Whatever is left unconsumed answers success with no output.</summary>
     internal WslResult Default { get; set; } = new(0, "", null);
 
+    private readonly List<(Func<string[], bool> When, WslResult Then)> _matched = [];
+
     /// <summary>Queue the next answer.</summary>
     internal FakeWsl Answer(int? exitCode, string output = "", string? failure = null)
     {
         _answers.Enqueue(new WslResult(exitCode, output, failure));
+        return this;
+    }
+
+    /// <summary>Answer whichever calls match, whenever they come.</summary>
+    /// <param name="when">Which argument lists this answers.</param>
+    /// <param name="exitCode">Its exit code.</param>
+    /// <param name="output">What it wrote.</param>
+    /// <returns>This, so a test reads as one statement.</returns>
+    /// <remarks>
+    /// Matched rather than queued, because the queue is an order and a lifecycle's calls are not one
+    /// a test should have to know: a start asks what is registered, launches, polls, and only then
+    /// asks about a log, and a queue makes every one of those a position to get wrong.
+    /// </remarks>
+    internal FakeWsl AnswerWhen(Func<string[], bool> when, int? exitCode, string output = "")
+    {
+        _matched.Add((when, new WslResult(exitCode, output, null)));
         return this;
     }
 
@@ -32,6 +50,15 @@ internal sealed class FakeWsl : IWsl
     {
         Invocations.Add(arguments);
         Budgets.Add(budget);
+
+        foreach (var (when, then) in _matched)
+        {
+            if (when(arguments))
+            {
+                return then;
+            }
+        }
+
         return _answers.Count > 0 ? _answers.Dequeue() : Default;
     }
 
