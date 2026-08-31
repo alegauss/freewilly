@@ -4,6 +4,9 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD261** (deps: —) **every process this product starts but one inherits the caller's working directory and holds a lock on it** — A child holds that directory for as long as it lives, so a hold or a launcher keeps whatever directory it was started from being renamed or removed. → §DD261
+- 📋 **DD262** (deps: DD260 ✅) **docker logs -f, attach and the websocket endpoints are upgraded connections the live drill never drives** — DD259 broke every upgraded connection and DD260 asserts three of them, so the shapes left out are the ones the next teardown change can break unnoticed. → §DD262
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
