@@ -324,21 +324,70 @@ public sealed class EnginePipeRelay : IAsyncDisposable
         finally
         {
             channel?.Dispose();
-            try
-            {
-                if (client.IsConnected)
-                {
-                    client.Disconnect();
-                }
-            }
-            catch (Exception exception) when (exception is IOException or ObjectDisposedException
-                or InvalidOperationException)
-            {
-                // Already gone.
-            }
-
-            await client.DisposeAsync().ConfigureAwait(false);
+            await EndAsync(client).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>How long the drain is given before the handle is closed regardless (DD259).</summary>
+    /// <remarks>
+    /// Normally unreached: the listeners are created with no buffers, so a write has already been
+    /// taken by the client before it completes and there is nothing left to drain. The deadline is
+    /// here for the client that stops reading without hanging up, which would otherwise hold a
+    /// thread for as long as it liked.
+    /// </remarks>
+    private static readonly TimeSpan DrainDeadline = TimeSpan.FromSeconds(5);
+
+    /// <summary>End one connection the way a client reading to EOF can survive (DD259).</summary>
+    /// <param name="client">The connection, served or failed.</param>
+    /// <remarks>
+    /// This used to call <c>Disconnect</c>. The Win32 call underneath discards whatever the pipe
+    /// still holds and leaves the client's next read with ERROR_PIPE_NOT_CONNECTED — "no process is
+    /// on the other end of the pipe". A response with a Content-Length had been read whole long
+    /// before that, so the error landed after the client already had its answer and nothing ever
+    /// noticed.
+    ///
+    /// <para>On an upgraded connection the end of the stream is the result. <c>docker compose
+    /// run</c>, <c>docker start -a</c> and <c>docker exec</c> all read to the end and report what
+    /// the last read said, so a container that exited 0 came back as exit 1 — with its output
+    /// delivered in full, which is what made the failure look like it belonged to the container.
+    /// </para>
+    ///
+    /// <para>Drain, then close, and never disconnect. The drain returns once the client has taken
+    /// every byte, and closing the handle after it ends the pipe with ERROR_BROKEN_PIPE, which is
+    /// the ending every client reads as a stream that finished.</para>
+    /// </remarks>
+    private static async Task EndAsync(NamedPipeServerStream client)
+    {
+        try
+        {
+            if (client.IsConnected)
+            {
+                // On a thread of its own because the wait is a blocking Win32 call, and abandoned
+                // rather than awaited past the deadline: the dispose below is what ends it, and it
+                // catches its own ending because by then there is nobody left to hand it to.
+                var drained = Task.Run(() =>
+                {
+                    try
+                    {
+                        client.WaitForPipeDrain();
+                    }
+                    catch (Exception exception) when (exception is IOException
+                        or ObjectDisposedException or InvalidOperationException)
+                    {
+                        // The client went away, which is this wait finishing by the other route.
+                    }
+                });
+
+                await Task.WhenAny(drained, Task.Delay(DrainDeadline)).ConfigureAwait(false);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException
+            or InvalidOperationException)
+        {
+            // The client hung up first. Nothing to drain, and the close below is all that is left.
+        }
+
+        await client.DisposeAsync().ConfigureAwait(false);
     }
 
     private static async Task Pump(Stream from, Stream to, CancellationToken cancellation)

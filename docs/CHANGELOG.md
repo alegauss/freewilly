@@ -87,6 +87,7 @@
 - ✅ **DD243** **diskpart reports its progress to a log nobody reads, so the longest step of a compaction is one unchanging line** — A channel beside the steps carries diskpart's own percentages, read out of the log it is writing, matched on the number so a translated machine reads the same climb.
 - ✅ **DD245** **the two compaction sequences carry the same five steps twice, and the copy already inherited a wrong verb once** — DiskCompaction.Walk carries the five beats once and both routes pass what differs, so a take-down cannot be copied and inherit the wrong verb again.
 - ✅ **DD247** **the elevated route has no rehearsal, and it is the one that shipped broken twice against a real disk** — --compact-drill --as-administrator points the same sequence at the scratch distribution, so the diskpart route is answered over half a gigabyte of wasted disk.
+- ✅ **DD259** **docker compose run, start -a and exec exit 1 with a broken pipe after the container has already succeeded** — The teardown drains and closes the handle instead of disconnecting it, so a client reading an upgraded stream to its end gets the broken pipe every client reads as the end.
 
 ## Block B — The daemon client (talk to the engine)
 

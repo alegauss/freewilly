@@ -4,6 +4,8 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+- 📋 **DD260** (deps: DD259 ✅) **the suite never drives an attach or an exec through the relay, so a broken teardown ships green** — Every check the relay has is a request carrying a Content-Length, which is the one shape this defect spares; what has to be asserted is the exit code a real client reports. → §DD260
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
