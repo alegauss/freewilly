@@ -81,7 +81,8 @@ public static class AgentSurface
         new(AgentNamespace.Read, "health", "read health",
             "whether WSL, the distribution and the disk under the engine are well"),
         new(AgentNamespace.Read, "logs", "read logs",
-            "<name> [--since t:..] [--level x] [--dedup] [--budget n] [--out path]"),
+            "<name> [--since t:..] [--level x] [--dedup] [--budget n] [--out path]\n"
+            + "[--follow] [--until s] [--timeout 30s] watch a run to a line or a deadline"),
         new(AgentNamespace.Read, "ports", "read ports",
             "[port] every published port, and what holds it on Windows"),
         new(AgentNamespace.Read, "ps", "read ps",
@@ -649,73 +650,12 @@ public static class AgentSurface
     /// </remarks>
     private static int ReadLogs(IEngineReads engine, string[] rest, TextWriter output)
     {
-        string? target = null;
-        string? outPath = null;
-        var query = new LogQuery(BudgetTokens: LogDigest.DefaultBudgetTokens);
-
-        for (var i = 0; i < rest.Length; i++)
+        if (ParseLogArguments(rest) is not { } asked)
         {
-            var argument = rest[i];
-            switch (argument)
-            {
-                case "--dedup":
-                    query = query with { Dedup = true };
-                    continue;
-                case "--since" or "--level" or "--budget" or "--out":
-                    if (i + 1 >= rest.Length)
-                    {
-                        return Refuse($"{argument} needs a value after it");
-                    }
-
-                    var value = rest[++i];
-                    switch (argument)
-                    {
-                        case "--since":
-                            if (!LogDigest.TryParseCursor(value, out var since, out var why))
-                            {
-                                return Refuse(why!);
-                            }
-
-                            query = query with { Since = since };
-                            continue;
-                        case "--level":
-                            if (!LogDigest.TryParseLevel(value, out var level))
-                            {
-                                return Refuse(
-                                    $"{value} is not a level: trace, debug, info, warn, error or fatal");
-                            }
-
-                            query = query with { MinimumLevel = level };
-                            continue;
-                        case "--budget":
-                            if (!int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var budget)
-                                || budget <= 0)
-                            {
-                                return Refuse($"{value} is not a token budget");
-                            }
-
-                            query = query with { BudgetTokens = budget };
-                            continue;
-                        default:
-                            outPath = value;
-                            continue;
-                    }
-
-                default:
-                    if (argument.StartsWith('-'))
-                    {
-                        return Refuse($"unexpected argument {argument}");
-                    }
-
-                    if (target is not null)
-                    {
-                        return Refuse($"unexpected argument {argument}: read logs takes one name");
-                    }
-
-                    target = argument;
-                    continue;
-            }
+            return Usage;
         }
+
+        var (target, outPath, until, follow, timeout, query) = asked;
 
         if (!Core.Agent.Address.TryParse(target, out var address, out var refusal))
         {
@@ -736,24 +676,44 @@ public static class AgentSurface
                 return Refuse($"no container named {address} on this engine");
             }
 
+            // Following starts from now unless a cursor says where to start, because the run a caller
+            // wants to watch is the one it is about to make. `--since` is already the surface's word
+            // for "and what came before", and it is the cursor the last read handed back.
+            var tail = follow && query.Since is null ? 0 : 2000;
+            var matched = false;
             List<LogChunk> chunks = [];
             using (var stream = engine.LogsAsync(
-                container.Id, tail: 2000, follow: false, timestamps: true, since: query.Since)
+                container.Id, tail: tail, follow: follow, timestamps: true, since: query.Since)
                 .GetAwaiter().GetResult())
             {
-                var frames = new LogFrames(stream, framed: true);
-                while (frames.ReadAsync().GetAwaiter().GetResult() is { } chunk)
+                if (follow)
                 {
-                    chunks.Add(chunk);
+                    var followed = Follow(stream, query, until, timeout, ceiling: outPath is null);
+                    chunks.AddRange(followed.Chunks);
+                    matched = followed.Matched;
+                }
+                else
+                {
+                    var frames = new LogFrames(stream, framed: true);
+                    while (frames.ReadAsync().GetAwaiter().GetResult() is { } chunk)
+                    {
+                        chunks.Add(chunk);
+                    }
                 }
             }
 
             var lines = LogDigest.Split(chunks);
+            var missed = until is not null && !matched;
 
             if (outPath is null)
             {
                 output.Write(LogDigest.Render(lines, query).Text);
-                return Ok;
+                if (missed)
+                {
+                    output.WriteLine(Missing(until!, timeout));
+                }
+
+                return missed ? Failed : Ok;
             }
 
             // To the file goes everything the filters kept, with no ceiling: the ceiling exists because
@@ -772,7 +732,12 @@ public static class AgentSurface
                 output.WriteLine("cursor  " + whole.Cursor);
             }
 
-            return Ok;
+            if (missed)
+            {
+                output.WriteLine(Missing(until!, timeout));
+            }
+
+            return missed ? Failed : Ok;
         }
         catch (DockerApiException exception)
         {
@@ -785,6 +750,222 @@ public static class AgentSurface
             return Refuse($"could not write {outPath}: {exception.Message}");
         }
     }
+
+    /// <summary>Everything <c>read logs</c> was asked for, once the argv has been read.</summary>
+    private sealed record LogArguments(
+        string? Target,
+        string? OutPath,
+        string? Until,
+        bool Follow,
+        TimeSpan Timeout,
+        LogQuery Query);
+
+    /// <summary>Read the argv, or refuse it and say why.</summary>
+    /// <param name="rest">Everything after the two words.</param>
+    /// <returns>What was asked, or null once the refusal has been written.</returns>
+    private static LogArguments? ParseLogArguments(string[] rest)
+    {
+        string? target = null;
+        string? outPath = null;
+        string? until = null;
+        var follow = false;
+        var timeout = TimeSpan.FromSeconds(30);
+        var deadline = false;
+        var query = new LogQuery(BudgetTokens: LogDigest.DefaultBudgetTokens);
+
+        for (var i = 0; i < rest.Length; i++)
+        {
+            var argument = rest[i];
+            switch (argument)
+            {
+                case "--dedup":
+                    query = query with { Dedup = true };
+                    continue;
+                case "--follow":
+                    follow = true;
+                    continue;
+                case "--since" or "--level" or "--budget" or "--until" or "--timeout" or "--out":
+                    if (i + 1 >= rest.Length)
+                    {
+                        return Refused($"{argument} needs a value after it");
+                    }
+
+                    var value = rest[++i];
+                    switch (argument)
+                    {
+                        case "--until":
+                            if (value.Length == 0)
+                            {
+                                return Refused("--until needs a line to wait for, not an empty string");
+                            }
+
+                            until = value;
+                            continue;
+                        case "--timeout":
+                            if (!TryParseSeconds(value, out timeout))
+                            {
+                                return Refused($"{value} is not a timeout: seconds, as 30 or 30s");
+                            }
+
+                            deadline = true;
+                            continue;
+                        case "--since":
+                            if (!LogDigest.TryParseCursor(value, out var since, out var why))
+                            {
+                                return Refused(why!);
+                            }
+
+                            query = query with { Since = since };
+                            continue;
+                        case "--level":
+                            if (!LogDigest.TryParseLevel(value, out var level))
+                            {
+                                return Refused(
+                                    $"{value} is not a level: trace, debug, info, warn, error or fatal");
+                            }
+
+                            query = query with { MinimumLevel = level };
+                            continue;
+                        case "--budget":
+                            if (!int.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var budget)
+                                || budget <= 0)
+                            {
+                                return Refused($"{value} is not a token budget");
+                            }
+
+                            query = query with { BudgetTokens = budget };
+                            continue;
+                        default:
+                            outPath = value;
+                            continue;
+                    }
+
+                default:
+                    if (argument.StartsWith('-'))
+                    {
+                        return Refused($"unexpected argument {argument}: read logs takes a name, "
+                            + "--since, --level, --dedup, --budget, --out, --follow, --until "
+                            + "and --timeout");
+                    }
+
+                    if (target is not null)
+                    {
+                        return Refused($"unexpected argument {argument}: read logs takes one name");
+                    }
+
+                    target = argument;
+                    continue;
+            }
+        }
+
+        // Both of these bound a follow and neither means anything without one, so a caller who typed
+        // one alone is told rather than handed the plain read they did not ask for.
+        if (!follow && until is not null)
+        {
+            return Refused("--until needs --follow: it is what ends the following");
+        }
+
+        return !follow && deadline
+            ? Refused("--timeout needs --follow: a read that does not follow has no deadline")
+            : new LogArguments(target, outPath, until, follow, timeout, query);
+    }
+
+    /// <summary>Write the refusal and hand the caller a null to return on.</summary>
+    private static LogArguments? Refused(string problem)
+    {
+        Refuse(problem);
+        return null;
+    }
+
+    /// <summary>What a follow collected, and whether the line it was waiting for arrived.</summary>
+    /// <param name="Chunks">Everything read, for the digest to split and filter as usual.</param>
+    /// <param name="Matched">Whether <c>--until</c> was named and arrived.</param>
+    internal readonly record struct FollowedLog(IReadOnlyList<LogChunk> Chunks, bool Matched);
+
+    /// <summary>
+    /// Read a log stream until the line the caller named, the deadline, or the ceiling (DD251).
+    /// </summary>
+    /// <remarks>
+    /// <b>It collects and then renders, rather than printing as it goes.</b> The reader is an agent,
+    /// which sees stdout once the process has ended, so a live scroll buys it nothing and costs the
+    /// digest everything: <c>--level</c>, <c>--dedup</c>, the budget and the cursor are all whole-payload
+    /// facts. This is <c>read verify --wait</c>'s shape, which prints nothing until it returns.
+    ///
+    /// <para>Three things end it, and the caller is told which by the exit code and the last line: the
+    /// pattern arrived, the deadline passed, or the payload filled the budget. A fourth, the container
+    /// exiting, ends the stream on its own. Ctrl+C is the fifth and is a normal ending, not an error,
+    /// because a person watching this is the one case where the stream had no bound to begin with.</para>
+    ///
+    /// <para>The match is a case-insensitive substring, not a pattern language. A session waiting for
+    /// <c>listening on</c> or <c>seed complete</c> is the whole of the use, and a regex that failed to
+    /// compile would be a refusal after the run had already started.</para>
+    /// </remarks>
+    /// <param name="stream">The daemon's log stream, already following.</param>
+    /// <param name="query">What was asked, whose budget is the ceiling.</param>
+    /// <param name="until">The line to wait for, or null to read to the deadline.</param>
+    /// <param name="timeout">How long the whole follow is given.</param>
+    /// <param name="ceiling">Whether the budget stops it; false when a file is being written.</param>
+    /// <returns>What was read, and whether the line arrived.</returns>
+    internal static FollowedLog Follow(
+        Stream stream, LogQuery query, string? until, TimeSpan timeout, bool ceiling)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(query);
+
+        List<LogChunk> chunks = [];
+        var matched = false;
+        var characters = 0;
+
+        using var stopping = new CancellationTokenSource(timeout);
+        ConsoleCancelEventHandler interrupt = (_, e) =>
+        {
+            e.Cancel = true;
+            stopping.Cancel();
+        };
+
+        Console.CancelKeyPress += interrupt;
+        try
+        {
+            var frames = new LogFrames(stream, framed: true);
+            while (frames.ReadAsync(stopping.Token).GetAwaiter().GetResult() is { } chunk)
+            {
+                chunks.Add(chunk);
+                characters += chunk.Text.Length;
+
+                if (until is not null
+                    && LogDigest.Split(chunks).Any(
+                        l => l.Text.Contains(until, StringComparison.OrdinalIgnoreCase)))
+                {
+                    matched = true;
+                    break;
+                }
+
+                // Only asked once the raw text could possibly fill the ceiling, because rendering is
+                // the expensive way to measure and every chunk before that cannot have reached it.
+                if (ceiling
+                    && query.BudgetTokens is { } budget
+                    && characters >= budget * TokenEstimate.CharactersPerToken
+                    && LogDigest.Render(LogDigest.Split(chunks), query).Dropped > 0)
+                {
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The deadline, or Ctrl+C. Both are endings this verb has, and what was read still counts.
+        }
+        finally
+        {
+            Console.CancelKeyPress -= interrupt;
+        }
+
+        return new FollowedLog(chunks, matched);
+    }
+
+    /// <summary>The last line of a follow whose pattern never arrived.</summary>
+    private static string Missing(string until, TimeSpan timeout) =>
+        $"until   \"{until}\" did not arrive in {Seconds(timeout)}";
 
     /// <summary>
     /// Every published port beside what holds it on Windows (DD28).
@@ -1848,8 +2029,17 @@ public static class AgentSurface
             {
                 foreach (var verb in All.Where(v => v.Namespace == half))
                 {
-                    text.Append("  ").Append(verb.ToString().PadRight(18))
-                        .AppendLine(verb.Summary);
+                    // A summary breaks where it says it breaks, and the continuation lands in the
+                    // same column. One verb has outgrown a line, and wrapping it here by width would
+                    // put the break wherever a flag name happened to fall.
+                    var gutter = "  " + new string(' ', 18);
+                    var first = true;
+                    foreach (var part in verb.Summary.Split('\n'))
+                    {
+                        text.Append(first ? "  " + verb.ToString().PadRight(18) : gutter)
+                            .AppendLine(part);
+                        first = false;
+                    }
                 }
             }
 

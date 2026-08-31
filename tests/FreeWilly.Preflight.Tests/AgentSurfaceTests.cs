@@ -360,6 +360,32 @@ public sealed class AgentSurfaceTests
         Assert.Contains("Bash(freewilly read:*)", AgentSurface.HelpText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void A_summary_that_breaks_puts_the_second_line_under_the_first()
+    {
+        // One verb has outgrown a line. A continuation in column 0 would read as a verb of its own,
+        // which is the failure this exists to prevent.
+        var lines = AgentSurface.HelpText.ReplaceLineEndings("\n").Split('\n');
+
+        var broken = AgentSurface.All.Where(v => v.Summary.Contains('\n')).ToList();
+        Assert.NotEmpty(broken);
+
+        foreach (var verb in broken)
+        {
+            foreach (var part in verb.Summary.Split('\n').Skip(1))
+            {
+                Assert.Contains(lines, l => l == new string(' ', 20) + part);
+            }
+
+            // The reason for breaking it: neither half runs so wide that a terminal folds it
+            // somewhere the reader did not choose.
+            foreach (var part in verb.Summary.Split('\n'))
+            {
+                Assert.True(part.Length + 20 <= 100, $"help line is {part.Length + 20} columns: {part}");
+            }
+        }
+    }
+
     // ---- addresses are names -------------------------------------------------------------------
 
     [Fact]

@@ -97,7 +97,7 @@ FreeWilly's other operator is a coding agent, and the split that matters to one 
 freewilly read context       the whole machine in one budgeted payload
 freewilly read doctor <name> why one container is not answering
 freewilly read ps            every container, one line each; mutates nothing
-freewilly read logs <name>   --since --level --dedup --budget --out
+freewilly read logs <name>   --since --level --dedup --budget --out --follow --until
 freewilly read ports [port]  what holds a host port, which Docker cannot say
 freewilly read verify <name> proof that it answers; --request --expect --wait
 freewilly read changes       what moved; --since for a delta, --session for mine
@@ -144,6 +144,25 @@ still a `read`: the promise is that a read does not mutate **the engine**, and a
 path you named in the same breath is not a mutation of anything you did not ask for. Two
 guards hold it: every daemon request is a `GET`, and a read verb touches no path other
 than the one it was given.
+
+`--follow` is for the run you want to watch, and it is bounded three ways so it is never
+open-ended:
+
+```
+freewilly read logs shop-db-1 --follow --until "database system is ready" --timeout 90s
+```
+
+It returns the moment that line arrives, the way `read verify --wait` returns the moment a
+service answers, and exits 1 if the deadline passes without it. `--until` is a
+case-insensitive substring, not a pattern language. Following starts from now, because the
+run you want to watch is the one you are about to make; `--since <cursor>` is already the
+word for replaying what came before. The token budget is the third bound, so a container
+printing faster than the ceiling allows ends the follow rather than the session's context.
+
+Nothing is printed until it returns. The reader is an agent, which sees stdout once the
+process has ended, so a live scroll buys it nothing and would cost `--level`, `--dedup`,
+the budget and the cursor, all of which are whole-payload facts. Ctrl+C is a normal ending
+and keeps what was read.
 
 `read doctor` closes a join that five commands used to leave to the caller, and returns
 conclusions rather than fields:

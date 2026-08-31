@@ -224,6 +224,7 @@
 - ✅ **DD178** **the shaped surface figure moves with the calendar, so an exact gate goes red on a tree nobody touched** — The clock reaches read doctor through the machine seam and the shaped measurement pins it beside the fixtures, so the exact token figure is the fixtures' and no longer the calendar's.
 - ✅ **DD198** **the agent surface has no reading for the health of WSL, the distribution or the disk** — read health answers for the machine under the engine in one call, off the same report the window draws, at 138 tokens against a ceiling of 200.
 - ✅ **DD250** **`read verify --request` cannot assert a path is gone: a 404 is only ever a failure** — `read verify --request` now takes `--expect 404` (or a comma list), so a path that must be gone has a check that passes, and a missed expectation prints the status that arrived.
+- ✅ **DD251** **`read logs` cannot follow, so watching a run live drops the session back to the docker CLI** — `read logs --follow` watches a run to a line (`--until`), a deadline (`--timeout`) or the token budget, so following a seed no longer sends the session to `docker compose logs -f`.
 
 ## Block H — The public surface (the site a reader and an agent both read)
 

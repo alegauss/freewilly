@@ -16,8 +16,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-- 📋 **DD251** (deps: —) **`read logs` cannot follow, so watching a run live drops the session back to the docker CLI** — Every other diagnostic on this machine is a `freewilly read`, and a seed that prints for two minutes is the one thing that still sends a session to `docker compose logs -f`. → §DD251
-
 ## Block H — The public surface (the site a reader and an agent both read)
 
 ## Non-goals
