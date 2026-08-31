@@ -153,11 +153,23 @@ freewilly read logs shop-db-1 --follow --until "database system is ready" --time
 ```
 
 It returns the moment that line arrives, the way `read verify --wait` returns the moment a
-service answers, and exits 1 if the deadline passes without it. `--until` is a
-case-insensitive substring, not a pattern language. Following starts from now, because the
-run you want to watch is the one you are about to make; `--since <cursor>` is already the
-word for replaying what came before. The token budget is the third bound, so a container
-printing faster than the ceiling allows ends the follow rather than the session's context.
+service answers. `--until` is a case-insensitive substring, not a pattern language.
+Following starts from now, because the run you want to watch is the one you are about to
+make; `--since <cursor>` is already the word for replaying what came before. The token
+budget is the third bound, so a container printing faster than the ceiling allows ends the
+follow rather than the session's context.
+
+A pattern that never arrives exits 1, and the last line says which of the four endings it
+was, because your next move differs for each:
+
+```
+until   "seed complete" did not arrive in 90s
+until   "seed complete" did not arrive, and the log ended
+until   "seed complete" did not arrive, and the budget filled first: raise --budget, or --out to a file
+until   "seed complete" had not arrived when this was stopped
+```
+
+Only the first names a duration, because it is the only one that waited one.
 
 Nothing is printed until it returns. The reader is an agent, which sees stdout once the
 process has ended, so a live scroll buys it nothing and would cost `--level`, `--dedup`,

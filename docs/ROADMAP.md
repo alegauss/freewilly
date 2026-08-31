@@ -16,8 +16,6 @@
 
 ## Block G — The agent surface (an agent operates this, and pays in tokens)
 
-- 📋 **DD256** (deps: —) **a follow stopped by Ctrl+C reports the deadline it never reached, so the transcript names a wait that did not happen** — The deadline and the interrupt cancel the same source and arrive as the same exception, and the one line the follow has for an unmatched pattern names a duration. → §DD256
-
 ## Block H — The public surface (the site a reader and an agent both read)
 
 ## Non-goals

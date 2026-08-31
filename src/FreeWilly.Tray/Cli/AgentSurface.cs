@@ -682,7 +682,7 @@ public static class AgentSurface
             // wants to watch is the one it is about to make. `--since` is already the surface's word
             // for "and what came before", and it is the cursor the last read handed back.
             var tail = follow && query.Since is null ? 0 : 2000;
-            var matched = false;
+            var ending = FollowEnd.Matched;
             IReadOnlyList<LogLine> lines;
             using (var stream = engine.LogsAsync(
                 container.Id, tail: tail, follow: follow, timestamps: true, since: query.Since)
@@ -692,7 +692,7 @@ public static class AgentSurface
                 {
                     var followed = Follow(stream, query, until, timeout, ceiling: outPath is null);
                     lines = followed.Lines;
-                    matched = followed.Matched;
+                    ending = followed.End;
                 }
                 else
                 {
@@ -707,14 +707,14 @@ public static class AgentSurface
                 }
             }
 
-            var missed = until is not null && !matched;
+            var missed = until is not null && ending != FollowEnd.Matched;
 
             if (outPath is null)
             {
                 output.Write(LogDigest.Render(lines, query).Text);
                 if (missed)
                 {
-                    output.WriteLine(Missing(until!, timeout));
+                    output.WriteLine(Missing(until!, timeout, ending));
                 }
 
                 return missed ? Failed : Ok;
@@ -738,7 +738,7 @@ public static class AgentSurface
 
             if (missed)
             {
-                output.WriteLine(Missing(until!, timeout));
+                output.WriteLine(Missing(until!, timeout, ending));
             }
 
             return missed ? Failed : Ok;
@@ -881,10 +881,38 @@ public static class AgentSurface
         return null;
     }
 
-    /// <summary>What a follow collected, and whether the line it was waiting for arrived.</summary>
+    /// <summary>Why a follow stopped following (DD256).</summary>
+    /// <remarks>
+    /// Kept apart because the sentence a caller reads afterwards is different for each, and three of
+    /// these used to be reported as the fourth: whatever ended it, an unmatched pattern printed the
+    /// deadline, naming a wait that in three cases out of four did not happen.
+    /// </remarks>
+    internal enum FollowEnd
+    {
+        /// <summary>The line named by <c>--until</c> arrived.</summary>
+        Matched,
+
+        /// <summary>The stream ended: the container stopped printing, or exited.</summary>
+        Ended,
+
+        /// <summary><c>--timeout</c> elapsed.</summary>
+        Deadline,
+
+        /// <summary>Ctrl+C. A person decided, which is a normal ending rather than an error.</summary>
+        Stopped,
+
+        /// <summary>The payload filled the token budget.</summary>
+        Ceiling,
+    }
+
+    /// <summary>What a follow collected, and what stopped it.</summary>
     /// <param name="Lines">Everything read, split as usual, for the digest to filter and render.</param>
-    /// <param name="Matched">Whether <c>--until</c> was named and arrived.</param>
-    internal readonly record struct FollowedLog(IReadOnlyList<LogLine> Lines, bool Matched);
+    /// <param name="End">Which of the five endings it was.</param>
+    internal readonly record struct FollowedLog(IReadOnlyList<LogLine> Lines, FollowEnd End)
+    {
+        /// <summary>Whether <c>--until</c> was named and arrived.</summary>
+        internal bool Matched => End == FollowEnd.Matched;
+    }
 
     /// <summary>
     /// Read a log stream until the line the caller named, the deadline, or the ceiling (DD251).
@@ -909,7 +937,7 @@ public static class AgentSurface
     /// <param name="until">The line to wait for, or null to read to the deadline.</param>
     /// <param name="timeout">How long the whole follow is given.</param>
     /// <param name="ceiling">Whether the budget stops it; false when a file is being written.</param>
-    /// <returns>What was read, and whether the line arrived.</returns>
+    /// <returns>What was read, and which of the five endings stopped it.</returns>
     internal static FollowedLog Follow(
         Stream stream, LogQuery query, string? until, TimeSpan timeout, bool ceiling)
     {
@@ -919,13 +947,20 @@ public static class AgentSurface
         // The tally carries the split across chunks and counts the payload as it grows, so a follow
         // costs what it reads rather than the square of it (DD253).
         var tally = new LogTally(query);
-        var matched = false;
+        var end = FollowEnd.Ended;
 
-        using var stopping = new CancellationTokenSource(timeout);
+        // Two sources rather than one, linked rather than merged, because both arrive as the same
+        // exception and only the source that fired says which happened (DD256). DockerApi draws the
+        // same distinction between its budget and its caller, for the same reason.
+        using var asked = new CancellationTokenSource();
+        using var deadline = new CancellationTokenSource(timeout);
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(
+            asked.Token, deadline.Token);
+
         ConsoleCancelEventHandler interrupt = (_, e) =>
         {
             e.Cancel = true;
-            stopping.Cancel();
+            asked.Cancel();
         };
 
         Console.CancelKeyPress += interrupt;
@@ -940,19 +975,22 @@ public static class AgentSurface
                 if (until is not null
                     && fresh.Any(l => l.Text.Contains(until, StringComparison.OrdinalIgnoreCase)))
                 {
-                    matched = true;
+                    end = FollowEnd.Matched;
                     break;
                 }
 
                 if (ceiling && query.BudgetTokens is { } budget && tally.Tokens >= budget)
                 {
+                    end = FollowEnd.Ceiling;
                     break;
                 }
             }
         }
         catch (OperationCanceledException)
         {
-            // The deadline, or Ctrl+C. Both are endings this verb has, and what was read still counts.
+            // Asked first: a Ctrl+C landing inside the last moments of the deadline is still a person
+            // deciding, and reporting it as a timeout would name a wait they cut short.
+            end = asked.IsCancellationRequested ? FollowEnd.Stopped : FollowEnd.Deadline;
         }
         finally
         {
@@ -960,12 +998,31 @@ public static class AgentSurface
         }
 
         tally.Flush();
-        return new FollowedLog(tally.Lines, matched);
+        return new FollowedLog(tally.Lines, end);
     }
 
-    /// <summary>The last line of a follow whose pattern never arrived.</summary>
-    private static string Missing(string until, TimeSpan timeout) =>
-        $"until   \"{until}\" did not arrive in {Seconds(timeout)}";
+    /// <summary>
+    /// The last line of a follow whose pattern never arrived.
+    /// </summary>
+    /// <remarks>
+    /// One sentence per ending, because the reader's next move differs: a deadline is raised, a
+    /// ceiling is raised or written to a file, a log that ended will not print the line however long
+    /// anyone waits, and a stop was the reader's own decision. Only the deadline names a duration,
+    /// and it is the only ending that actually waited one.
+    ///
+    /// <para>The exit code is 1 for all four. The claim was not proved, whatever ended it, and a
+    /// second failing code would make a caller's branch wider without telling it anything this line
+    /// does not already say.</para>
+    /// </remarks>
+    internal static string Missing(string until, TimeSpan timeout, FollowEnd end) =>
+        $"until   \"{until}\" " + end switch
+        {
+            FollowEnd.Deadline => $"did not arrive in {Seconds(timeout)}",
+            FollowEnd.Stopped => "had not arrived when this was stopped",
+            FollowEnd.Ceiling => "did not arrive, and the budget filled first: raise --budget, "
+                + "or --out to a file",
+            _ => "did not arrive, and the log ended",
+        };
 
     /// <summary>
     /// Every published port beside what holds it on Windows (DD28).

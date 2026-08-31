@@ -200,6 +200,98 @@ public sealed class AgentFollowTests
         Assert.True(DateTimeOffset.UtcNow - started < Patience);
     }
 
+    // ---- which ending it was (DD256) -------------------------------------------------------------
+
+    [Fact]
+    public void A_deadline_and_a_stream_that_ended_are_not_the_same_ending()
+    {
+        // Both used to be reported as the deadline, so a container that stopped printing after two
+        // seconds was said to have been waited on for the whole timeout.
+        var waiting = new LiveStream([.. Frame(1, "migrating\n")]);
+        var over = new MemoryStream([.. Frame(1, "migrating\n")]);
+
+        Assert.Equal(
+            AgentSurface.FollowEnd.Deadline,
+            AgentSurface.Follow(waiting, Query(), "seed", TimeSpan.FromMilliseconds(250), true).End);
+        Assert.Equal(
+            AgentSurface.FollowEnd.Ended,
+            AgentSurface.Follow(over, Query(), "seed", Patience, ceiling: true).End);
+    }
+
+    [Fact]
+    public void The_ceiling_is_its_own_ending_rather_than_the_deadline()
+    {
+        var chatty = Enumerable.Range(0, 400)
+            .Select(i => $"line {i} of a service with a great deal to say for itself\n")
+            .ToArray();
+        using var stream = Live(chatty);
+
+        var followed = AgentSurface.Follow(stream, Query(budget: 60), "seed", Patience, ceiling: true);
+
+        // The reader's next move is to raise --budget or write to a file, which is a different move
+        // from raising --timeout.
+        Assert.Equal(AgentSurface.FollowEnd.Ceiling, followed.End);
+    }
+
+    [Fact]
+    public async Task A_log_that_ended_says_so_rather_than_naming_a_wait_that_never_happened()
+    {
+        await using var daemon = Printing("migrating\n", "rolling back\n");
+        var output = new StringWriter();
+
+        var code = Logs(
+            daemon, output, "shop-api-1", "--follow", "--until", "seed complete", "--timeout", "90s");
+
+        Assert.Equal(1, code);
+        Assert.Contains("the log ended", output.ToString(), StringComparison.Ordinal);
+
+        // The whole of DD256: it never waited ninety seconds, so it must not say it did.
+        Assert.DoesNotContain("90s", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Only_the_deadline_names_a_duration()
+    {
+        // A duration is a claim about how long this waited, so only the ending that waited one may
+        // make it. Every other ending naming the timeout is exactly the defect DD256 fixed.
+        var ninety = TimeSpan.FromSeconds(90);
+
+        foreach (var end in Enum.GetValues<AgentSurface.FollowEnd>())
+        {
+            if (end == AgentSurface.FollowEnd.Matched)
+            {
+                continue;
+            }
+
+            var said = AgentSurface.Missing("seed complete", ninety, end);
+
+            Assert.Contains("seed complete", said, StringComparison.Ordinal);
+            Assert.Equal(
+                end == AgentSurface.FollowEnd.Deadline,
+                said.Contains("90s", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void Each_ending_says_something_a_reader_can_act_on()
+    {
+        var ninety = TimeSpan.FromSeconds(90);
+
+        // The next move differs per ending, and the line is where it is named.
+        Assert.Contains(
+            "--budget",
+            AgentSurface.Missing("x", ninety, AgentSurface.FollowEnd.Ceiling),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "stopped",
+            AgentSurface.Missing("x", ninety, AgentSurface.FollowEnd.Stopped),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "the log ended",
+            AgentSurface.Missing("x", ninety, AgentSurface.FollowEnd.Ended),
+            StringComparison.Ordinal);
+    }
+
     // ---- what a follow costs (DD253) -------------------------------------------------------------
 
     [Fact]
