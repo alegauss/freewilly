@@ -4,8 +4,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD279** (deps: —) **the relay's dispose joins its accept thread for five seconds inside a teardown budget of four** — A hurried teardown waits for what it actually has left, so the steps after the relay still run and still reach the journal. → §DD279
-
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)

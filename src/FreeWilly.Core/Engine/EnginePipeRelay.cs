@@ -134,7 +134,7 @@ public sealed class EnginePipeRelay : IAsyncDisposable
     /// Null on a relay that is still accepting and on one that was disposed, which is the whole
     /// distinction this property exists to draw. The loop has always caught four exception types out
     /// of <see cref="NamedPipeServerStream.WaitForConnection"/> and returned on all of them, and only
-    /// one of the four is a stop: <see cref="DisposeAsync"/> closes the handle underneath a blocking
+    /// one of the four is a stop: <see cref="DisposeAsync()"/> closes the handle underneath a blocking
     /// wait on purpose, so the throw that follows is this class working as designed.
     ///
     /// <para><b>The other three are the loop dying, and it died silently.</b> Nothing replaces the
@@ -502,8 +502,32 @@ public sealed class EnginePipeRelay : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// How long a dispose waits for the accept thread when nothing is racing it.
+    /// </summary>
+    /// <remarks>
+    /// Generous rather than careless: nothing on the ordinary path is waiting, and the alternative
+    /// to waiting is a thread that may still be inside a Win32 call.
+    /// </remarks>
+    public static readonly TimeSpan Join = TimeSpan.FromSeconds(5);
+
     /// <inheritdoc/>
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync() => DisposeAsync(Join);
+
+    /// <summary>Stop serving, waiting no longer than the caller has (DD279).</summary>
+    /// <param name="join">How long to wait for the accept thread before leaving it.</param>
+    /// <returns>The work.</returns>
+    /// <remarks>
+    /// <see cref="Join"/> is five seconds and a session ending has four, so a teardown taking the
+    /// default could spend its whole budget here. DD271 put the terminate first, so this can no
+    /// longer cost the unmount; what it still costs is everything after it, which is the account of
+    /// the teardown DD273 exists to write.
+    ///
+    /// <para>Nothing changes about what happens at the deadline, and that is why a shorter one is
+    /// safe: a thread that has not returned is left to the process, which is what the wait already
+    /// did at five seconds and does no differently at two.</para>
+    /// </remarks>
+    public async ValueTask DisposeAsync(TimeSpan join)
     {
         await _stopping.CancelAsync().ConfigureAwait(false);
 
@@ -522,7 +546,7 @@ public sealed class EnginePipeRelay : IAsyncDisposable
         // Joined with a deadline rather than indefinitely. A thread that has not noticed is a
         // background one and goes with the process; a dispose that never returns takes the tray
         // down with it, which is a worse failure than a thread lingering for a moment.
-        _accepting?.Join(TimeSpan.FromSeconds(5));
+        _accepting?.Join(join);
         _accepting = null;
 
         _stopping.Dispose();

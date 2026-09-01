@@ -1598,6 +1598,34 @@ public sealed class EngineLifecycleTests
             $"the terminate ({terminated}) should follow the SIGTERM ({signalled})");
     }
 
+    // ---- the relay's join is bounded by the teardown too (DD279) -------------------------------
+
+    [Fact]
+    public void The_relays_own_join_is_longer_than_a_session_ending_has()
+    {
+        // The premise of DD279, asserted so the task cannot quietly stop being about anything: five
+        // seconds is right where nothing is racing the dispose, and it is longer than the whole
+        // teardown budget, so a hurried stop taking it could spend the shutdown on one wait.
+        Assert.True(
+            EnginePipeRelay.Join > EngineLifecycle.HurriedCall,
+            $"the relay's own join ({EnginePipeRelay.Join}) no longer needs shortening");
+    }
+
+    [Fact]
+    public void A_hurried_stop_does_not_wait_on_the_relay_longer_than_it_waits_on_anything_else()
+    {
+        // Asserted at the call site, because the wait is a Thread.Join inside a dispose and driving
+        // it would mean holding a real accept thread open — a test that measures the build machine.
+        // What can go wrong here is the argument, and that is what this reads.
+        var source = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Core/Engine/EngineLifecycle.cs"));
+
+        Assert.Contains(
+            "_relay.DisposeAsync(hurried ? HurriedCall : EnginePipeRelay.Join)",
+            source,
+            StringComparison.Ordinal);
+    }
+
     // ---- nothing there is not a failure (DD276) ------------------------------------------------
 
     [Fact]
@@ -1881,5 +1909,18 @@ public sealed class EngineLifecycleTests
         Assert.Equal(EngineState.Stopped, status.State);
         Assert.True(status.Conclusive);
         Assert.Contains("not registered", status.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>The repository root, found by walking up from the test binary.</summary>
+    private static string RepositoryRoot()
+    {
+        var here = new DirectoryInfo(AppContext.BaseDirectory);
+        while (here is not null && !File.Exists(Path.Combine(here.FullName, "FreeWilly.slnx")))
+        {
+            here = here.Parent;
+        }
+
+        Assert.True(here is not null, "the repository root was not found above the test binaries");
+        return here!.FullName;
     }
 }

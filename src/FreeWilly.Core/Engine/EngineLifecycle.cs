@@ -560,7 +560,11 @@ public sealed class EngineLifecycle : IAsyncDisposable
 
         if (_relay is not null)
         {
-            await _relay.DisposeAsync().ConfigureAwait(false);
+            // Under the teardown's own budget since DD279. The relay's default join is five seconds
+            // and a session ending has four, so the one step here that is not a wsl.exe was the last
+            // way a single wait could still spend the whole shutdown.
+            await _relay.DisposeAsync(hurried ? HurriedCall : EnginePipeRelay.Join)
+                .ConfigureAwait(false);
             _relay = null;
             Did("stopped serving the pipe");
         }
