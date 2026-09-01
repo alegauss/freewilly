@@ -1592,6 +1592,57 @@ public sealed class EngineLifecycleTests
             $"the terminate ({terminated}) should follow the SIGTERM ({signalled})");
     }
 
+    // ---- nothing there is not a failure (DD276) ------------------------------------------------
+
+    [Fact]
+    public async Task A_terminate_that_finds_no_distribution_says_there_was_nothing_there()
+    {
+        // DD271 dropped the registered gate from the hurried path, and this is its consequence: on a
+        // machine that never provisioned an engine, every logoff wrote a failure about a distribution
+        // nobody ever had. The captured wording is Portuguese on purpose — the match is on the code,
+        // because the prose around it is whatever language the machine is in.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(
+            -1,
+            "Não há distribuição com o nome fornecido.\r\n"
+            + "Código de erro: Wsl/Service/WSL_E_DISTRO_NOT_FOUND\r\n",
+            null);
+        await using var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        var status = await engine.StopAsync(EngineLifecycle.HurriedGrace);
+
+        Assert.Contains("there was no freewilly to take down", status.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("could not terminate", status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_terminate_that_failed_for_any_other_reason_still_reads_as_a_failure()
+    {
+        // The safe direction, and the one that must not be lost: reporting "there was nothing there"
+        // about a distribution that is would hide the failure this line exists to carry.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(-1, "Error code: Wsl/Service/WSL_E_VM_MODE_NOT_SUPPORTED", null);
+        await using var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        var status = await engine.StopAsync(EngineLifecycle.HurriedGrace);
+
+        Assert.Contains("could not terminate freewilly", status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_build_that_prints_only_the_sentence_is_read_as_a_failure_rather_than_as_absence()
+    {
+        // Not every wsl.exe prints the code. Answering false there leaves the ordinary failure line,
+        // which is truthful about a call that did fail; the mistake worth avoiding is the other one.
+        Assert.False(WslFailure.SaysNoSuchDistribution(
+            "There is no distribution with the supplied name."));
+        Assert.False(WslFailure.SaysNoSuchDistribution(null));
+        Assert.True(WslFailure.SaysNoSuchDistribution(
+            "Error code: Wsl/Service/WSL_E_DISTRO_NOT_FOUND"));
+    }
+
     // ---- no step outlives the teardown that is running it (DD275) -------------------------------
 
     [Fact]

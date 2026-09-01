@@ -2,29 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD276 A distribution that was never there is not a failed terminate
-
-DD271 took the `DistributionRegistered` gate off the hurried path on purpose: the gate
-is a `wsl --list`, so asking whether the terminate is worth running costs the same
-launch as running it, and under a four-second budget that launch is the thing being
-protected.
-
-What it did not settle is what the journal then says. `wsl --terminate freewilly`
-against a distribution that is not registered exits non-zero and prints "There is no
-distribution with the supplied name", so `StopAsync` reports `could not terminate
-freewilly: ...`. On a machine where the engine was never provisioned, or where somebody
-unregistered it, that line is now written at every logoff. The tray reaches it by the
-ordinary route: with no host to tell, `SessionTeardown` terminates itself.
-
-Nothing is wrong on that machine, and the file says otherwise. That is the same defect
-DD26 puts above every other consideration, arriving in the one file a reader opens
-precisely because they suspect something went wrong overnight.
-
-The terminate stays ungated. What changes is that its own output is read: a refusal
-naming a distribution that is not there is the answer "there was nothing to take down",
-and it should be written that way. Every other failure keeps the sentence it has,
-because those are failures.
-
 ### §DD277 A teardown line should say which process wrote it
 
 DD273 gave the teardown a line per step, written through `EngineCommand.Step`, which

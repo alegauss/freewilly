@@ -30,6 +30,27 @@ public sealed record WslFailure(string Meaning, IReadOnlyList<string> Remedy)
     /// </remarks>
     private const string Eio = "failed 5";
 
+    /// <summary>The code <c>wsl.exe</c> maps "that distribution is not registered" to.</summary>
+    private const string DistroNotFound = "WSL_E_DISTRO_NOT_FOUND";
+
+    /// <summary>
+    /// Whether these words are <c>wsl.exe</c> saying the distribution is not registered (DD276).
+    /// </summary>
+    /// <param name="said">What it wrote.</param>
+    /// <returns><see langword="true"/> where they are.</returns>
+    /// <remarks>
+    /// The code and never the sentence, for the reason <see cref="LooksLikeAnUnreadableRoot"/> gives:
+    /// the prose around it is localised, and the capture this project already holds of a refused
+    /// launch is in Portuguese. The code is the one part that reads the same on every machine.
+    ///
+    /// <para>A build that printed only the sentence answers false here, and that is the safe
+    /// direction: the caller then writes its ordinary failure line, which is a truthful thing to say
+    /// about a call that did fail. The mistake worth avoiding is the other one, reporting "there was
+    /// nothing there" about a distribution that is.</para>
+    /// </remarks>
+    public static bool SaysNoSuchDistribution(string? said) =>
+        said is not null && said.Contains(DistroNotFound, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Read a launcher's words, or a status detail carrying them, for a failure worth explaining.
     /// </summary>

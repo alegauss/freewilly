@@ -605,13 +605,25 @@ public sealed class EngineLifecycle : IAsyncDisposable
     private string Terminated(TimeSpan budget)
     {
         var terminated = _wsl.Run(budget, "--terminate", Distribution);
-        return terminated.Succeeded
-            ? $"terminated {Distribution}"
+        if (terminated.Succeeded)
+        {
+            return $"terminated {Distribution}";
+        }
 
-            // Detail rather than the trimmed output, since DD274. A wsl.exe Windows refused to start
-            // writes nothing at all, and this line used to end at its colon — which is the one place
-            // in a session ending where "it said nothing" and "it never ran" look identical.
-            : $"could not terminate {Distribution}: {terminated.Detail}";
+        // DD276. Dropping the gate was right and its consequence was not: on a machine that never
+        // provisioned an engine, every logoff now writes a failure about a distribution nobody ever
+        // had. Nothing is wrong there, and the file saying otherwise is the false diagnosis DD26
+        // puts above every other consideration — arriving in the one file somebody opens because
+        // they already suspect something went wrong overnight.
+        if (WslFailure.SaysNoSuchDistribution(terminated.Output))
+        {
+            return $"there was no {Distribution} to take down";
+        }
+
+        // Detail rather than the trimmed output, since DD274. A wsl.exe Windows refused to start
+        // writes nothing at all, and this line used to end at its colon — which is the one place
+        // in a session ending where "it said nothing" and "it never ran" look identical.
+        return $"could not terminate {Distribution}: {terminated.Detail}";
     }
 
     /// <summary>

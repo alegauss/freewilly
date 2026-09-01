@@ -85,7 +85,10 @@ internal static class SessionTeardown
             // Nothing is serving this session's engine, so nothing else is going to take the
             // distribution down. This is the case DD187 cannot cover, because the process it gave
             // the subscription to is not running.
-            return $"no engine host to tell, so this took it down: {machine.Terminate()}";
+            // The clause and not "so this took it down", since DD276: the terminate now has an
+            // outcome that says there was nothing there, and a sentence promising it went down would
+            // contradict the half of itself that follows the colon.
+            return $"no engine host to tell: {machine.Terminate()}";
         }
 
         // The distribution and not the pipe, which is the whole of DD272. Dropping the relay is the
@@ -108,7 +111,7 @@ internal static class SessionTeardown
         // longer either way, so the choice here is between one more `wsl --terminate` and a virtual
         // machine reaped with its root never unmounted, which is the ext4 that was repaired by hand
         // on 29 August 2026.
-        return $"the engine host ran out of time, so this took it down: {machine.Terminate()}";
+        return $"the engine host ran out of time: {machine.Terminate()}";
     }
 }
 
