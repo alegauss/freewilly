@@ -98,6 +98,7 @@
 - 🗑 **DD268** **the install execs only dockerd, so the other seven binaries are first found busy by a start seconds later** — superseded by DD269: Filed against the wrong writer: provision.log is stamped after the failure, so widening the install's exec check could not catch a file its own tar was still holding.
 - ✅ **DD267** **the retry reads the launcher's exit code only, so a binary the daemon forks being busy is never tried again** — A start now relaunches on the daemon log's own words as well as on the exit code, so a busy containerd under a daemon that exec'd fine is retried rather than reported.
 - ✅ **DD269** **a start can be asked for while the provisioner is rewriting the engine binaries, and nothing stops the two overlapping** — The provisioner holds a lock across the import and the unpack, and a start waits up to twenty seconds for it out of its own budget, saying so where it waited.
+- ✅ **DD270** **a wsl.exe that fails to start during a shutdown opens a modal Windows error box and blocks until dismissed** — Every wsl.exe FreeWilly starts inherits SEM_FAILCRITICALERRORS, so a launch Windows refuses during a shutdown fails at once rather than holding the teardown on an unclickable box.
 
 ## Block B — The daemon client (talk to the engine)
 

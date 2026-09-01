@@ -653,6 +653,39 @@ public sealed class TrayTests
     }
 
     [Fact]
+    public void A_child_Windows_refuses_to_start_cannot_hold_the_teardown_on_a_modal_box()
+    {
+        // DD270. The budget above only buys anything if a failed launch fails at once: a `wsl.exe`
+        // that dies with 0xC0000142 during a session ending puts up a hard-error box nobody can
+        // click, and the runner then waits out all four seconds on a process that is already gone.
+        // SEM_FAILCRITICALERRORS is what returns the failure to the caller instead, and a child
+        // inherits it.
+        var mode = HardErrorBox.Suppress();
+
+        Assert.Equal(
+            HardErrorBox.FailCriticalErrors, mode & HardErrorBox.FailCriticalErrors);
+
+        // Added rather than assigned, so calling it again is not how a flag something else set goes
+        // missing. The error mode is one word shared with the WinForms and WPF runtimes in here.
+        Assert.Equal(mode, HardErrorBox.Suppress());
+    }
+
+    [Fact]
+    public void The_error_mode_is_set_before_anything_this_process_starts_can_inherit_it()
+    {
+        // Where the call is, is the whole of DD270: an error mode set after a surface has already
+        // launched `wsl.exe` covers nothing, because inheritance happens at the launch. So it is
+        // asserted against the first statement of Main rather than against its presence anywhere.
+        var source = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/Program.cs"));
+        var suppress = source.IndexOf("HardErrorBox.Suppress()", StringComparison.Ordinal);
+        var routed = source.IndexOf("var route = Cli.CommandLine.Of(", StringComparison.Ordinal);
+
+        Assert.True(suppress >= 0, "nothing takes this process off the critical-error dialog");
+        Assert.True(routed > suppress, "the error mode is set after the command line is routed");
+    }
+
+    [Fact]
     public void A_session_ending_no_longer_answers_by_spawning_a_process()
     {
         // DD188. The spawn is the defect and not an implementation detail of it: `ShellExecuteEx`

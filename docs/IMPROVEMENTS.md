@@ -2,28 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD270 A shutdown-time popup is what eats the teardown budget
-
-Windows logged the same application popup at every shutdown between 29 and 31 August
-2026: `wsl.exe` failing with 0xC0000142, STATUS_DLL_INIT_FAILED, in the same second the
-host and the tray both took SessionEnding. It is not a WSL fault and not a fault in how
-this tool spells the command. Adobe's LogTransport2.exe took the same code in the same
-second on 30 August, so the condition belongs to the session: under Fast Startup, which
-is on by default, Windows logs the user off before it hibernates, and process creation
-in that session stops working part way through.
-
-What makes this worse than a failed launch is that the popup is a hard error. The child
-sits on a modal box nobody can click, so `ProcessOutput.Run` waits out its whole budget
-on a process that has already failed. Every failing teardown in the journal ends at
-exactly the four seconds `SessionEndingBudget` allows, while the one that worked, on 30
-August at 10:08, finished in two.
-
-The error mode is inherited by child processes, so the host setting
-SEM_FAILCRITICALERRORS once covers every `wsl.exe` it starts. The launch still fails,
-because nothing here can make Windows start a process it has decided not to start. What
-changes is that it fails immediately and silently, which returns the budget to the steps
-that can still run and takes the dialog off the user's screen.
-
 ### §DD271 The terminate goes first when the stop is hurried
 
 Under `HurriedGrace`, `StopAsync` does four things in order: it drops the relay, asks

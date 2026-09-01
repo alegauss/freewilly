@@ -4,8 +4,7 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-- 📋 **DD270** (deps: —) **a wsl.exe that fails to start during a shutdown opens a modal Windows error box and blocks until dismissed** — The host sets a process error mode its children inherit, so a shutdown-time launch fails at once instead of waiting on a dialog nobody can click. → §DD270
-- 📋 **DD271** (deps: DD270) **a session-ending stop reaches the terminate that unmounts ext4 only after three other wsl.exe calls** — A hurried stop now terminates the distribution first, so the one step that protects the filesystem runs while Windows still allows a process to start. → §DD271
+- 📋 **DD271** (deps: DD270 ✅) **a session-ending stop reaches the terminate that unmounts ext4 only after three other wsl.exe calls** — A hurried stop now terminates the distribution first, so the one step that protects the filesystem runs while Windows still allows a process to start. → §DD271
 - 📋 **DD272** (deps: —) **the tray's backstop reads a quiet pipe as the host having taken the distribution down, and the pipe goes quiet first** — The backstop now asks whether the distribution is still running, so it terminates where the host stopped serving but never reached the terminate. → §DD272
 - 📋 **DD273** (deps: —) **a teardown killed mid-way writes nothing, because the stop's one journal line is composed only after every step** — A session-ending stop now writes a line as each step finishes, so a journal that ends early still says how far the teardown got. → §DD273
 - 📋 **DD274** (deps: —) **a child Windows refused to start reads in the journal as a tool that exited without a word** — The runner now names the exit codes a session ending produces, so 0xC0000142 and 0x40010004 read as Windows refusing the launch rather than as silence. → §DD274

@@ -904,6 +904,12 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        // Before anything, because everything below may start a wsl.exe and the error mode is what
+        // a child inherits (DD270). A launch Windows refuses during a session ending puts up a modal
+        // box nobody can click, and the teardown then spends its whole budget waiting on a process
+        // that has already failed.
+        _ = Cli.HardErrorBox.Suppress();
+
         var route = Cli.CommandLine.Of(args);
 
         // A build link, which is the shell invoking this install's handler for docker-desktop://
