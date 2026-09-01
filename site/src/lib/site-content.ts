@@ -1060,7 +1060,7 @@ export const friction = {
 /* ------------------------------------------------------------------ /compare page */
 // §DD47 — a visitor arrives having already decided against something. The honest question
 // is narrow: what does this do that the alternative does not. A matrix of green ticks is
-// not believed, so every rival gets a column for what it is genuinely better at, and the
+// not believed, so every alternative gets a column for what it is genuinely better at, and the
 // rows are grouped by the law each comes from so the matrix argues rather than tallies.
 
 export const compare = {
@@ -1115,7 +1115,7 @@ export const compare = {
       ],
     },
     {
-      law: "Breadth: where a rival wins",
+      law: "Breadth: where an alternative leads",
       rows: [
         { cap: "Kubernetes built in", cells: ["✗", "✓", "✓", "~", "✗"] },
         { cap: "Extensions / build cloud", cells: ["✗", "✓", "✗", "✗", "✗"] },

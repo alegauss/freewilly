@@ -164,7 +164,7 @@ immediately. → **DD50**
 
 ### S10 — The honest status is a feature, not a disclaimer
 
-Every rival in the comparison matrix has something it is genuinely better at, and the
+Every alternative in the comparison matrix has something it is genuinely better at, and the
 matrix says what. A page that wins every row is one nobody believes, which is the argument
 Shio's `/compare` is built on. → **DD45**, **DD47**
 
