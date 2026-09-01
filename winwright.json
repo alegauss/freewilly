@@ -1,0 +1,25 @@
+{
+  // WW87. What is true of this project rather than of any one case. Every relative path here
+  // resolves against this file's own directory, so a case carries no path and runs on any checkout.
+  //
+  // It replaces two harness scripts: scripts\Capture-Window.ps1, whose five assertions about a
+  // screen copy are all readings the engine takes, and scripts\page-probe.ps1, whose geometry
+  // checks are the layout reading the engine already owns.
+
+  // The published single file and not the Debug build. The capture is of the menu this product
+  // ships, and the thing that ships is the self-contained .exe — a preview taken of a Debug build
+  // is a picture of something nobody installs. build\build.cmd produces it.
+  "executable": "src/FreeWilly.Tray/bin/Release/net10.0-windows/win-x64/publish/FreeWilly.exe",
+
+  "sourceRoot": "src",
+
+  "timeouts": {
+    // Measured, and the number the script it replaces arrived at: a cold start of the single-file
+    // self-contained .exe took longer than 2500 ms to put its menu up on that machine, and the run
+    // refused with "no FreeWilly window" on an application that was fine. A deadline polled every
+    // 25 ms, so a warm start still returns as soon as the window exists.
+    "launch": 30000,
+    "stop": 5000,
+    "poll": 25
+  }
+}

@@ -1371,14 +1371,18 @@ public sealed class PackagingTests
         // DD88's lesson and DD102's, in a third file: the site build was broken for 21 commits
         // because its workflow was workflow_dispatch only, and the installer script's first reader
         // was the release. A harness nothing runs is the same failure with better intentions.
+        // WW87 moved the harness from scripts\page-probe.ps1 into a test project that is not in
+        // FreeWilly.slnx, so `dotnet test` at the root does not run it and this step still has to
+        // name it. The project file and not the folder, which is what makes this a path a reader
+        // can follow.
         var check = Workflow("check.yml");
-        Assert.Contains(@"scripts\page-probe.ps1", check, StringComparison.Ordinal);
+        Assert.Contains(@"tests\FreeWilly.Cases\FreeWilly.Cases.csproj", check, StringComparison.Ordinal);
 
         // After the compiler is on the PATH, because it compiles and runs a real Setup. Ordered
         // rather than assumed: moving it above that step would leave it failing for the one reason
         // that says nothing about the page.
         var inno = check.IndexOf("./.github/actions/inno-setup", StringComparison.Ordinal);
-        var probe = check.IndexOf(@"scripts\page-probe.ps1", StringComparison.Ordinal);
+        var probe = check.IndexOf(@"tests\FreeWilly.Cases\FreeWilly.Cases.csproj", StringComparison.Ordinal);
         Assert.True(inno > 0 && probe > inno, "the page harness runs before ISCC is available");
 
         // And it still has something to slice. The markers are machine-readable precisely so this

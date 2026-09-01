@@ -848,9 +848,13 @@ end;
 // >>> page-probe (DD145)
 //
 // Everything between this marker and its closing one is compiled a second time, on its own, by
-// scripts\page-probe.ps1: it wraps this block in a Setup that shows the page, reports every
-// control's rectangle, and closes itself. That is what turns "read the Pascal and hope" into a
-// check — and the two failures below were both found that way rather than by reading.
+// tests\FreeWilly.Cases\PreflightPage.cs: it wraps this block in a Setup that shows the page,
+// reports every control's rectangle, and closes itself. That is what turns "read the Pascal and
+// hope" into a check — and the two failures below were both found that way rather than by reading.
+//
+// It was scripts\page-probe.ps1 until WW87. What moved is only the checking: the rectangles now go
+// out in winwright's geometry dump format and the engine reads them, which is why nothing on that
+// side states a coordinate any more.
 //
 // The markers are machine-readable on purpose. The harness used to slice on a section heading,
 // which is prose, and prose is renamed by whoever is tidying up.

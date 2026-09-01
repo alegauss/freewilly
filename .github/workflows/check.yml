@@ -113,12 +113,14 @@ jobs:
       # one somebody can read. They are different questions and neither covers the other — a page
       # whose Copy button stands nine pixels below its box compiles perfectly.
       #
-      # Here rather than in `dotnet test`, and for one reason: this compiles and runs a real Setup,
-      # so it needs ISCC, and ISCC is only on the PATH from the step above. A test that quietly
-      # skipped itself when the compiler was missing would be a guard nobody could tell was absent.
+      # WW87 moved it out of scripts\page-probe.ps1 and into tests\FreeWilly.Cases, which is not in
+      # FreeWilly.slnx and so is not what `dotnet test` above runs. It is still its own step for the
+      # reason the script was: this compiles and runs a real Setup, so it needs ISCC, and ISCC is
+      # only on the PATH from the step above. A test that quietly skipped itself when the compiler
+      # was missing would be a guard nobody could tell was absent, which is why it refuses instead.
       - name: The preflight page renders, in every state it has
         run: |
-          & powershell -NoProfile -ExecutionPolicy Bypass -File scripts\page-probe.ps1
+          dotnet test tests\FreeWilly.Cases\FreeWilly.Cases.csproj --nologo
           if ($LASTEXITCODE -ne 0) { throw "the preflight page did not survive its own harness" }
 
       - name: It starts, and says what it is
