@@ -623,7 +623,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
         // Detail rather than the trimmed output, since DD274. A wsl.exe Windows refused to start
         // writes nothing at all, and this line used to end at its colon — which is the one place
         // in a session ending where "it said nothing" and "it never ran" look identical.
-        return $"could not terminate {Distribution}: {terminated.Detail}";
+        return $"could not terminate {Distribution}: {terminated.Detail()}";
     }
 
     /// <summary>

@@ -373,5 +373,5 @@ public sealed class FilesystemRepair
     /// <param name="result">The call.</param>
     /// <returns>Its output, or its failure where it never ran.</returns>
     private static string Said(WslResult result) =>
-        result.Failure ?? result.Output.Trim().ReplaceLineEndings(" ");
+        result.Detail();
 }

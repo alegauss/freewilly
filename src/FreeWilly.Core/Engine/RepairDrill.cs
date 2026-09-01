@@ -240,5 +240,5 @@ public sealed class RepairDrill
         write);
 
     private static string Said(WslResult result) =>
-        result.Failure ?? result.Output.Trim().ReplaceLineEndings(" ");
+        result.Detail();
 }

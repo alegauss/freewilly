@@ -510,5 +510,5 @@ public sealed class DiskCompaction
 
     /// <summary>What a call said, on one line.</summary>
     private static string Said(WslResult result) =>
-        result.Failure ?? result.Output.Trim().ReplaceLineEndings(" ");
+        result.Detail();
 }

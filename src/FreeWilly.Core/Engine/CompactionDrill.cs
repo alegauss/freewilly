@@ -271,5 +271,5 @@ public sealed class CompactionDrill
         bytes is { } value ? MachineReport.Size(value) : MachineReport.Unread;
 
     private static string Said(WslResult result) =>
-        result.Failure ?? result.Output.Trim().ReplaceLineEndings("; ");
+        result.Detail("; ");
 }

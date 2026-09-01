@@ -106,6 +106,7 @@
 - ✅ **DD275** **the terminate a session ending depends on is given 15 seconds inside a budget of 4** — Every wsl.exe a hurried teardown runs is bounded by half the shutdown budget, so one call that hangs gives up in time for the next rather than spending the four seconds alone.
 - ✅ **DD276** **a logoff on a machine that never provisioned an engine now writes a terminate failure** — A terminate that finds nothing registered now says there was nothing to take down, so a logoff on a machine with no engine stops writing a failure about one.
 - ✅ **DD277** **the teardown lines two processes now write are both labelled stop, so nobody can tell which wrote one** — A teardown step is written under its writer's own column word, so the host's stop and the tray's backstop are told apart in the file DD188 leaves that question in.
+- ✅ **DD278** **six callers spell their own version of what a wsl call said, and none falls back to the exit code** — The six restatements now call one Detail that carries the separator, so a wsl call which exited non-zero and wrote nothing names its exit code instead of resolving to nothing.
 
 ## Block B — The daemon client (talk to the engine)
 

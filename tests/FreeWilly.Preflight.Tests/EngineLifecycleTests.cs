@@ -1181,9 +1181,15 @@ public sealed class EngineLifecycleTests
         // is the one place where "it said nothing" and "it never started" have to be told apart.
         var refused = new WslResult(unchecked((int)0xC0000142), "", null);
 
-        Assert.Contains("Windows would not start the process", refused.Detail, StringComparison.Ordinal);
-        Assert.Equal("no such distribution", new WslResult(1, " no such distribution \r\n", null).Detail);
-        Assert.Equal("wsl.exe: it timed out", new WslResult(null, "", "wsl.exe: it timed out").Detail);
+        Assert.Contains("Windows would not start the process", refused.Detail(), StringComparison.Ordinal);
+        Assert.Equal("no such distribution", new WslResult(1, " no such distribution \r\n", null).Detail());
+        Assert.Equal("wsl.exe: it timed out", new WslResult(null, "", "wsl.exe: it timed out").Detail());
+
+        // DD278. The separator is the one thing the six callers this replaced actually chose between,
+        // and a detail carrying its own newline breaks the shape of every journal line after it.
+        Assert.Equal(
+            "first; second",
+            new WslResult(1, "first\r\nsecond\r\n", null).Detail("; "));
     }
 
     // ---- what is actually there, rather than what the handle implies (DD175) ------------------

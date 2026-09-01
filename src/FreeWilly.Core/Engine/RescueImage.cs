@@ -344,5 +344,5 @@ public sealed class RescueImage
         _wsl.Run(WslBudget.Work, "--import", name, root, from, "--version", "2");
 
     private static string Said(WslResult result) =>
-        result.Failure ?? result.Output.Trim().ReplaceLineEndings(" ");
+        result.Detail();
 }

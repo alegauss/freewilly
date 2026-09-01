@@ -12,26 +12,37 @@ public sealed record WslResult(int? ExitCode, string Output, string? Failure)
     public bool Succeeded => Failure is null && ExitCode == 0;
 
     /// <summary>What to say about a call that did not succeed (DD274).</summary>
+    /// <param name="between">
+    /// What joins the lines of a wrapped answer, because the journal is read as a column of stamped
+    /// lines and a detail carrying its own newline breaks the shape of every line after it. A space
+    /// for almost everything; <c>"; "</c> where the answer is a transcript rather than a sentence.
+    /// </param>
+    /// <returns>The one clause a status detail or a journal line can carry.</returns>
     /// <remarks>
     /// The tool's own words first, because they are the answer where there are any. A launch Windows
     /// refused has none — it exits with empty streams — and the sentence used to end at the colon,
     /// which reads as a call that ran and had nothing to report rather than one that never started.
     /// The exit code is the only thing left saying which, so it is what fills the gap.
+    ///
+    /// <para>The one answer to this question, since DD278. Six callers spelled a weaker version of
+    /// it — <c>Failure ?? Output.Trim().ReplaceLineEndings(...)</c> — and every one of them stopped
+    /// where this starts: a call that ran, exited non-zero and wrote nothing resolved to the empty
+    /// string, so a repair or a compaction reported its failure and named nothing at all. The
+    /// separator is the part of those six that was a real choice, so it is the part that stayed.</para>
     /// </remarks>
-    public string Detail
+    public string Detail(string between = " ")
     {
-        get
-        {
-            if (Output.Trim() is { Length: > 0 } said)
-            {
-                return said;
-            }
+        ArgumentNullException.ThrowIfNull(between);
 
-            return Failure
-                ?? (ExitCode is { } code
-                    ? $"it exited {Preflight.Windows.WindowsExit.Spell(code)}"
-                    : "it never ran");
+        if (Output.Trim().ReplaceLineEndings(between) is { Length: > 0 } said)
+        {
+            return said;
         }
+
+        return Failure
+            ?? (ExitCode is { } code
+                ? $"it exited {Preflight.Windows.WindowsExit.Spell(code)}"
+                : "it never ran");
     }
 }
 
