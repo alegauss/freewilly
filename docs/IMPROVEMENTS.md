@@ -2,26 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD274 The exit codes a session ending produces
-
-On 29 August 2026 the journal recorded "the daemon exited: wsl.exe exited 1073807364
-without a word". That number is 0x40010004, DBG_TERMINATE_PROCESS, and it means Windows
-killed the process during the shutdown. Nothing in the line says so. The 0xC0000142 case
-is worse: a child that fails DLL initialisation exits with empty stdout and stderr, so
-the runner reports a tool that ran and said nothing, which is the same shape as a tool
-that ran and had nothing to say.
-
-Two different failures, both invisible, both specific to a session ending. The evidence
-that either was happening came from the Windows System log rather than from this
-journal, which is backwards for a tool whose entire account of a shutdown is a file read
-the next morning.
-
-So the runner names them. An exit code in the range NTSTATUS uses is reported as what it
-is, with the two a shutdown produces spelled out: 0xC0000142 as Windows refusing to
-initialise the process, and 0x40010004 as Windows killing it. The rest keep their number
-and gain the hex, because a reader who has to convert 1073807364 by hand before they can
-search for it will not.
-
 ### §DD275 A step cannot be given more time than the teardown has
 
 Two calls a session ending depends on run under `ConsoleTool.Timeout`, which is fifteen

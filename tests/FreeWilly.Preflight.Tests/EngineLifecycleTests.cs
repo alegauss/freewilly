@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Text;
 using FreeWilly.Core.Engine;
+using FreeWilly.Core.Preflight.Windows;
 using Xunit;
 
 namespace FreeWilly.Preflight.Tests;
@@ -1122,6 +1123,67 @@ public sealed class EngineLifecycleTests
         var said = WslDaemonProcess.Sentence(1, [], []);
 
         Assert.Equal("wsl.exe exited 1 without a word", said);
+    }
+
+    // ---- the exit codes a session ending produces (DD274) ---------------------------------------
+
+    [Fact]
+    public void A_launcher_Windows_killed_says_so_rather_than_naming_a_number()
+    {
+        // Measured. On 29 August 2026 the journal read "the daemon exited: wsl.exe exited 1073807364
+        // without a word", and 1073807364 is DBG_TERMINATE_PROCESS: Windows killing the launcher
+        // during the shutdown. That it was happening at all had to be read out of the Windows System
+        // log, which is the wrong place for a tool whose account of a shutdown is this file.
+        var said = WslDaemonProcess.Sentence(0x40010004, [], []);
+
+        Assert.Equal(
+            "wsl.exe exited 0x40010004 (Windows killed it) without a word", said);
+    }
+
+    [Fact]
+    public void A_launcher_Windows_would_not_start_is_told_apart_from_one_with_nothing_to_say()
+    {
+        // The worse half. A child that fails DLL initialisation exits with both streams empty, so it
+        // reads exactly like a tool that ran and had nothing to report. DD270 stops the dialog; this
+        // is what puts the reason in the file.
+        var said = WslDaemonProcess.Sentence(unchecked((int)0xC0000142), [], []);
+
+        Assert.Contains("Windows would not start the process", said, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0, "0")]
+    [InlineData(1, "1")]
+    [InlineData(126, "126")]
+
+    // -1 is in the top of the unsigned range without being an NTSTATUS: it is `wsl.exe`'s answer to
+    // a missing distribution, and the one failure in here a reader already understands.
+    [InlineData(-1, "-1")]
+    public void An_exit_code_a_program_chose_for_itself_is_left_alone(int code, string expected)
+    {
+        // 126 is a shell that could not exec, and it is the number a reader already knows. Dressing
+        // it up would be this claiming to know something about a code it does not.
+        Assert.Equal(expected, WindowsExit.Spell(code));
+    }
+
+    [Fact]
+    public void An_ntstatus_nobody_has_a_sentence_for_still_gains_its_hex()
+    {
+        // The general case, and the reason the hex is not decoration: a reader who has to convert
+        // 1073807366 by hand before they can search for it will not.
+        Assert.Equal("1073807366 (0x40010006)", WindowsExit.Spell(0x40010006));
+    }
+
+    [Fact]
+    public void A_wsl_call_that_wrote_nothing_says_what_it_exited_with_rather_than_ending_at_a_colon()
+    {
+        // `could not terminate freewilly: ` was the shape of the failing line, and a session ending
+        // is the one place where "it said nothing" and "it never started" have to be told apart.
+        var refused = new WslResult(unchecked((int)0xC0000142), "", null);
+
+        Assert.Contains("Windows would not start the process", refused.Detail, StringComparison.Ordinal);
+        Assert.Equal("no such distribution", new WslResult(1, " no such distribution \r\n", null).Detail);
+        Assert.Equal("wsl.exe: it timed out", new WslResult(null, "", "wsl.exe: it timed out").Detail);
     }
 
     // ---- what is actually there, rather than what the handle implies (DD175) ------------------

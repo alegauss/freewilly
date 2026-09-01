@@ -579,7 +579,11 @@ public sealed class EngineLifecycle : IAsyncDisposable
         var terminated = _wsl.Run("--terminate", Distribution);
         return terminated.Succeeded
             ? $"terminated {Distribution}"
-            : $"could not terminate {Distribution}: {terminated.Output.Trim()}";
+
+            // Detail rather than the trimmed output, since DD274. A wsl.exe Windows refused to start
+            // writes nothing at all, and this line used to end at its colon — which is the one place
+            // in a session ending where "it said nothing" and "it never ran" look identical.
+            : $"could not terminate {Distribution}: {terminated.Detail}";
     }
 
     /// <summary>
@@ -926,7 +930,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
             // DD266. The exit code rather than the sentence, because the sentence's own tail is the
             // claim being withdrawn: there were words, and they are in the log.
             var code = _daemon.ExitCode is { } number
-                ? $"wsl.exe exited {number}"
+                ? $"wsl.exe exited {Preflight.Windows.WindowsExit.Spell(number)}"
                 : "the launcher exited";
 
             return LastLineOfTheDaemonLog() is { } ended
@@ -1159,9 +1163,14 @@ public sealed class WslDaemonProcess : IDaemonProcess
         // detail read at a glance should lead with the half that says what happened.
         var line = string.Join(" ", Flatten(wroteOut).Concat(Flatten(wroteErr)));
 
+        // Spelled since DD274. A code Windows chose rather than the tool used to reach the journal
+        // as a bare number, and 1073807364 is the one that mattered: DBG_TERMINATE_PROCESS, which
+        // is the session ending killing the launcher. Read as a decimal it says nothing at all.
+        var exited = Preflight.Windows.WindowsExit.Spell(exitCode);
+
         return line.Length == 0
-            ? $"wsl.exe exited {exitCode}{WithoutAWord}"
-            : $"wsl.exe exited {exitCode}: {line}";
+            ? $"wsl.exe exited {exited}{WithoutAWord}"
+            : $"wsl.exe exited {exited}: {line}";
     }
 
     /// <summary>Decode one stream and reduce it to words a single journal line can hold.</summary>

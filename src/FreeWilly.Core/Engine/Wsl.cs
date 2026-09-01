@@ -10,6 +10,29 @@ public sealed record WslResult(int? ExitCode, string Output, string? Failure)
 {
     /// <summary>Whether it ran and reported success.</summary>
     public bool Succeeded => Failure is null && ExitCode == 0;
+
+    /// <summary>What to say about a call that did not succeed (DD274).</summary>
+    /// <remarks>
+    /// The tool's own words first, because they are the answer where there are any. A launch Windows
+    /// refused has none — it exits with empty streams — and the sentence used to end at the colon,
+    /// which reads as a call that ran and had nothing to report rather than one that never started.
+    /// The exit code is the only thing left saying which, so it is what fills the gap.
+    /// </remarks>
+    public string Detail
+    {
+        get
+        {
+            if (Output.Trim() is { Length: > 0 } said)
+            {
+                return said;
+            }
+
+            return Failure
+                ?? (ExitCode is { } code
+                    ? $"it exited {Preflight.Windows.WindowsExit.Spell(code)}"
+                    : "it never ran");
+        }
+    }
 }
 
 /// <summary>
