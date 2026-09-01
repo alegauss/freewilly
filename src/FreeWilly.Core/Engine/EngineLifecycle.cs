@@ -487,12 +487,30 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// </param>
     /// <param name="cancellation">Cancellation.</param>
     /// <returns>Stopped, and what was done.</returns>
+    /// <remarks>
+    /// The order the steps run in is decided by <paramref name="grace"/>, and that is DD271. A stop
+    /// somebody asked for does the polite thing first and unmounts last; a stop that is out of time
+    /// unmounts first, because it may not get a second chance.
+    /// </remarks>
     public async Task<EngineStatus> StopAsync(
         TimeSpan grace, CancellationToken cancellation = default)
     {
         // Whatever was found about the engine being stopped here is about to stop being true of it.
         _found = null;
         var done = new List<string>();
+
+        // DD271. Under a session ending the whole teardown has four seconds and a single wsl.exe
+        // launch can consume all of it, so the step that unmounts ext4 must not be queued behind
+        // three others: the sessions of 29, 30 and 31 August 2026 all end at "still tearing down
+        // after 4s" with no terminate line behind them, which is the unclean unmount DD187 and DD188
+        // were written to prevent. What that costs is DD189's SIGTERM, and the trade is deliberate —
+        // a container reaped by WSL2 recovers on the next start and a root torn off mid-write may
+        // not. A patient stop is not racing anything and keeps the order it has.
+        var hurried = grace <= HurriedGrace;
+        if (hurried)
+        {
+            done.Add(Terminated());
+        }
 
         if (_relay is not null)
         {
@@ -517,16 +535,31 @@ public sealed class EngineLifecycle : IAsyncDisposable
             done.Add("stopped the daemon");
         }
 
-        if (DistributionRegistered)
+        if (!hurried && DistributionRegistered)
         {
-            var terminated = _wsl.Run("--terminate", Distribution);
-            done.Add(terminated.Succeeded
-                ? $"terminated {Distribution}"
-                : $"could not terminate {Distribution}: {terminated.Output.Trim()}");
+            done.Add(Terminated());
         }
 
         return new EngineStatus(EngineState.Stopped,
             done.Count == 0 ? "nothing was running" : string.Join(", ", done));
+    }
+
+    /// <summary>Take the distribution down, and say what that did (DD271).</summary>
+    /// <returns>The line for the journal.</returns>
+    /// <remarks>
+    /// Ungated where a hurried stop calls it, which is the half of DD271 that is easy to miss:
+    /// <see cref="DistributionRegistered"/> is a <c>wsl --list</c>, so asking whether the terminate
+    /// is worth running costs the same launch as running it. A terminate against a distribution that
+    /// is not registered fails and says so, which is a truthful line in the journal and no worse than
+    /// the launch the question would have spent. The patient path keeps the gate, because there the
+    /// launch is free and "nothing was running" is a better answer than a failure.
+    /// </remarks>
+    private string Terminated()
+    {
+        var terminated = _wsl.Run("--terminate", Distribution);
+        return terminated.Succeeded
+            ? $"terminated {Distribution}"
+            : $"could not terminate {Distribution}: {terminated.Output.Trim()}";
     }
 
     /// <summary>

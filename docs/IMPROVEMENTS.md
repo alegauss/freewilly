@@ -2,27 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD271 The terminate goes first when the stop is hurried
-
-Under `HurriedGrace`, `StopAsync` does four things in order: it drops the relay, asks
-whether the distribution is running, sends dockerd a SIGTERM and waits for it, and only
-then runs `wsl --terminate`. Three of those four reach for `wsl.exe`, and the terminate
-is last.
-
-That order is right when somebody is at a keyboard. It is wrong when Windows is ending
-the session, because the budget is four seconds and a single `wsl.exe` launch in that
-window can consume all of it. The journal shows the consequence: the sessions of 29, 30
-and 31 August 2026 all end at "still tearing down after 4s" with no "terminated
-freewilly" line behind them. The step that unmounts ext4 never ran, which is the unclean
-unmount DD187 and DD188 were written to prevent and the one repaired by hand on 29
-August.
-
-Containers stopping themselves is worth having, and DD189 is why. It is not worth having
-ahead of the unmount, because a container reaped by WSL2 recovers on the next start and
-a root filesystem torn off mid-write may not. So a hurried stop terminates first and
-does the rest with whatever budget is left. A patient stop keeps the order it has: there
-the SIGTERM has twenty seconds and the terminate is not racing anything.
-
 ### §DD272 A quiet pipe is not a stopped distribution
 
 `SessionTeardown` decides the host handled the teardown by pinging the engine and

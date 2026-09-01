@@ -1398,7 +1398,9 @@ public sealed class EngineLifecycleTests
         // the SIGTERM, then a pidof that finds nothing, which is the daemon having answered.
         wsl.Answer(0, "freewilly\r\n").Answer(0).Answer(1);
 
-        var status = await engine.StopAsync(EngineLifecycle.HurriedGrace);
+        // Patient since DD271, which is what makes the queue above mean what it says: a hurried stop
+        // now runs the terminate first and would take the running gate's answer for it.
+        var status = await engine.StopAsync(EngineLifecycle.PatientGrace);
 
         Assert.Equal(EngineState.Stopped, status.State);
         Assert.Equal(1, daemon.Stops);
@@ -1415,7 +1417,10 @@ public sealed class EngineLifecycleTests
         var daemon = new FakeDaemon();
         await using var engine = new EngineLifecycle(wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
 
-        var status = await engine.StopAsync(EngineLifecycle.HurriedGrace);
+        // Patient, because "nothing was running" is the patient path's answer: it can afford the
+        // `wsl --list` that establishes the distribution is not registered. A hurried stop spends
+        // that same launch on the terminate itself (DD271), and the test below is its half.
+        var status = await engine.StopAsync(EngineLifecycle.PatientGrace);
 
         Assert.Equal(EngineState.Stopped, status.State);
         Assert.Contains("nothing was running", status.Detail, StringComparison.Ordinal);
@@ -1445,10 +1450,84 @@ public sealed class EngineLifecycleTests
         // Queued after the start, whose own probes would consume them.
         wsl.Answer(0, "freewilly\r\n").Answer(0).Answer(1);
 
-        var status = await engine.StopAsync(EngineLifecycle.HurriedGrace);
+        // Patient since DD271. The claim is unchanged and still the one DD189 exists for; what
+        // changed is which stop makes it, because a session ending now unmounts before it asks.
+        var status = await engine.StopAsync(EngineLifecycle.PatientGrace);
 
         Assert.True(asked >= 0, "the daemon was killed without being asked to stop first");
         Assert.Contains("stopped its containers", status.Detail, StringComparison.Ordinal);
+    }
+
+    // ---- the terminate goes first when the stop is hurried (DD271) ------------------------------
+
+    [Fact]
+    public async Task A_hurried_stop_unmounts_before_it_spends_a_launch_on_anything_else()
+    {
+        // The whole of DD271. Four seconds is what a session ending has, one wsl.exe launch in that
+        // window can consume all of it, and `wsl --terminate` is the only step that unmounts the
+        // distribution's ext4 — so it goes first, before the running gate, before the SIGTERM and
+        // before the `wsl --list` that would ask whether it is worth running.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var daemon = new FakeDaemon();
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
+        await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        // Everything the start asked is already recorded, so the stop's first call is the one
+        // asserted on rather than the run's.
+        var before = wsl.Invocations.Count;
+
+        var status = await engine.StopAsync(EngineLifecycle.HurriedGrace);
+
+        Assert.Equal(
+            ["--terminate", "freewilly"],
+            wsl.Invocations[before]);
+        Assert.Contains("terminated freewilly", status.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_hurried_stop_does_not_pay_a_launch_to_ask_whether_the_terminate_is_worth_it()
+    {
+        // `DistributionRegistered` is a `wsl --list`, so the question costs exactly what the answer
+        // does. A terminate against something unregistered fails and says so, which is a truthful
+        // line and cheaper than establishing it was unnecessary.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "Ubuntu\r\n", null);
+        var daemon = new FakeDaemon();
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
+
+        await engine.StopAsync(EngineLifecycle.HurriedGrace);
+
+        Assert.Equal(["--terminate", "freewilly"], wsl.Invocations[0]);
+    }
+
+    [Fact]
+    public async Task A_patient_stop_still_unmounts_last()
+    {
+        // The other half, and the reason DD271 is a decision rather than a reordering: a quit is not
+        // racing Windows, so there the containers get to stop themselves first and the unmount is
+        // the tidy-up it has always been.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var daemon = new FakeDaemon();
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
+        await engine.StartAsync(TimeSpan.FromSeconds(20));
+        wsl.Answer(0, "freewilly\r\n").Answer(0).Answer(1);
+
+        await engine.StopAsync(EngineLifecycle.PatientGrace);
+
+        var signalled = wsl.Invocations.FindIndex(
+            argv => argv.Any(word => word.Contains("kill -TERM", StringComparison.Ordinal)));
+        var terminated = wsl.Invocations.FindIndex(
+            argv => argv.Length > 0 && argv[0] == "--terminate");
+
+        Assert.True(signalled >= 0, "a patient stop no longer asks the daemon to stop");
+        Assert.True(
+            terminated > signalled,
+            $"the terminate ({terminated}) should follow the SIGTERM ({signalled})");
     }
 
     [Fact]
