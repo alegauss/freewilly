@@ -44,25 +44,28 @@ search for it will not.
 
 ### §DD275 A step cannot be given more time than the teardown has
 
-`EngineLifecycle.StopAsync` reaches `wsl --terminate` through `_wsl.Run(...)` with no
-budget, so it inherits `ConsoleTool.Timeout`, which is fifteen seconds. That number was
-written for a preflight probe standing at a prompt. During a session ending the whole
-teardown has four, which is `SessionEndingBudget`, and Windows is not waiting longer.
+Two calls a session ending depends on run under `ConsoleTool.Timeout`, which is fifteen
+seconds. `EngineLifecycle.StopAsync` reaches `wsl --terminate` through `_wsl.Run(...)`
+with no budget named, and `LiveEngineTeardown.DistributionIsUp` asks `wsl --list
+--running` the same way. The whole teardown has four seconds, which is
+`SessionEndingBudget`, and Windows is not waiting longer.
 
-The two do not disagree on a healthy machine, because a terminate takes well under a
-second. They disagree exactly where it matters: a `wsl.exe` that starts and then stops
-answering. The call sits inside a budget it can never exhaust, the four seconds run out
-around it, and the process is killed somewhere in the middle. What reaches the journal
-is nothing, because the line naming the outcome is written after the call returns.
+Fifteen seconds was written for a preflight probe standing at a prompt. It and the
+shutdown budget do not disagree on a healthy machine, because both calls answer in well
+under a second. They disagree exactly where it matters: a `wsl.exe` that starts and then
+stops answering. The call sits inside a budget it can never exhaust, the four seconds
+run out around it, and the process is killed somewhere in the middle. What reaches the
+journal is nothing, because the line naming the outcome is written after the call
+returns. The backstop's one-second poll cadence is the same fiction: a probe that hangs
+makes the cadence meaningless.
 
-DD270 removed one way that happens, and only one: a launch Windows refuses now fails at
-once instead of waiting on a dialog. A launch that succeeds and hangs is untouched by
-it, and the failing teardowns between 29 and 31 August all ended at the four-second mark
-rather than at fifteen, which is what says the budget above was never the binding one.
+DD270 removed one way that happens and only one, a launch Windows refuses now fails at
+once. A launch that succeeds and hangs is untouched by it, and the failing teardowns
+between 29 and 31 August all ended at the four-second mark rather than at fifteen.
 
-The fix is that a hurried stop carries its own budget down to the calls it makes, rather
-than each call choosing from a constant written for another caller. The patient path
-keeps the timeout it has, because a quit really can wait.
+So a hurried teardown carries its own budget down to every call it makes, rather than
+each call taking a constant written for another caller. The patient path keeps the
+timeout it has.
 
 ### §DD276 A distribution that was never there is not a failed terminate
 
