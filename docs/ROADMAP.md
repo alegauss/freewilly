@@ -7,6 +7,7 @@
 - 📋 **DD275** (deps: —) **the terminate a session ending depends on is given 15 seconds inside a budget of 4** — A hurried stop now runs its wsl.exe under the budget the shutdown actually has, so one call that hangs cannot spend the whole teardown by itself. → §DD275
 - 📋 **DD276** (deps: —) **a logoff on a machine that never provisioned an engine now writes a terminate failure** — A hurried terminate that finds no distribution says so plainly, so an ordinary session ending stops leaving a line that reads like something went wrong. → §DD276
 - 📋 **DD277** (deps: —) **the teardown lines two processes now write are both labelled stop, so nobody can tell which wrote one** — Each teardown line names the process it came from, so a reader can tell the host's own stop from the tray's backstop where DD188 says the difference matters. → §DD277
+- 📋 **DD278** (deps: —) **six callers spell their own version of what a wsl call said, and none falls back to the exit code** — The one Detail DD274 added answers all of them, so a wsl.exe Windows refused inside a repair or a compaction says so rather than producing an empty sentence. → §DD278
 
 ## Block B — The daemon client (talk to the engine)
 

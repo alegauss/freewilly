@@ -73,6 +73,29 @@ one is worse: it looks like the host did its job.
 The word is already a parameter of the sink; what is missing is that each caller passes
 its own.
 
+### §DD278 One answer to what a wsl call said
+
+DD274 gave `WslResult` a `Detail`: the tool's own words where there are any, then the
+failure, then the exit code spelled out. It was written for the terminate line, which is
+where the gap was measured, and it is the general answer.
+
+Six other places already spell a weaker version of it. `DiskCompaction`,
+`ElevatedCompaction`, `FilesystemRepair`, `RepairDrill`, `RescueImage` and
+`CompactionDrill` each carry a line reading `result.Failure ??
+result.Output.Trim().ReplaceLineEndings(...)`. Every one of them stops where DD274
+starts: a call that ran, exited non-zero and wrote nothing resolves to the empty string,
+and the sentence built around it says a repair failed and names nothing at all. That is
+the same shape the terminate line had, in the five commands a user runs precisely
+because something is already wrong.
+
+They differ in one detail that has to survive: the separator. Four join wrapped output
+with a space and one with `"; "`, which is a real choice about how a multi-line `e2fsck`
+transcript reads on one journal line, not an accident to be flattened away.
+
+So `Detail` takes the separator and the six call sites become one call each. What that
+buys is not fewer lines: it is that the next reader of a failed compaction gets the exit
+code rather than a sentence that trails off.
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
