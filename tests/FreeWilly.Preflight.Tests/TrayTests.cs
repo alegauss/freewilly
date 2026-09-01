@@ -689,6 +689,54 @@ public sealed class TrayTests
     }
 
     [Fact]
+    public void A_teardown_line_says_which_of_the_two_processes_wrote_it()
+    {
+        // DD277. DD273 gave both writers the same column word, and DD188's whole design is that the
+        // host does the teardown and the tray runs only where it did not — so two identical
+        // "terminated freewilly" lines make the first question a reader has unanswerable, and a
+        // single one is worse: it looks like the host did its job.
+        var root = Path.Combine(Path.GetTempPath(), $"freewilly-step-{Guid.NewGuid():N}");
+        var file = Path.Combine(root, "engine.log");
+        try
+        {
+            var journal = new EngineHostLog(file);
+            EngineCommand.Step(journal, "host")("terminated freewilly");
+            EngineCommand.Step(journal, "tray")("terminated freewilly");
+
+            var lines = File.ReadAllLines(file);
+
+            Assert.Equal(2, lines.Length);
+            Assert.Contains("host      terminated freewilly", lines[0], StringComparison.Ordinal);
+            Assert.Contains("tray      terminated freewilly", lines[1], StringComparison.Ordinal);
+
+            // The two are the same words in the same file, so the column is the only thing telling
+            // them apart. That is the whole assertion.
+            Assert.NotEqual(lines[0][19..], lines[1][19..]);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void The_two_teardown_writers_do_not_both_call_themselves_the_same_thing()
+    {
+        // Asserted at the call sites, because the sink cannot enforce it: a second caller passing
+        // "host" would compile and would put the failure back exactly as DD273 left it.
+        var root = RepositoryRoot();
+        var host = File.ReadAllText(Path.Combine(root, "src/FreeWilly.Tray/Cli/EngineCommand.cs"));
+        var tray = File.ReadAllText(Path.Combine(root, "src/FreeWilly.Tray/SessionTeardown.cs"));
+
+        Assert.Contains("Step(journal, \"host\")", host, StringComparison.Ordinal);
+        Assert.Contains("Step(journal, \"tray\")", tray, StringComparison.Ordinal);
+        Assert.DoesNotContain("Step(journal, \"host\")", tray, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void No_single_wsl_call_may_spend_the_whole_session_ending_budget()
     {
         // DD275, and it is the two constants held against each other rather than either alone: the

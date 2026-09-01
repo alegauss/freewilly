@@ -175,9 +175,13 @@ internal sealed class LiveEngineTeardown(EngineHostLog journal) : IEngineTeardow
     /// <para>Each step is written as it finishes (DD273), through the same sink the host hands its
     /// own teardown. The line this returns is composed only once every step is done, so it is the
     /// one thing a teardown Windows kills part way through never gets to say.</para>
+    ///
+    /// <para>Under the tray's own column word and not the host's (DD277). Both processes reach this
+    /// sink during one session ending, and which of the two took the distribution down is the first
+    /// question DD188 leaves a reader with.</para>
     /// </remarks>
     public string Terminate() =>
         new EngineLifecycle(new Wsl(), new WslDaemonProcess(), new WslSocatBackend())
-            .StopAsync(EngineLifecycle.HurriedGrace, step: Cli.EngineCommand.Step(journal))
+            .StopAsync(EngineLifecycle.HurriedGrace, step: Cli.EngineCommand.Step(journal, "tray"))
             .GetAwaiter().GetResult().Detail;
 }

@@ -105,6 +105,7 @@
 - ✅ **DD274** **a child Windows refused to start reads in the journal as a tool that exited without a word** — An exit code Windows chose now reads as what it is, so 0xC0000142 and 0x40010004 say the launch was refused or killed rather than arriving as a bare number.
 - ✅ **DD275** **the terminate a session ending depends on is given 15 seconds inside a budget of 4** — Every wsl.exe a hurried teardown runs is bounded by half the shutdown budget, so one call that hangs gives up in time for the next rather than spending the four seconds alone.
 - ✅ **DD276** **a logoff on a machine that never provisioned an engine now writes a terminate failure** — A terminate that finds nothing registered now says there was nothing to take down, so a logoff on a machine with no engine stops writing a failure about one.
+- ✅ **DD277** **the teardown lines two processes now write are both labelled stop, so nobody can tell which wrote one** — A teardown step is written under its writer's own column word, so the host's stop and the tray's backstop are told apart in the file DD188 leaves that question in.
 
 ## Block B — The daemon client (talk to the engine)
 

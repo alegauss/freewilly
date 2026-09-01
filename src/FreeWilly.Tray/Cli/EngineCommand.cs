@@ -307,7 +307,7 @@ internal static class EngineCommand
         catch (OperationCanceledException)
         {
             Report(
-                lifecycle.StopAsync(grace, step: Step(journal)).GetAwaiter().GetResult(), journal);
+                lifecycle.StopAsync(grace, step: Step(journal, "host")).GetAwaiter().GetResult(), journal);
             return Ok;
         }
         finally
@@ -507,24 +507,32 @@ internal static class EngineCommand
         }
 
         Report(
-            lifecycle.StopAsync(grace(), step: Step(journal)).GetAwaiter().GetResult(), journal);
+            lifecycle.StopAsync(grace(), step: Step(journal, "host")).GetAwaiter().GetResult(), journal);
         return Ok;
     }
 
     /// <summary>Write down each teardown step as it finishes (DD273).</summary>
     /// <param name="journal">Where the host writes.</param>
+    /// <param name="who">
+    /// The column word, which is the writer's own name (DD277): <c>host</c> here and <c>tray</c>
+    /// from the backstop.
+    /// </param>
     /// <returns>The sink <see cref="EngineLifecycle.StopAsync"/> reports to.</returns>
     /// <remarks>
     /// Handed over on every teardown, not only on the one that is out of time, because which ending
     /// this turned out to be is decided inside <c>StopAsync</c> and it only speaks on the hurried
     /// one. A quit reaches the end and the aggregate line says the same thing more briefly.
     ///
-    /// <para>Its own column word, because these are neither a state the engine is in nor a poll: they
-    /// are the teardown reporting itself while it still can, and a reader working out how far the
-    /// last shutdown got wants exactly those lines together.</para>
+    /// <para><b>The word is the writer and not the activity, which reverses what DD273 chose.</b> A
+    /// shared <c>stop</c> read well while one process wrote it, and two do: the host from its own
+    /// teardown, and the tray from <c>LiveEngineTeardown</c> when the backstop fires. Every other
+    /// line in this file names who is speaking, and losing that here is the worst place to lose it —
+    /// DD188's whole design is that the host does this and the tray runs only where it did not, so
+    /// "which of the two terminated it" is the first question anyone opens the file to answer. What
+    /// a step was is already in the words after the column.</para>
     /// </remarks>
-    internal static Action<string> Step(EngineHostLog? journal) =>
-        line => Note(journal, $"  {"stop",-8}  {line}");
+    internal static Action<string> Step(EngineHostLog? journal, string who) =>
+        line => Note(journal, $"  {who,-8}  {line}");
 
     /// <summary>
     /// Get the engine back, backing off between attempts and then waiting (DD136, DD164).

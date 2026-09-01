@@ -2,29 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD277 A teardown line should say which process wrote it
-
-DD273 gave the teardown a line per step, written through `EngineCommand.Step`, which
-stamps the column word `stop`. Two processes now reach it during one session ending: the
-host, from its own `StopAsync`, and the tray, from `LiveEngineTeardown.Terminate` when
-the backstop fires. They write the same words into the same file.
-
-That undoes the one thing DD163 built the shared journal for. Every other line in there
-says who is speaking: `host` for the engine host, `tray` for the icon, `session` for
-what Windows said, `power`, `fs`. The reader is meant to be able to follow two processes
-through one timeline, and the run of 21 August 2026 is exactly why: the engine going
-quiet, a gap, and a human clicking Start, which only reads as one story because each
-half is attributed.
-
-The teardown is the worst place to lose that. DD188's whole design is that the host
-should do this and the tray is a backstop that runs only where the host did not, so
-"which of the two terminated it" is the first question anyone opens the file to answer.
-Two identical `stop  terminated freewilly` lines make that unanswerable, and a single
-one is worse: it looks like the host did its job.
-
-The word is already a parameter of the sink; what is missing is that each caller passes
-its own.
-
 ### §DD278 One answer to what a wsl call said
 
 DD274 gave `WslResult` a `Detail`: the tool's own words where there are any, then the
