@@ -8,6 +8,7 @@
 - 📋 **DD272** (deps: —) **the tray's backstop reads a quiet pipe as the host having taken the distribution down, and the pipe goes quiet first** — The backstop now asks whether the distribution is still running, so it terminates where the host stopped serving but never reached the terminate. → §DD272
 - 📋 **DD273** (deps: —) **a teardown killed mid-way writes nothing, because the stop's one journal line is composed only after every step** — A session-ending stop now writes a line as each step finishes, so a journal that ends early still says how far the teardown got. → §DD273
 - 📋 **DD274** (deps: —) **a child Windows refused to start reads in the journal as a tool that exited without a word** — The runner now names the exit codes a session ending produces, so 0xC0000142 and 0x40010004 read as Windows refusing the launch rather than as silence. → §DD274
+- 📋 **DD275** (deps: —) **the terminate a session ending depends on is given 15 seconds inside a budget of 4** — A hurried stop now runs its wsl.exe under the budget the shutdown actually has, so one call that hangs cannot spend the whole teardown by itself. → §DD275
 
 ## Block B — The daemon client (talk to the engine)
 

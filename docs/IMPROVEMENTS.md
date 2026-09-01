@@ -83,6 +83,28 @@ initialise the process, and 0x40010004 as Windows killing it. The rest keep thei
 and gain the hex, because a reader who has to convert 1073807364 by hand before they can
 search for it will not.
 
+### §DD275 A step cannot be given more time than the teardown has
+
+`EngineLifecycle.StopAsync` reaches `wsl --terminate` through `_wsl.Run(...)` with no
+budget, so it inherits `ConsoleTool.Timeout`, which is fifteen seconds. That number was
+written for a preflight probe standing at a prompt. During a session ending the whole
+teardown has four, which is `SessionEndingBudget`, and Windows is not waiting longer.
+
+The two do not disagree on a healthy machine, because a terminate takes well under a
+second. They disagree exactly where it matters: a `wsl.exe` that starts and then stops
+answering. The call sits inside a budget it can never exhaust, the four seconds run out
+around it, and the process is killed somewhere in the middle. What reaches the journal
+is nothing, because the line naming the outcome is written after the call returns.
+
+DD270 removed one way that happens, and only one: a launch Windows refuses now fails at
+once instead of waiting on a dialog. A launch that succeeds and hangs is untouched by
+it, and the failing teardowns between 29 and 31 August all ended at the four-second mark
+rather than at fifteen, which is what says the budget above was never the binding one.
+
+The fix is that a hurried stop carries its own budget down to the calls it makes, rather
+than each call choosing from a constant written for another caller. The patient path
+keeps the timeout it has, because a quit really can wait.
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
