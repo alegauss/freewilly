@@ -137,6 +137,10 @@ internal sealed class LiveEngineTeardown(EngineHostLog journal) : IEngineTeardow
     /// direction DD272 argues for and it is not symmetric: this is exactly the launch a session
     /// ending may refuse (DD270), so a probe that failed is no evidence the distribution went with
     /// it.</para>
+    ///
+    /// <para>Under the teardown's own budget and not the probe's fifteen seconds (DD275). This runs
+    /// inside four, so a call that could not time out before the shutdown did would make the poll
+    /// cadence above a fiction.</para>
     /// </remarks>
     public bool DistributionIsUp()
     {
@@ -145,7 +149,8 @@ internal sealed class LiveEngineTeardown(EngineHostLog journal) : IEngineTeardow
             return false;
         }
 
-        var running = _wsl.Run("--list", "--running", "--quiet");
+        var running = _wsl.Run(
+            EngineLifecycle.HurriedCall, "--list", "--running", "--quiet");
         return !running.Succeeded
             || running.Output
                 .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)

@@ -473,6 +473,26 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// </remarks>
     public static readonly TimeSpan HurriedGrace = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// How long one <c>wsl.exe</c> call gets inside a teardown that is out of time (DD275).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="WslBudget.Probe"/> is fifteen seconds and was written for a preflight standing at a
+    /// prompt. A session ending has four in total, so a call taking that constant is a call that
+    /// cannot exhaust its own budget before the shutdown's runs out around it: the process is killed
+    /// mid-call and the line naming the outcome, which is written after the call returns, never
+    /// reaches the journal.
+    ///
+    /// <para>Half of the four, so the terminate and one call after it can both finish. That is the
+    /// whole claim: one <c>wsl.exe</c> that hangs must not be able to spend the teardown by itself.
+    /// It is not a promise that every step runs, and nothing here can make one — Windows stops
+    /// waiting on its own schedule.</para>
+    ///
+    /// <para>On a healthy machine none of this is reached. Both calls answer in well under a second,
+    /// and this only bounds the failing case.</para>
+    /// </remarks>
+    public static readonly TimeSpan HurriedCall = TimeSpan.FromSeconds(2);
+
     /// <summary>How often the grace asks whether the daemon has gone.</summary>
     private static readonly TimeSpan GracePoll = TimeSpan.FromMilliseconds(500);
 
@@ -513,6 +533,12 @@ public sealed class EngineLifecycle : IAsyncDisposable
         // not. A patient stop is not racing anything and keeps the order it has.
         var hurried = grace <= HurriedGrace;
 
+        // DD275. Every wsl.exe below runs under the budget this teardown actually has, rather than
+        // each call taking the probe constant written for a preflight at a prompt. Fifteen seconds
+        // inside a budget of four is a call that cannot time out before the shutdown does, and a
+        // process killed mid-call writes no line at all.
+        var budget = hurried ? HurriedCall : WslBudget.Probe;
+
         // DD273. The aggregate below is composed only once every step has finished, so a teardown
         // Windows kills part way through left no trace that it ran at all: the last three shutdowns
         // of August 2026 carry the session line and then nothing, and which step it died in had to
@@ -529,7 +555,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
 
         if (hurried)
         {
-            Did(Terminated());
+            Did(Terminated(budget));
         }
 
         if (_relay is not null)
@@ -544,7 +570,8 @@ public sealed class EngineLifecycle : IAsyncDisposable
         // shutdown and no container ever received a stop signal, on every exit since DD128 including
         // the Quit menu item. The difference this buys is a MariaDB that closed its tables and one
         // that recovers them on the next boot.
-        if (await AskTheDaemonToStopAsync(grace, cancellation).ConfigureAwait(false) is { } asked)
+        if (await AskTheDaemonToStopAsync(grace, budget, cancellation).ConfigureAwait(false)
+            is { } asked)
         {
             Did(asked);
         }
@@ -557,7 +584,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
 
         if (!hurried && DistributionRegistered)
         {
-            Did(Terminated());
+            Did(Terminated(budget));
         }
 
         return new EngineStatus(EngineState.Stopped,
@@ -565,6 +592,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
     }
 
     /// <summary>Take the distribution down, and say what that did (DD271).</summary>
+    /// <param name="budget">How long the call gets, which the teardown decides (DD275).</param>
     /// <returns>The line for the journal.</returns>
     /// <remarks>
     /// Ungated where a hurried stop calls it, which is the half of DD271 that is easy to miss:
@@ -574,9 +602,9 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// the launch the question would have spent. The patient path keeps the gate, because there the
     /// launch is free and "nothing was running" is a better answer than a failure.
     /// </remarks>
-    private string Terminated()
+    private string Terminated(TimeSpan budget)
     {
-        var terminated = _wsl.Run("--terminate", Distribution);
+        var terminated = _wsl.Run(budget, "--terminate", Distribution);
         return terminated.Succeeded
             ? $"terminated {Distribution}"
 
@@ -590,6 +618,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// Send the daemon a SIGTERM and wait for it to go, so its containers are stopped (DD189).
     /// </summary>
     /// <param name="grace">How long it is given.</param>
+    /// <param name="budget">How long each <c>wsl.exe</c> below gets (DD275).</param>
     /// <param name="cancellation">Cancellation.</param>
     /// <returns>What to report, or <see langword="null"/> where there was nothing to ask.</returns>
     /// <remarks>
@@ -602,14 +631,15 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// no daemon in it makes that command fail, which is the answer rather than an error.</para>
     /// </remarks>
     private async Task<string?> AskTheDaemonToStopAsync(
-        TimeSpan grace, CancellationToken cancellation)
+        TimeSpan grace, TimeSpan budget, CancellationToken cancellation)
     {
-        if (!DistributionIsRunning())
+        if (!DistributionIsRunning(budget))
         {
             return null;
         }
 
         var signalled = _wsl.Run(
+            budget,
             "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", "kill -TERM $(pidof dockerd)");
         if (!signalled.Succeeded)
         {
@@ -625,6 +655,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
             await Task.Delay(GracePoll, cancellation).ConfigureAwait(false);
 
             var alive = _wsl.Run(
+                budget,
                 "-d", Distribution, "-u", "root", "--exec", "/bin/sh", "-c", "pidof dockerd");
             if (!alive.Succeeded)
             {
@@ -646,15 +677,19 @@ public sealed class EngineLifecycle : IAsyncDisposable
         .Any(line => line.Trim().Equals(Distribution, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Whether the owned distribution is up right now.</summary>
+    /// <param name="budget">
+    /// How long the call gets, defaulting to the probe's own (DD275). A teardown that is out of time
+    /// names a shorter one, because this gate is one of the launches that can spend a shutdown.
+    /// </param>
     /// <returns><see langword="true"/> where WSL lists it as running.</returns>
     /// <remarks>
     /// The gate every <c>--exec</c> in this file goes through, and it is not about cost. Asking
     /// <c>--exec</c> of a distribution that is not running <em>starts</em> it, so a probe without
     /// this boots the virtual machine it was only meant to look at.
     /// </remarks>
-    private bool DistributionIsRunning()
+    private bool DistributionIsRunning(TimeSpan? budget = null)
     {
-        var running = _wsl.Run("--list", "--running", "--quiet");
+        var running = _wsl.Run(budget ?? WslBudget.Probe, "--list", "--running", "--quiet");
         return running.Succeeded && NamesTheDistribution(running.Output);
     }
 

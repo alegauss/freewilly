@@ -689,6 +689,23 @@ public sealed class TrayTests
     }
 
     [Fact]
+    public void No_single_wsl_call_may_spend_the_whole_session_ending_budget()
+    {
+        // DD275, and it is the two constants held against each other rather than either alone: the
+        // teardown has four seconds and a call that could take all four would leave the terminate
+        // no room to run at all. Half means the unmount and one call after it can both finish, which
+        // is what DD271's ordering is worth only if the first call is bounded.
+        Assert.True(
+            EngineLifecycle.HurriedCall + EngineLifecycle.HurriedCall
+                <= EngineCommand.SessionEndingBudget,
+            $"two calls of {EngineLifecycle.HurriedCall} do not fit in "
+            + $"{EngineCommand.SessionEndingBudget}");
+
+        // And it is shorter than the constant it replaced, or the task changed nothing.
+        Assert.True(EngineLifecycle.HurriedCall < WslBudget.Probe);
+    }
+
+    [Fact]
     public void A_session_ending_no_longer_answers_by_spawning_a_process()
     {
         // DD188. The spawn is the defect and not an implementation detail of it: `ShellExecuteEx`

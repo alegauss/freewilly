@@ -1592,6 +1592,48 @@ public sealed class EngineLifecycleTests
             $"the terminate ({terminated}) should follow the SIGTERM ({signalled})");
     }
 
+    // ---- no step outlives the teardown that is running it (DD275) -------------------------------
+
+    [Fact]
+    public async Task A_hurried_teardown_gives_every_wsl_call_the_time_the_shutdown_has()
+    {
+        // Fifteen seconds is `WslBudget.Probe`, written for a preflight standing at a prompt, and a
+        // session ending has four. A call taking the probe constant cannot time out before the
+        // shutdown does: the process is killed mid-call, and the line naming the outcome is written
+        // after the call returns, so nothing at all reaches the journal.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        await using var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        await engine.StopAsync(EngineLifecycle.HurriedGrace);
+
+        // Every one of them, and not only the terminate: the claim is that no single launch can
+        // spend the teardown, which a budget applied to one call would not buy.
+        Assert.NotEmpty(wsl.Budgets);
+        Assert.All(wsl.Budgets, budget => Assert.Equal(EngineLifecycle.HurriedCall, budget));
+    }
+
+    [Fact]
+    public async Task A_patient_teardown_keeps_the_budget_a_question_is_asked_under()
+    {
+        // Nothing is racing a quit, so there the probe's own number is right and shortening it would
+        // be a stop giving up on a slow machine for no reason.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        await using var engine = new EngineLifecycle(
+            wsl, new FakeDaemon(), new FakeBackend(Ok200), Pipe(), Owned);
+
+        // The running gate, the SIGTERM, then a pidof that finds nothing, so the grace ends on the
+        // first poll rather than after twenty seconds of a test measuring the build machine.
+        wsl.Answer(0, "freewilly\r\n").Answer(0).Answer(1);
+
+        await engine.StopAsync(EngineLifecycle.PatientGrace);
+
+        Assert.NotEmpty(wsl.Budgets);
+        Assert.All(wsl.Budgets, budget => Assert.Equal(WslBudget.Probe, budget));
+    }
+
     // ---- a teardown that is killed has still written something (DD273) -------------------------
 
     [Fact]
