@@ -113,7 +113,11 @@ internal static class SessionTeardown
 }
 
 /// <summary>The real machine, for the tray that is actually signing out.</summary>
-internal sealed class LiveEngineTeardown : IEngineTeardown
+/// <param name="journal">
+/// Where each teardown step is written as it finishes (DD273). The tray's own, so these lines
+/// interleave with the host's in the one file rather than starting a second timeline.
+/// </param>
+internal sealed class LiveEngineTeardown(EngineHostLog journal) : IEngineTeardown
 {
     private readonly EnginePaths _paths = new();
     // Held as the interface, so the probe budget comes from `IWsl.Run`'s own default rather than
@@ -159,8 +163,13 @@ internal sealed class LiveEngineTeardown : IEngineTeardown
     /// <para>Hurried, because this runs inside a session ending. It is the same reason the host uses
     /// that budget on the same event, and the two are the same constant so they cannot drift into
     /// disagreeing about how long a shutdown has.</para>
+    ///
+    /// <para>Each step is written as it finishes (DD273), through the same sink the host hands its
+    /// own teardown. The line this returns is composed only once every step is done, so it is the
+    /// one thing a teardown Windows kills part way through never gets to say.</para>
     /// </remarks>
     public string Terminate() =>
         new EngineLifecycle(new Wsl(), new WslDaemonProcess(), new WslSocatBackend())
-            .StopAsync(EngineLifecycle.HurriedGrace).GetAwaiter().GetResult().Detail;
+            .StopAsync(EngineLifecycle.HurriedGrace, step: Cli.EngineCommand.Step(journal))
+            .GetAwaiter().GetResult().Detail;
 }

@@ -306,7 +306,8 @@ internal static class EngineCommand
         }
         catch (OperationCanceledException)
         {
-            Report(lifecycle.StopAsync(grace).GetAwaiter().GetResult(), journal);
+            Report(
+                lifecycle.StopAsync(grace, step: Step(journal)).GetAwaiter().GetResult(), journal);
             return Ok;
         }
         finally
@@ -505,9 +506,25 @@ internal static class EngineCommand
             Console.WriteLine();
         }
 
-        Report(lifecycle.StopAsync(grace()).GetAwaiter().GetResult(), journal);
+        Report(
+            lifecycle.StopAsync(grace(), step: Step(journal)).GetAwaiter().GetResult(), journal);
         return Ok;
     }
+
+    /// <summary>Write down each teardown step as it finishes (DD273).</summary>
+    /// <param name="journal">Where the host writes.</param>
+    /// <returns>The sink <see cref="EngineLifecycle.StopAsync"/> reports to.</returns>
+    /// <remarks>
+    /// Handed over on every teardown, not only on the one that is out of time, because which ending
+    /// this turned out to be is decided inside <c>StopAsync</c> and it only speaks on the hurried
+    /// one. A quit reaches the end and the aggregate line says the same thing more briefly.
+    ///
+    /// <para>Its own column word, because these are neither a state the engine is in nor a poll: they
+    /// are the teardown reporting itself while it still can, and a reader working out how far the
+    /// last shutdown got wants exactly those lines together.</para>
+    /// </remarks>
+    internal static Action<string> Step(EngineHostLog? journal) =>
+        line => Note(journal, $"  {"stop",-8}  {line}");
 
     /// <summary>
     /// Get the engine back, backing off between attempts and then waiting (DD136, DD164).

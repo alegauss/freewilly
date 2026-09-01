@@ -2,26 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD273 A teardown that is killed should still have written something
-
-`StopAsync` collects what it did into a list and turns that list into one journal line
-when it returns. Nothing is written until every step has finished, so a teardown Windows
-kills part way through leaves no trace that it ran at all.
-
-That is what the last three shutdowns look like. The session lines are there, because
-the handler writes those itself, and then nothing: no relay line, no SIGTERM line, no
-terminate line, no "this host is done". Read the next morning, that file says only that
-the teardown did not finish, which was already obvious from the four-second line above
-it. It does not say which step it was in, whether `wsl.exe` was reached, or what the
-terminate returned. Finding that out took the Windows System log, which is the wrong
-place to have to go.
-
-The clean session ending on 30 August 2026 at 10:08 shows what the aggregate line is
-worth when it does get written, and there is no reason to lose it. So the aggregate
-stays for the patient path, and a hurried stop adds a line per step, written and flushed
-as that step finishes. Under a session ending this file is the only witness, and a
-witness that speaks after the room is empty is not one.
-
 ### §DD274 The exit codes a session ending produces
 
 On 29 August 2026 the journal recorded "the daemon exited: wsl.exe exited 1073807364

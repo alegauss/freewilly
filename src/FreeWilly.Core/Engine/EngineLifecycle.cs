@@ -486,6 +486,11 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// <see cref="PatientGrace"/> and a session ending cannot.
     /// </param>
     /// <param name="cancellation">Cancellation.</param>
+    /// <param name="step">
+    /// Told what each step did the moment it finishes, where the stop is hurried (DD273). Null
+    /// elsewhere, and ignored on the patient path: a quit reaches the end and the aggregate below
+    /// says the same thing in one line.
+    /// </param>
     /// <returns>Stopped, and what was done.</returns>
     /// <remarks>
     /// The order the steps run in is decided by <paramref name="grace"/>, and that is DD271. A stop
@@ -493,7 +498,7 @@ public sealed class EngineLifecycle : IAsyncDisposable
     /// unmounts first, because it may not get a second chance.
     /// </remarks>
     public async Task<EngineStatus> StopAsync(
-        TimeSpan grace, CancellationToken cancellation = default)
+        TimeSpan grace, CancellationToken cancellation = default, Action<string>? step = null)
     {
         // Whatever was found about the engine being stopped here is about to stop being true of it.
         _found = null;
@@ -507,16 +512,31 @@ public sealed class EngineLifecycle : IAsyncDisposable
         // a container reaped by WSL2 recovers on the next start and a root torn off mid-write may
         // not. A patient stop is not racing anything and keeps the order it has.
         var hurried = grace <= HurriedGrace;
+
+        // DD273. The aggregate below is composed only once every step has finished, so a teardown
+        // Windows kills part way through left no trace that it ran at all: the last three shutdowns
+        // of August 2026 carry the session line and then nothing, and which step it died in had to
+        // be read out of the Windows System log. Under a session ending this file is the only
+        // witness, and a witness that speaks after the room is empty is not one.
+        void Did(string what)
+        {
+            done.Add(what);
+            if (hurried)
+            {
+                step?.Invoke(what);
+            }
+        }
+
         if (hurried)
         {
-            done.Add(Terminated());
+            Did(Terminated());
         }
 
         if (_relay is not null)
         {
             await _relay.DisposeAsync().ConfigureAwait(false);
             _relay = null;
-            done.Add("stopped serving the pipe");
+            Did("stopped serving the pipe");
         }
 
         // Before the kill, and it is the whole of DD189. What follows kills the launcher tree, and
@@ -526,18 +546,18 @@ public sealed class EngineLifecycle : IAsyncDisposable
         // that recovers them on the next boot.
         if (await AskTheDaemonToStopAsync(grace, cancellation).ConfigureAwait(false) is { } asked)
         {
-            done.Add(asked);
+            Did(asked);
         }
 
         if (_daemon.Alive)
         {
             _daemon.Stop();
-            done.Add("stopped the daemon");
+            Did("stopped the daemon");
         }
 
         if (!hurried && DistributionRegistered)
         {
-            done.Add(Terminated());
+            Did(Terminated());
         }
 
         return new EngineStatus(EngineState.Stopped,

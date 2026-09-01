@@ -831,7 +831,7 @@ internal sealed class TrayApplication : ApplicationContext
 
         _journal.Say(
             $"{"session",-8}  {SessionTeardown.Run(
-                new LiveEngineTeardown(), () => DateTimeOffset.UtcNow, Thread.Sleep)}");
+                new LiveEngineTeardown(_journal), () => DateTimeOffset.UtcNow, Thread.Sleep)}");
     }
 
     /// <summary>Ask the engine to stop, at most once over this tray's life (DD129).</summary>

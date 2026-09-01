@@ -1530,6 +1530,53 @@ public sealed class EngineLifecycleTests
             $"the terminate ({terminated}) should follow the SIGTERM ({signalled})");
     }
 
+    // ---- a teardown that is killed has still written something (DD273) -------------------------
+
+    [Fact]
+    public async Task A_hurried_stop_says_what_it_did_as_each_step_finishes()
+    {
+        // The aggregate is composed when this returns, so a teardown Windows kills part way through
+        // left no trace that it ran: the last three shutdowns of August 2026 carry the session line
+        // and then nothing. Under a session ending the journal is the only witness there is.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var daemon = new FakeDaemon();
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
+        await engine.StartAsync(TimeSpan.FromSeconds(20));
+
+        var said = new List<string>();
+        var status = await engine.StopAsync(EngineLifecycle.HurriedGrace, step: said.Add);
+
+        // The unmount first, because DD271 put it there, and that ordering is the whole point of
+        // writing these at all: it is the line that has to survive being cut off.
+        Assert.Equal("terminated freewilly", said[0]);
+
+        // And the two accounts cannot disagree, because they are the same list. A per-step line that
+        // said something the summary did not would be two timelines in one file.
+        Assert.Equal(said, status.Detail.Split(", ", StringSplitOptions.None));
+    }
+
+    [Fact]
+    public async Task A_patient_stop_keeps_its_account_to_the_one_line_at_the_end()
+    {
+        // Nothing is racing a quit, so it reaches the aggregate and the aggregate says the same
+        // thing more briefly. A line per step there would be four where one is the whole story.
+        var wsl = new FakeWsl();
+        wsl.Default = new WslResult(0, "freewilly\r\n", null);
+        var daemon = new FakeDaemon();
+        await using var engine = new EngineLifecycle(
+            wsl, daemon, new FakeBackend(Ok200), Pipe(), Owned);
+        await engine.StartAsync(TimeSpan.FromSeconds(20));
+        wsl.Answer(0, "freewilly\r\n").Answer(0).Answer(1);
+
+        var said = new List<string>();
+        var status = await engine.StopAsync(EngineLifecycle.PatientGrace, step: said.Add);
+
+        Assert.Empty(said);
+        Assert.Contains("terminated freewilly", status.Detail, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_distribution_that_is_not_running_is_not_started_in_order_to_be_stopped()
     {
