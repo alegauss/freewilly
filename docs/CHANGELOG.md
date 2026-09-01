@@ -100,6 +100,7 @@
 - ✅ **DD269** **a start can be asked for while the provisioner is rewriting the engine binaries, and nothing stops the two overlapping** — The provisioner holds a lock across the import and the unpack, and a start waits up to twenty seconds for it out of its own budget, saying so where it waited.
 - ✅ **DD270** **a wsl.exe that fails to start during a shutdown opens a modal Windows error box and blocks until dismissed** — Every wsl.exe FreeWilly starts inherits SEM_FAILCRITICALERRORS, so a launch Windows refuses during a shutdown fails at once rather than holding the teardown on an unclickable box.
 - ✅ **DD271** **a session-ending stop reaches the terminate that unmounts ext4 only after three other wsl.exe calls** — A hurried stop now runs wsl --terminate before anything else, so the step that unmounts ext4 lands inside the four seconds Windows allows rather than behind three other launches.
+- ✅ **DD272** **the tray's backstop reads a quiet pipe as the host having taken the distribution down, and the pipe goes quiet first** — The backstop now asks whether the distribution is running, so a host that stopped serving the pipe but never reached the terminate is finished off rather than trusted.
 
 ## Block B — The daemon client (talk to the engine)
 

@@ -2,26 +2,6 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
-### §DD272 A quiet pipe is not a stopped distribution
-
-`SessionTeardown` decides the host handled the teardown by pinging the engine and
-finding nothing there. The premise is that a quiet pipe means the distribution is down.
-It does not. Dropping the relay is the first thing `StopAsync` does, so the pipe goes
-quiet at the start of the teardown rather than at the end, and the backstop stands down
-at the moment the work it exists to cover has barely begun.
-
-Every failing shutdown in the journal shows it. On 31 August 2026 the tray wrote "the
-engine host took it down" at 21:51:46, and two seconds later the host itself wrote
-"still tearing down after 4s". Both lines are about the same teardown and the second one
-is the true one. No terminate ever ran, and the tray had already decided one had.
-
-What the backstop should ask is what it actually cares about: whether the distribution
-is still registered and running. That is a different question from whether anything is
-serving the pipe, and it stays true right up to the terminate. Answering it needs
-`wsl.exe`, which is the launch that may not work, so a failed launch has to read as
-unknown and terminate anyway. Terminating a distribution that is already down costs one
-wasted call. Not terminating one that is up costs the ext4.
-
 ### §DD273 A teardown that is killed should still have written something
 
 `StopAsync` collects what it did into a list and turns that list into one journal line

@@ -14,7 +14,7 @@ namespace FreeWilly.Preflight.Tests;
 /// only way the deadline itself is worth asserting: a test that actually waited would be measuring
 /// the build machine.
 /// </remarks>
-internal sealed class FakeTeardown(bool heard, int answersFor) : IEngineTeardown
+internal sealed class FakeTeardown(bool heard, int upFor) : IEngineTeardown
 {
     private DateTimeOffset _clock = new(2026, 8, 29, 3, 0, 0, TimeSpan.Zero);
     private int _asked;
@@ -36,8 +36,11 @@ internal sealed class FakeTeardown(bool heard, int answersFor) : IEngineTeardown
     /// <inheritdoc/>
     public bool TellTheLiveHost() => heard;
 
+    /// <summary>How many times the distribution was asked about.</summary>
+    internal int Asked => _asked;
+
     /// <inheritdoc/>
-    public bool EngineAnswers() => _asked++ < answersFor;
+    public bool DistributionIsUp() => _asked++ < upFor;
 
     /// <inheritdoc/>
     public string Terminate()
@@ -708,7 +711,7 @@ public sealed class TrayTests
     {
         // The case DD187 cannot cover, because the process it gave the SessionEnding subscription
         // to is not running. Something still has to unmount the distribution's ext4.
-        var machine = new FakeTeardown(heard: false, answersFor: 0);
+        var machine = new FakeTeardown(heard: false, upFor: 0);
 
         var said = SessionTeardown.Run(machine, machine.Now, machine.Pause);
 
@@ -722,7 +725,7 @@ public sealed class TrayTests
         // Two processes running `wsl --terminate` on the same distribution is how a teardown turns
         // back into the unclean unmount it exists to prevent, so the host doing its job is the one
         // outcome where this does nothing at all.
-        var machine = new FakeTeardown(heard: true, answersFor: 2);
+        var machine = new FakeTeardown(heard: true, upFor: 2);
 
         var said = SessionTeardown.Run(machine, machine.Now, machine.Pause);
 
@@ -736,7 +739,7 @@ public sealed class TrayTests
         // Windows is not waiting longer either way. The choice at the deadline is one more
         // terminate or a virtual machine reaped with its root never unmounted, and the second is
         // the ext4 that had to be repaired by hand.
-        var machine = new FakeTeardown(heard: true, answersFor: int.MaxValue);
+        var machine = new FakeTeardown(heard: true, upFor: int.MaxValue);
 
         var said = SessionTeardown.Run(machine, machine.Now, machine.Pause);
 
@@ -746,6 +749,35 @@ public sealed class TrayTests
         // Bounded by the budget rather than by the fake running out of answers, which is the whole
         // reason the loop is on a clock.
         Assert.InRange(machine.Elapsed, EngineCommand.SessionEndingBudget, TimeSpan.FromSeconds(6));
+    }
+
+    [Fact]
+    public void The_backstop_no_longer_decides_from_whether_the_pipe_is_answering()
+    {
+        // DD272. Dropping the relay is the first thing a stop does, so a quiet pipe says the teardown
+        // has begun rather than that it finished — and this stood down there. On 31 August 2026 the
+        // tray wrote "the engine host took it down" two seconds before the host wrote "still tearing
+        // down after 4s" about the same teardown. Asserted on the live implementation, because the
+        // interface no longer has a word for the premise the fake would have to hold.
+        var source = File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "src/FreeWilly.Tray/SessionTeardown.cs"));
+
+        Assert.DoesNotContain("PingAsync", source, StringComparison.Ordinal);
+        Assert.Contains("--running", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_backstop_asks_a_handful_of_times_rather_than_four_times_a_second()
+    {
+        // The cost of asking had to move with the question (DD272): a pipe connect is free and
+        // `wsl --list --running` is a process, so the old 250ms cadence would spend a four-second
+        // shutdown launching sixteen of them. That is the load DD134 warns about, arriving at the
+        // worst moment there is.
+        var machine = new FakeTeardown(heard: true, upFor: int.MaxValue);
+
+        SessionTeardown.Run(machine, machine.Now, machine.Pause);
+
+        Assert.InRange(machine.Asked, 1, 6);
     }
 
     [Fact]
