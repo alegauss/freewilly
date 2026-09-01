@@ -2,6 +2,109 @@
 
 ## Block A — The Windows engine (Docker without Docker Desktop)
 
+### §DD270 A shutdown-time popup is what eats the teardown budget
+
+Windows logged the same application popup at every shutdown between 29 and 31 August
+2026: `wsl.exe` failing with 0xC0000142, STATUS_DLL_INIT_FAILED, in the same second the
+host and the tray both took SessionEnding. It is not a WSL fault and not a fault in how
+this tool spells the command. Adobe's LogTransport2.exe took the same code in the same
+second on 30 August, so the condition belongs to the session: under Fast Startup, which
+is on by default, Windows logs the user off before it hibernates, and process creation
+in that session stops working part way through.
+
+What makes this worse than a failed launch is that the popup is a hard error. The child
+sits on a modal box nobody can click, so `ProcessOutput.Run` waits out its whole budget
+on a process that has already failed. Every failing teardown in the journal ends at
+exactly the four seconds `SessionEndingBudget` allows, while the one that worked, on 30
+August at 10:08, finished in two.
+
+The error mode is inherited by child processes, so the host setting
+SEM_FAILCRITICALERRORS once covers every `wsl.exe` it starts. The launch still fails,
+because nothing here can make Windows start a process it has decided not to start. What
+changes is that it fails immediately and silently, which returns the budget to the steps
+that can still run and takes the dialog off the user's screen.
+
+### §DD271 The terminate goes first when the stop is hurried
+
+Under `HurriedGrace`, `StopAsync` does four things in order: it drops the relay, asks
+whether the distribution is running, sends dockerd a SIGTERM and waits for it, and only
+then runs `wsl --terminate`. Three of those four reach for `wsl.exe`, and the terminate
+is last.
+
+That order is right when somebody is at a keyboard. It is wrong when Windows is ending
+the session, because the budget is four seconds and a single `wsl.exe` launch in that
+window can consume all of it. The journal shows the consequence: the sessions of 29, 30
+and 31 August 2026 all end at "still tearing down after 4s" with no "terminated
+freewilly" line behind them. The step that unmounts ext4 never ran, which is the unclean
+unmount DD187 and DD188 were written to prevent and the one repaired by hand on 29
+August.
+
+Containers stopping themselves is worth having, and DD189 is why. It is not worth having
+ahead of the unmount, because a container reaped by WSL2 recovers on the next start and
+a root filesystem torn off mid-write may not. So a hurried stop terminates first and
+does the rest with whatever budget is left. A patient stop keeps the order it has: there
+the SIGTERM has twenty seconds and the terminate is not racing anything.
+
+### §DD272 A quiet pipe is not a stopped distribution
+
+`SessionTeardown` decides the host handled the teardown by pinging the engine and
+finding nothing there. The premise is that a quiet pipe means the distribution is down.
+It does not. Dropping the relay is the first thing `StopAsync` does, so the pipe goes
+quiet at the start of the teardown rather than at the end, and the backstop stands down
+at the moment the work it exists to cover has barely begun.
+
+Every failing shutdown in the journal shows it. On 31 August 2026 the tray wrote "the
+engine host took it down" at 21:51:46, and two seconds later the host itself wrote
+"still tearing down after 4s". Both lines are about the same teardown and the second one
+is the true one. No terminate ever ran, and the tray had already decided one had.
+
+What the backstop should ask is what it actually cares about: whether the distribution
+is still registered and running. That is a different question from whether anything is
+serving the pipe, and it stays true right up to the terminate. Answering it needs
+`wsl.exe`, which is the launch that may not work, so a failed launch has to read as
+unknown and terminate anyway. Terminating a distribution that is already down costs one
+wasted call. Not terminating one that is up costs the ext4.
+
+### §DD273 A teardown that is killed should still have written something
+
+`StopAsync` collects what it did into a list and turns that list into one journal line
+when it returns. Nothing is written until every step has finished, so a teardown Windows
+kills part way through leaves no trace that it ran at all.
+
+That is what the last three shutdowns look like. The session lines are there, because
+the handler writes those itself, and then nothing: no relay line, no SIGTERM line, no
+terminate line, no "this host is done". Read the next morning, that file says only that
+the teardown did not finish, which was already obvious from the four-second line above
+it. It does not say which step it was in, whether `wsl.exe` was reached, or what the
+terminate returned. Finding that out took the Windows System log, which is the wrong
+place to have to go.
+
+The clean session ending on 30 August 2026 at 10:08 shows what the aggregate line is
+worth when it does get written, and there is no reason to lose it. So the aggregate
+stays for the patient path, and a hurried stop adds a line per step, written and flushed
+as that step finishes. Under a session ending this file is the only witness, and a
+witness that speaks after the room is empty is not one.
+
+### §DD274 The exit codes a session ending produces
+
+On 29 August 2026 the journal recorded "the daemon exited: wsl.exe exited 1073807364
+without a word". That number is 0x40010004, DBG_TERMINATE_PROCESS, and it means Windows
+killed the process during the shutdown. Nothing in the line says so. The 0xC0000142 case
+is worse: a child that fails DLL initialisation exits with empty stdout and stderr, so
+the runner reports a tool that ran and said nothing, which is the same shape as a tool
+that ran and had nothing to say.
+
+Two different failures, both invisible, both specific to a session ending. The evidence
+that either was happening came from the Windows System log rather than from this
+journal, which is backwards for a tool whose entire account of a shutdown is a file read
+the next morning.
+
+So the runner names them. An exit code in the range NTSTATUS uses is reported as what it
+is, with the two a shutdown produces spelled out: 0xC0000142 as Windows refusing to
+initialise the process, and 0x40010004 as Windows killing it. The rest keep their number
+and gain the hex, because a reader who has to convert 1073807364 by hand before they can
+search for it will not.
+
 ## Block B — The daemon client (talk to the engine)
 
 ## Block C — The window (claude-tray's elements)
