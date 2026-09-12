@@ -55,22 +55,24 @@ an id and deletes a design that was already right.
    sentence.** A second sentence is the signal the content belongs in the rationale file,
    which is what the pointer addresses.
 
-Markers are `[markers]` in `roadkeep.toml`: the open set is the roadmap's, and the shipped
-and retired ones are the ledger's alone — neither is legal in a roadmap. Limits are
+Markers are `[markers]` in `roadkeep.toml`: the open set is the roadmap's, `working` is the
+one a claim is taken at, and the shipped and retired ones are the ledger's alone — neither is
+legal in a roadmap. Limits are
 `[limits]`: `roadkeep lint` names the file, line and column of anything over, and `--fix`
 repairs only what is **derived** (annotation, pointer, dep order, marker codepoint,
 whitespace, the queue entry whose task shipped or was retired, and a criteria heading
 addressed to nothing and holding nothing — each named in the report and never dropped in
 silence). On a project that arrived with drift, an absolute count answers
-nothing: `--baseline <rev>` (`HEAD` after a write) reports **what you added** and forgives
-the standing debt by name.
+nothing: `lint --baseline <rev>` (`HEAD` after a write) reports **what you added** and
+forgives the standing debt by name.
 
 ## Where the rest is
 
 Two pages sit beside this file, and they are read when a turn needs them and not before:
 
 * **`writing.md`** — the write path whole: every flag on `add`, `status`, `amend`,
-  `restate`, `ship`, `retire`, `record`, `section`, `non-goal`, `defer` and `resume`, what
+  `restate`, `ship`, `retire`, `record`, `section`, `non-goal`, `defer`, `resume`, `dismiss`
+  and `reopen`, what
   each transaction refuses and how the refusal is answered, the wiring verbs (`init`,
   `adopt`, `install`, `declare`, `engines`, `merge`), and every code the gate reports.
 * **`asking.md`** — the query surface whole: what each read answers and in which units,
@@ -91,7 +93,8 @@ refusal. `--json` carries the word beside the sentence (`standing.state`, on `br
 `pick` and `list` alike), so a loop driving a block to completion branches on `finished`
 and never matches English. Unscoped, the answer may be another block's, and the block
 order is the headings' own (`list`, whose own empty listing says the same thing on
-stderr). **Ready is not implementable**: the tiers rank by id, so add `--designed` when
+stderr). **Ready is not implementable**: the tiers rank by id, so reach for
+`pick --block <label> --designed` when
 you asked to *execute* and not to plan — it sets aside the markers `[markers] undesigned`
 names, and says how many. Without it the answer still tells you, in the same sentence that
 names the tier, that the line it chose has its design to write — which is a `section add`,
@@ -102,10 +105,13 @@ line comes back every call, because every tier is a function of the file. `add -
 <word>` states it, `amend <id> --requires …` adds it to a line already there, and the word
 is one `[requirements] declared` names — the one table `declare` does *not* open, because a
 vocabulary is a list of words and an empty one governs nothing, so a project opting in
-declares its own words once. Then `pick` sets those lines aside for a caller that did not
+declares its own words once — as a list, or as a table saying what each word *is*, which
+is what the refusal then quotes so a caller can weigh it rather than believe it. Then
+`pick` sets those lines aside for a caller that did not
 say it has them, **names** each with what it is missing, and still counts them ready: what
-narrows is the offer, never the truth. A caller that does have the thing passes `--have
-<word>`, repeatable, on `pick` and `brief` alike — which is the whole difference from
+narrows is the offer, never the truth. A caller that does have the thing passes
+`pick --have <word>`, repeatable, and `brief <id> --have <word> --designed` alike — which is
+the whole difference from
 `defer`, a pause being symmetric and taking the line away from the person who could have
 finished it. So the honest end of an impossible pick is the requirement written and the id
 handed over, never a fifth identical answer worked around in silence.
@@ -146,8 +152,8 @@ another live claim says is *its* own, what no claim names at all, and which decl
 would stage nothing right now. **Declare only your code**: the governed files are
 supplied, and a scope naming them by hand carries paths that were never the work — the
 analysis `git add -A` cannot make and a second session's work is what it sweeps up.
-`--add-path <p>` is the same write from the other end, for the file the work turned up
-after the scope was declared; passing both is refused. Over MCP this verb is the tool
+`claim <id> --add-path <p>` is the same write from the other end, for the file the work
+turned up after the scope was declared; passing both is refused. Over MCP this verb is the tool
 `scope` — not `claim`, which is `brief --claim` and takes a line; the two words are two
 acts. `--porcelain` prints the paths alone, for `git add --`. Refused on a line no live
 claim holds: taking a line is a marker, and nothing here dates one. **`ship` and `retire`

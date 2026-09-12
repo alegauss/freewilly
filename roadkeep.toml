@@ -36,3 +36,11 @@ held = 60
 # the roadmap's other list: declared at all means governed, and `lead` and `why`
 # are the two limits a bullet is held to — 80 and 320 characters unless set here
 [non_goals]
+
+[install]
+wired = "0.2.473"
+
+[project]
+name = "FreeWilly"
+description = "A Docker Desktop replacement with no seat, revenue or licence threshold."
+icon = "🐳"
