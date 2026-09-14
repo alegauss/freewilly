@@ -20,7 +20,7 @@
     <!-- Win32_ComputerSystem.HypervisorPresent and Win32_Processor.VirtualizationFirmwareEnabled
          are the two properties Task Manager's own "Virtualization" row reads, and WMI is the
          documented way to reach them without an elevated token. -->
-    <PackageReference Include="System.Management" Version="10.0.11" />
+    <PackageReference Include="System.Management" Version="10.0.12" />
   </ItemGroup>
 
 </Project>
