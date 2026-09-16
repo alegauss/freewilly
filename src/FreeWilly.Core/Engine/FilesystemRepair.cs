@@ -129,6 +129,12 @@ public sealed record FsckReading(RepairStep Step, string Findings, bool Clean)
 ///
 /// <para>A root cannot check itself, which is why any of this is necessary: starting the engine's
 /// own distribution to run <c>e2fsck</c> would mount the very filesystem being checked.</para>
+///
+/// <para><b>A distribution that will not start is the case the check exists for (DD280)</b>, and
+/// everything above assumed one that would. Such a distribution cannot say which filesystem it is,
+/// so the UUID is read out of its virtual disk instead (<see cref="Vhdx"/>). Its disk is also not
+/// attached until something launches it, so the run launches it once under the hold and lets the
+/// launch fail.</para>
 /// </remarks>
 public sealed class FilesystemRepair
 {
@@ -221,18 +227,30 @@ public sealed class FilesystemRepair
         // there is nothing left that knows which of the attached disks was its. A UUID rather than a
         // device name: /dev/sdX is assigned in attach order and moves between boots, and picking the
         // wrong one would run a repair against somebody else's distribution.
-        var uuid = RootUuid();
+        var asked = AskRoot();
+        var answered = asked.Succeeded ? Minirootfs.UuidIn(asked.Output) : null;
+
+        // A distribution whose root ext4 aborts on mount never boots to answer, and that is the
+        // distribution a check is for (DD280). Its disk still says which filesystem it carries.
+        var uuid = answered ?? Vhdx.FilesystemUuid(VirtualDisk);
         if (uuid is null)
         {
             Record(steps, report, new RepairStep(
                 "note the disk",
                 false,
-                $"{_paths.DistributionName} could not say which filesystem is its root, so nothing "
-                + "here can tell its disk from the others attached. Run the sequence by hand"));
+                $"{_paths.DistributionName} could not say which filesystem is its root "
+                + $"({Said(asked)}), and neither could {VirtualDisk}, so nothing here can tell its "
+                + "disk from the others attached. Run the sequence by hand"));
             return new RepairOutcome(steps);
         }
 
-        Record(steps, report, new RepairStep("note the disk", true, $"root filesystem is {uuid}"));
+        Record(steps, report, new RepairStep(
+            "note the disk",
+            true,
+            answered is not null
+                ? $"root filesystem is {uuid}"
+                : $"root filesystem is {uuid}, read off {VirtualDisk} because "
+                  + $"{_paths.DistributionName} did not answer: {Said(asked)}"));
 
         var brought = _image.Import(RescueName, RescueRoot, rootfsPath);
         if (!Record(steps, report, brought.Step))
@@ -258,6 +276,13 @@ public sealed class FilesystemRepair
 
             prepared = true;
 
+            // Before the terminate, so that a launch which does boot is taken down by it and e2fsck
+            // never meets a mounted root.
+            if (answered is null)
+            {
+                Record(steps, report, Attach());
+            }
+
             if (!Record(steps, report, TakeTheEngineDown()))
             {
                 return new RepairOutcome(steps);
@@ -269,8 +294,11 @@ public sealed class FilesystemRepair
                 Record(steps, report, new RepairStep(
                     "find the disk",
                     false,
-                    $"no attached disk carries {uuid}, so the terminate took it away with the "
-                    + "distribution rather than leaving it on the virtual machine"));
+                    answered is not null
+                        ? $"no attached disk carries {uuid}, so the terminate took it away with the "
+                          + "distribution rather than leaving it on the virtual machine"
+                        : $"no attached disk carries {uuid}, so the launch that should have attached "
+                          + "it did not"));
                 return new RepairOutcome(steps);
             }
 
@@ -301,21 +329,46 @@ public sealed class FilesystemRepair
         return step.Ok;
     }
 
+    /// <summary>Where WSL keeps the distribution's filesystem.</summary>
+    private string VirtualDisk => Path.Combine(_paths.Distribution, "ext4.vhdx");
+
     /// <summary>Ask the engine's distribution which filesystem it is running on.</summary>
-    /// <returns>The UUID, or <see langword="null"/> where it could not say.</returns>
+    /// <returns>What it said, which carries the UUID where it could answer.</returns>
     /// <remarks>
     /// Through <c>/proc/mounts</c> and <c>blkid</c> since DD201. It asked <c>findmnt</c>, which is
     /// util-linux and is not in a minirootfs, so this exited 127 on every machine and the verb
     /// refused before it imported anything — measured, and the reason nothing else in DD199 had ever
     /// been reached.
     /// </remarks>
-    private string? RootUuid()
-    {
-        var asked = _wsl.Run(
-            "-d", _paths.DistributionName, "-u", "root", "--exec",
-            "/bin/sh", "-c", $"d=$({Minirootfs.RootDevice}); {Minirootfs.BlockDevices} $d");
+    private WslResult AskRoot() => _wsl.Run(
+        "-d", _paths.DistributionName, "-u", "root", "--exec",
+        "/bin/sh", "-c", $"d=$({Minirootfs.RootDevice}); {Minirootfs.BlockDevices} $d");
 
-        return asked.Succeeded ? Minirootfs.UuidIn(asked.Output) : null;
+    /// <summary>Launch the distribution once, for the disk WSL attaches on the way (DD280).</summary>
+    /// <returns>The step, which succeeds whether or not the distribution started.</returns>
+    /// <remarks>
+    /// <para>Measured on 16 September 2026 with another distribution holding the virtual machine:
+    /// until something launches the engine's distribution its disk is not attached, and a terminate
+    /// of a distribution that is not running exits 0 and attaches nothing. A launch that fails with
+    /// <c>E_UNEXPECTED</c> on a root ext4 will not mount leaves the disk attached and unmounted, and
+    /// it stays attached through the terminate.</para>
+    ///
+    /// <para>So a failed launch is the expected outcome, and it is not this step's to judge. Whether
+    /// the disk arrived is <see cref="DeviceFor"/>'s question, and it reports the answer as itself.
+    /// </para>
+    /// </remarks>
+    private RepairStep Attach()
+    {
+        var launched = _wsl.Run(
+            WslBudget.Work, "-d", _paths.DistributionName, "-u", "root", "--exec", "/bin/true");
+
+        return new RepairStep(
+            "attach the disk",
+            true,
+            launched.Succeeded
+                ? $"{_paths.DistributionName} started this time, and the terminate takes it down again"
+                : $"{_paths.DistributionName} would not start, which still attaches its disk: "
+                  + Said(launched));
     }
 
     private RepairStep TakeTheEngineDown()

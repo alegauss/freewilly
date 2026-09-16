@@ -365,6 +365,128 @@ public sealed class FilesystemRepairTests
         Assert.DoesNotContain(wsl.Invocations, argv => argv.Length > 0 && argv[0] == "--terminate");
     }
 
+    /// <summary>What wsl.exe wrote for every launch of the distribution on 16 September 2026.</summary>
+    private const string WouldNotStart =
+        "Catastrophic failure\nError code: Wsl/Service/CreateInstance/E_UNEXPECTED";
+
+    /// <summary>Answer the sequence a run makes against a distribution that will not start (DD280).</summary>
+    /// <param name="listing">What blkid in the rescue prints once the launch has been tried.</param>
+    /// <param name="fsckExit">What e2fsck exits with.</param>
+    /// <returns>The machine.</returns>
+    private static FakeWsl WontStart(string listing = Listing, int fsckExit = 4)
+    {
+        var wsl = new FakeWsl();
+        wsl.Answer(-1, WouldNotStart)  // the engine cannot be asked for its root
+            .Answer(0)                 // --terminate any leftover of the rescue's own name
+            .Answer(1, NameWasFree)    // --unregister it: there was none
+            .Answer(0)                 // --import the rescue
+            .Answer(0, "/sbin/e2fsck") // apk add && command -v
+            .Answer(-1, WouldNotStart) // the launch that attaches the disk
+            .Answer(0)                 // --terminate the engine's distribution
+            .Answer(0, listing)        // blkid
+            .Answer(fsckExit, "Block bitmap differences:  -(13449760--13449791)")
+            .Answer(0);                // --unregister the rescue
+        return wsl;
+    }
+
+    /// <summary>A layout whose virtual disk carries <see cref="Uuid"/>.</summary>
+    private static EnginePaths PathsWithDisk()
+    {
+        var paths = Paths();
+        VirtualDiskFile.Write(Path.Combine(paths.Distribution, "ext4.vhdx"), Uuid);
+        return paths;
+    }
+
+    [Fact]
+    public void A_distribution_that_will_not_start_is_found_by_the_uuid_its_disk_carries()
+    {
+        // Measured on 16 September 2026: ext4 aborted on mount, every launch exited E_UNEXPECTED,
+        // and the check refused at its first step because that step asked the distribution. The
+        // distribution that cannot boot is the one the check is for.
+        var paths = PathsWithDisk();
+        var wsl = WontStart();
+
+        var outcome = new FilesystemRepair(wsl, paths, FakeHold.Over(wsl, out _))
+            .Check(@"C:\downloads\rootfs.tar.gz");
+
+        Assert.True(outcome.Succeeded, outcome.Failure?.Detail);
+        Assert.False(outcome.Clean);
+        Assert.Contains("Block bitmap differences", outcome.Findings, StringComparison.Ordinal);
+        Assert.Contains("read off", outcome.Steps[0].Detail, StringComparison.Ordinal);
+        Assert.Contains(
+            wsl.Invocations,
+            argv => argv.Any(word => word.Contains("e2fsck -fn '/dev/sdd'", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void The_launch_that_attaches_the_disk_is_held_and_then_taken_down()
+    {
+        // Measured: nothing attaches the disk of a distribution that is not running, a launch does
+        // even when it fails, and the disk survives the terminate only while the virtual machine is
+        // held. A launch that boots after all is taken down by the same terminate, so e2fsck never
+        // meets a mounted root.
+        var paths = PathsWithDisk();
+        var wsl = WontStart();
+
+        new FilesystemRepair(wsl, paths, FakeHold.Over(wsl, out var hold))
+            .Check(@"C:\downloads\rootfs.tar.gz");
+
+        var launch = wsl.Invocations.FindIndex(
+            argv => argv.Length > 1 && argv[0] == "-d" && argv[1] == EnginePaths.CurrentDistribution
+                && argv[^1] == "/bin/true");
+        var terminate = wsl.Invocations.FindIndex(
+            argv => argv.Length > 1 && argv[0] == "--terminate"
+                && argv[1] == EnginePaths.CurrentDistribution);
+        var fsck = wsl.Invocations.FindIndex(
+            argv => argv.Any(word => word.Contains("e2fsck -f", StringComparison.Ordinal)));
+
+        Assert.True(launch >= 0, "nothing launched the distribution, so its disk was never attached");
+        Assert.True(hold.OpenedAfter <= launch, "the disk was attached before anything held the machine");
+        Assert.True(launch < terminate, "the launch came after the terminate, so a boot would stay up");
+        Assert.True(terminate < fsck, "e2fsck ran before the distribution was taken down");
+    }
+
+    [Fact]
+    public void A_distribution_that_answered_is_not_launched_for_its_disk()
+    {
+        // Its answer means it booted, and a boot already attached the disk.
+        var wsl = Machine(0);
+
+        var outcome = new FilesystemRepair(wsl, Paths(), FakeHold.Over(wsl, out _))
+            .Check(@"C:\downloads\rootfs.tar.gz");
+
+        Assert.DoesNotContain(wsl.Invocations, argv => argv.Length > 0 && argv[^1] == "/bin/true");
+        Assert.DoesNotContain(outcome.Steps, step => step.What == "attach the disk");
+    }
+
+    [Fact]
+    public void A_refusal_to_note_the_disk_says_what_the_distribution_said()
+    {
+        // The refusal used to drop wsl.exe's own words, so "could not say" was all anybody had to go
+        // on, and the words were the diagnosis.
+        var wsl = new FakeWsl();
+        wsl.Answer(-1, WouldNotStart);
+
+        var outcome = new FilesystemRepair(wsl, Paths(), FakeHold.Over(wsl, out _))
+            .Check(@"C:\downloads\rootfs.tar.gz");
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("E_UNEXPECTED", outcome.Failure?.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_launch_that_attached_nothing_is_named_as_itself()
+    {
+        var paths = PathsWithDisk();
+        var wsl = WontStart(listing: "/dev/sde: UUID=\"f20b734b-5cee-45dd-93cc-accea19eb41f\" TYPE=\"ext4\"\n");
+
+        var outcome = new FilesystemRepair(wsl, paths, FakeHold.Over(wsl, out _))
+            .Check(@"C:\downloads\rootfs.tar.gz");
+
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("the launch that should have attached it", outcome.Failure?.Detail, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void A_disk_the_terminate_took_away_is_named_rather_than_guessed_at()
     {
