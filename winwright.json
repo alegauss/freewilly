@@ -13,6 +13,11 @@
 
   "sourceRoot": "src",
 
+  // Where a case writes a picture it asked for. The same folder the script wrote to, because that is
+  // where a person already looks for the preview and nothing tracks it — the menu is photographed to
+  // be looked at as well as to be checked.
+  "captures": "docs/_preview",
+
   "timeouts": {
     // Measured, and the number the script it replaces arrived at: a cold start of the single-file
     // self-contained .exe took longer than 2500 ms to put its menu up on that machine, and the run

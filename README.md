@@ -368,10 +368,14 @@ states, otherwise the hardest thing here to reach, are one flag away.
 
 `--capture-window` renders the window's own content and never photographs the screen, so it
 cannot catch anything that happens to be in front of it, and it needs no desktop at all,
-which a screen copy does. [`scripts/Capture-Window.ps1`](scripts/Capture-Window.ps1) is the
-screen-copy fallback for popups, and it refuses rather than writing when something overlaps
-the window, or when the window has a translucent system backdrop, which composites what is
-behind it into the copy and is a leak no overlap check can see.
+which a screen copy does. The one surface it cannot reach is the tray's menu: a context menu
+is its own top-level window and is in no tree the application can hand over. That one is
+photographed by [`tests/FreeWilly.Cases/TrayMenuPicture.cs`](tests/FreeWilly.Cases/TrayMenuPicture.cs),
+which `run-cases.cmd` runs, and the copy refuses rather than writing when something overlaps
+the window, when the window has a translucent system backdrop — which composites what is
+behind it into the copy and is a leak no overlap check can see — or when the menu has not
+laid out where the copy is about to read, which is a picture of the desktop that passes every
+other question.
 
 A windowed program does not hold the prompt, so a typed verb prints *after* the prompt
 returns. Redirecting (`FreeWilly.exe --preflight > report.txt`) has neither problem, and
